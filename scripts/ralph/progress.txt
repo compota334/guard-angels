@@ -12,6 +12,8 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - CLI entry: `src/bin/angels.ts` (shebang) → imports `src/cli.ts` (commander program). Build: `npm run build` → `dist/bin/angels.js`.
 - ESLint enforces `preserve-caught-error` — always pass `{ cause: err }` when wrapping caught errors in new Error.
 - Config loading: `src/config/load.ts` → `loadConfig(cwd)`. Schema: `src/config/schema.ts`. Defaults: `src/config/defaults.ts`.
+- Path utilities: `src/paths/layout.ts` (canonical .angels/ paths), `src/paths/resolve.ts` (angel-id ↔ path conversion).
+- Angel ID encoding: `/` → `-`, literal `-` → `--`. Root angel: `_root` ↔ `.`. This encoding is bijective (round-trips correctly).
 
 ---
 
@@ -54,4 +56,13 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - Zod 4.x API is fully compatible with 3.x for object/string/number/enum/literal/array/min/optional
   - `z.infer<typeof Schema>` works as type-only construct in zod 4.x (no runtime `z.infer`)
   - Config module path: `src/config/` with schema.ts (Zod schema + types), defaults.ts (constants), load.ts (loadConfig function)
+---
+
+## 2026-04-28T05:30:00Z - US-004: Utilidades de paths y resolución de angel-id
+- Implemented: Created src/paths/layout.ts (pure functions for all canonical .angels/ paths: angelsRoot, configFile, newspaperFile, briefsDir, responsesDir, inboxDir, outboxDir, locksDir, logsDir, cursorsDir, archiveDir, rootAngelDir, angelDir, angelMdFile, plus per-angel helpers). Created src/paths/resolve.ts (angelIdToPath, pathToAngelId, isRootAngel) with bijective encoding: `/` → `-`, literal `-` → `--`, `_root` ↔ `.`.
+- Files changed: src/paths/layout.ts, src/paths/resolve.ts, tests/unit/paths.test.ts
+- Verification: tsc=PASS  vitest=PASS (64 tests)  eslint=PASS
+- Learnings for future iterations:
+  - Angel ID encoding uses double-hyphen (`--`) to escape literal hyphens in path segment names. This makes the encoding bijective and round-trippable. E.g. `src/my-component` → `src-my--component`.
+  - layout.ts functions take `projectRoot` (for top-level dirs) or `projectRoot + angelId/angelPath` (for per-angel dirs). The `angelDir`/`angelMdFile` functions take the angel's path (not ID), while `angelBriefsDir`, `angelLogsDir`, etc. take the angel ID.
 ---
