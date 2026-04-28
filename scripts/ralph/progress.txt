@@ -28,6 +28,7 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Protocol module: `src/protocol/brief.ts` — `writeBrief(projectRoot, data)` creates brief files at `_briefs/<angel-id>/<date>T<HHMM>-<seq>.md`. `parseBrief(path)` / `parseBriefContent(raw)` parse back. Sequence numbering is per-angel-id, per-day, max+1 zero-padded to 3 digits.
 - Protocol section parsing caveat: `extractSection` uses `\n(?=[A-Z][A-Z _]*:)` to detect next header. Lines in section content matching this pattern (e.g. `NOTE:`, `TODO:`) will truncate the section prematurely. Keep this in mind when designing response format (US-013).
 - Protocol response: `src/protocol/response.ts` — `writeResponse(projectRoot, data)`, `parseResponse(path)` / `parseResponseContent(raw)`. ResponseVerdict type: proceed|concerns|refuse|done|error. Done-only fields (CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED) validated at parse time.
+- Prompt builder: `src/protocol/prompt.ts` — `buildPrompt(input: PromptInput)` constructs the full angel system prompt. Four phases: init, review, execute, sweep. Fixed protocol header is shared; phase-specific instructions swap a single block. Inbox cables: high-urgency inlined in full, normal/low listed by subject only. `getProtocolHeaderLength()` exposes the header char count for token budget checks.
 
 ---
 
@@ -222,4 +223,15 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - Done-only fields (CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED) are single-line header fields, not sections. They use `extractOptionalField` (returns null if absent). The formatter only writes them when `response === 'done'`.
   - The same section-parsing caveat from brief.ts applies: lines in section content matching `^[A-Z][A-Z_ ]*:` (e.g. `NOTE:`, `ERROR:`) will be misinterpreted as section boundaries. The regex uses `[A-Z_ ]` (underscore + space) to match headers like `TEST_RESULTS:` and `QUESTIONS FOR MAIN:`.
   - `ResponseData` type uses `ResponseVerdict` for the `response` field — an explicit union type, not `string`. Enum validation happens at parse time via `VALID_VERDICTS` Set.
+---
+
+## 2026-04-28T07:10:00Z - US-014: Constructor de prompt (REVIEW/EXECUTE/INIT/SWEEP)
+- Implemented: Created `src/protocol/prompt.ts` with `buildPrompt(input: PromptInput)` that constructs the full angel system prompt. Fixed protocol header (shared across all phases) states read-any/write-own-folder rules, two-phase protocol, test judgment, invariant surfacing. Four phase-specific instruction blocks: INIT (create angel.md, no code edits), REVIEW (evaluate change, respond proceed/concerns/refuse, no edits), EXECUTE (implement changes, update angel.md, send cables, report files changed), SWEEP (report-only maintenance pass, read inbox/newspaper, detect drift, update own angel.md). Inbox rendering: high-urgency cables inlined in full between `--- URGENT CABLE ---` markers; normal/low cables listed by subject only. `getProtocolHeaderLength()` utility exported for token budget checks.
+- Files changed: src/protocol/prompt.ts (new), tests/unit/prompt.test.ts (new, 31 tests), tests/unit/__snapshots__/prompt.test.ts.snap (new)
+- Verification: tsc=PASS  vitest=PASS (254 tests)  eslint=PASS
+- Learnings for future iterations:
+  - `PromptInput` interface takes `angelId`, `angelPath`, `angelType`, `folderListing`, `angelMd` (string|null), `newspaperDelta`, `inbox` (InboxEntry[]), `brief`, `responsePath`. Future orchestrator (US-015) needs to assemble this from config+registry+filesystem.
+  - `InboxEntry` has `urgency`, `subject`, `content`. The prompt builder renders differently based on urgency — callers must provide all three fields for every cable.
+  - Protocol header is ~540 chars → ~135 tokens (well under 600 token budget). Phase instructions add ~200-400 chars each.
+  - Snapshot tests are deterministic because inbox order is preserved as-is (array order). No sorting happens inside buildPrompt — callers must pre-sort if needed.
 ---
