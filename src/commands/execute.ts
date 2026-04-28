@@ -5,7 +5,7 @@ import { AngelRegistry } from '../angels/registry.js';
 import { writeBrief, parseBrief } from '../protocol/brief.js';
 import { invoke } from '../protocol/orchestrate.js';
 import { angelIdToPath } from '../paths/resolve.js';
-import { newspaperFile } from '../paths/layout.js';
+import { appendNewspaper } from '../messaging/newspaper.js';
 import type { ResponseData } from '../protocol/response.js';
 
 /**
@@ -213,39 +213,39 @@ function appendNewspaperEntry(
   response: ResponseData,
   outOfTerritory: string[],
 ): void {
-  const npFile = newspaperFile(projectRoot);
   const timestamp = new Date().toISOString();
 
-  const lines: string[] = [];
-  lines.push(`## ${timestamp} [${angelId}]`);
+  let summary: string;
+  const detailLines: string[] = [];
 
   if (response.response === 'done') {
-    lines.push(`EXECUTE completed successfully.`);
+    summary = 'EXECUTE completed successfully.';
     if (response.filesChanged) {
-      lines.push(`Files changed: ${response.filesChanged}`);
+      detailLines.push(`Files changed: ${response.filesChanged}`);
     }
     if (response.angelMdUpdated === 'true') {
-      lines.push(`angel.md was updated.`);
+      detailLines.push('angel.md was updated.');
     }
   } else {
-    lines.push(`EXECUTE finished with RESPONSE: ${response.response}`);
+    summary = `EXECUTE finished with RESPONSE: ${response.response}`;
     if (response.concerns) {
-      lines.push(`Concerns: ${response.concerns}`);
+      detailLines.push(`Concerns: ${response.concerns}`);
     }
   }
 
   if (outOfTerritory.length > 0) {
-    lines.push(`WARNING: Out-of-territory writes detected:`);
+    detailLines.push('WARNING: Out-of-territory writes detected:');
     for (const file of outOfTerritory) {
-      lines.push(`  - ${file}`);
+      detailLines.push(`  - ${file}`);
     }
   }
 
-  lines.push('');
-  lines.push('');
-
-  const entry = lines.join('\n');
-  fs.appendFileSync(npFile, entry, 'utf-8');
+  appendNewspaper(projectRoot, {
+    timestamp,
+    angelId,
+    summary,
+    details: detailLines.length > 0 ? detailLines.join('\n') : undefined,
+  });
 }
 
 /**

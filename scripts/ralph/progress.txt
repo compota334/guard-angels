@@ -36,6 +36,8 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Brief command: `src/commands/brief.ts` — `briefAngel(cwd, angelId, task)` returns exit code (0=proceed, 1=concerns, 2=refuse, 3=error). Writes brief, invokes orchestrator in review mode, prints summary.
 - Execute command: `src/commands/execute.ts` — `executeAngel(cwd, angelId, briefPath)` returns exit code (0=done, 1=anything else). Parses original brief, writes execute-phase brief, invokes orchestrator, detects territory violations via mtime+size snapshot, appends newspaper entry. Territory detection skips `.angels/`, `node_modules/`, `.git/`, `dist/`.
 - Fake execute backend: `tests/fixtures/fake-execute-backend.sh` — supports `FAKE_BACKEND_WRITE_FILES` (comma-separated absolute paths) to actually create files during tests, enabling real territory detection.
+- Newspaper module: `src/messaging/newspaper.ts` — `appendNewspaper(projectRoot, entry)`, `readNewspaperSince(projectRoot, cursor)`, `getNewspaperSize(projectRoot)`, `formatNewspaperEntry(entry)`. Byte-offset-based cursor system. Entry parsing uses `## <timestamp> [<angel-id>]` header regex.
+- Cursor module: `src/messaging/cursors.ts` — `getCursor(projectRoot, angelId)`, `setCursor(projectRoot, angelId, offset)`. Single-line byte-offset files at `_cursors/<angel-id>`. Missing file → offset 0. Atomic write via tmpfile+rename.
 
 ---
 
@@ -297,4 +299,15 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - `fake-execute-backend.sh` writes actual files to disk when `FAKE_BACKEND_WRITE_FILES` is set (comma-separated absolute paths). This lets integration tests verify real territory detection via mtime/size changes.
   - Root angel (`angelPath === '.'`) short-circuits territory detection — everything is in-territory for root. Future tasks should test this.
   - Execute command: exit code 0 = done, exit code 1 = any other verdict (error, concerns, etc.). Simpler than brief's 4-value exit code scheme.
+---
+
+## 2026-04-28T07:55:00Z - US-018: Newspaper + cursores
+- Implemented: Created `src/messaging/newspaper.ts` with `appendNewspaper`, `readNewspaperSince`, `getNewspaperSize`, and `formatNewspaperEntry`. Newspaper is plain Markdown, append-only. Entry parsing uses header regex `## <timestamp> [<angel-id>]` to split entries. `readNewspaperSince(cursor)` uses byte-offset slicing — returns only entries fully written after the cursor position. Text before the first valid header is silently ignored (partial-write protection). Created `src/messaging/cursors.ts` with `getCursor` and `setCursor` — single-line byte-offset files at `_cursors/<angel-id>`, atomic write via tmpfile+rename. Missing cursor file returns 0. Refactored `execute.ts` to use the new `appendNewspaper` function instead of its inline newspaper-append implementation.
+- Files changed: src/messaging/newspaper.ts (new), src/messaging/cursors.ts (new), src/commands/execute.ts (refactored), tests/unit/newspaper.test.ts (new, 18 tests), tests/unit/cursors.test.ts (new, 18 tests), scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS (326 tests)  eslint=PASS
+- Learnings for future iterations:
+  - `readNewspaperSince` works with byte offsets, not line numbers or timestamps. Use `getNewspaperSize` to capture the current offset after an append — this is the cursor value for "read everything after this point."
+  - The entry parser treats any text before the first valid `## <timestamp> [<angel-id>]` header as non-entry content and silently skips it. This provides partial-write protection: a truncated append mid-entry leaves valid text that won't parse as a complete entry.
+  - `formatNewspaperEntry` produces entries ending with `\n` (a single trailing newline after the last content line). Consecutive entries are thus separated by the trailing newline from the previous entry.
+  - `execute.ts` was refactored to use `appendNewspaper` from `src/messaging/newspaper.ts` instead of raw `fs.appendFileSync`. The inline `appendNewspaperEntry` function now builds a `NewspaperEntry` object and delegates to the module.
 ---
