@@ -38,6 +38,7 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Fake execute backend: `tests/fixtures/fake-execute-backend.sh` — supports `FAKE_BACKEND_WRITE_FILES` (comma-separated absolute paths) to actually create files during tests, enabling real territory detection.
 - Newspaper module: `src/messaging/newspaper.ts` — `appendNewspaper(projectRoot, entry)`, `readNewspaperSince(projectRoot, cursor)`, `getNewspaperSize(projectRoot)`, `formatNewspaperEntry(entry)`. Byte-offset-based cursor system. Entry parsing uses `## <timestamp> [<angel-id>]` header regex.
 - Cursor module: `src/messaging/cursors.ts` — `getCursor(projectRoot, angelId)`, `setCursor(projectRoot, angelId, offset)`. Single-line byte-offset files at `_cursors/<angel-id>`. Missing file → offset 0. Atomic write via tmpfile+rename.
+- Cable module: `src/messaging/cables.ts` — `writeCable(projectRoot, data)`, `readInbox(projectRoot, angelId)`, `parseCable(filePath)`, `parseCableContent(raw)`. Writes to `_outbox/<from>/` first (audit trail), then copies to `_inbox/<to>/`. Filename: `<sanitized-ts>-cable-from-<sender>.md`. `readInbox` sorts by timestamp ascending, skips malformed files. `ParsedCable.rawContent` provides full file text for prompt builder's `InboxEntry.content`.
 
 ---
 
@@ -320,4 +321,16 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - `walkDir` in execute.ts does NOT skip hidden directories other than `.git` — it only skips the 4 entries in `SKIP_DIRS`. Other hidden dirs like `.cache` or `.next` are included in the snapshot. This is intentional for territory detection (an angel could legitimately modify hidden directories).
   - Symlinks are silently skipped by the snapshot walker — `entry.isFile()` returns false for symlinks. This means symlink-based territory violations go undetected, but this is acceptable for v1.
   - `formatNewspaperEntry` actually ends entries with `\n\n` (two newlines via two empty string pushes joined by `\n`), not one. The progress.txt entry from US-018 says "single trailing newline" but the actual code produces a blank line separator between entries. Not a bug — the code is correct, the note was slightly inaccurate.
+---
+
+## 2026-04-28T08:10:00Z - US-019: Cables (inbox/outbox) + integración con prompt builder
+- Implemented: Created `src/messaging/cables.ts` with `writeCable(projectRoot, data)`, `readInbox(projectRoot, angelId)`, `parseCable(filePath)`, and `parseCableContent(raw)`. Cable format matches spec section 6.5 exactly: FROM, TO, TIMESTAMP, TYPE (breaking_change|fyi|review_request|invariant_violation), URGENCY (high|normal|low), SUBJECT, REQUIRES_ACK, BODY section, REFERENCES section. `writeCable` writes to `_outbox/<from>/` first (audit trail), then copies identical content to `_inbox/<to>/`. Filename format: `<sanitized-timestamp>-cable-from-<sender>.md`. `readInbox` returns `ParsedCable[]` sorted by timestamp ascending, silently skips malformed files. `ParsedCable.rawContent` provides the full file content for mapping to prompt builder's `InboxEntry.content`. Prompt builder inbox rendering (from US-014) was already correct — high-urgency cables are inlined between `--- URGENT CABLE ---` markers, normal/low show subject only. Added 2 new snapshot tests to prompt.test.ts covering high-urgency and mixed-urgency inbox scenarios.
+- Files changed: src/messaging/cables.ts (new), tests/unit/cables.test.ts (new, 26 tests), tests/integration/cables.test.ts (new, 4 tests), tests/unit/prompt.test.ts (updated, 2 new snapshot tests), tests/unit/__snapshots__/prompt.test.ts.snap (updated), scripts/ralph/prd.json (updated), scripts/ralph/progress.txt (updated)
+- Verification: tsc=PASS  vitest=PASS (360 tests)  eslint=PASS
+- Learnings for future iterations:
+  - `ParsedCable` includes `rawContent: string` — the full file text — so callers can map directly to `InboxEntry.content` for prompt building without re-serializing.
+  - `readInbox` silently skips malformed `.md` files in the inbox directory (catch-and-continue). This is intentional: a single corrupt cable shouldn't block all pending cables for an angel.
+  - Cable filenames use sanitized timestamps (colons → dashes) matching the log filename convention from `src/logs/log.ts`.
+  - The cable parser shares the same `extractSection` / `extractRequiredField` pattern as `response.ts` and `brief.ts` (private copies, not DRY). Three modules now have this pattern — a future task could extract to `src/protocol/parser-utils.ts`.
+  - `writeCable` does NOT validate that `from`/`to` angel IDs actually exist in the registry. Validation at that level is the caller's responsibility (e.g. the `cable` command in US-020 should load config and check).
 ---

@@ -273,6 +273,42 @@ describe('buildPrompt', () => {
     });
   });
 
+  describe('inbox with cables (snapshot)', () => {
+    it('snapshot with high-urgency cable inlined', () => {
+      const cables: InboxEntry[] = [
+        {
+          urgency: 'high',
+          subject: 'Breaking change in session API',
+          content: 'FROM: src-api\nTO: src-auth\nTIMESTAMP: 2026-04-28T14:30:00Z\nTYPE: breaking_change\nURGENCY: high\nSUBJECT: Breaking change in session API\nREQUIRES_ACK: true\n\nBODY:\nThe session.create() signature changed from positional args to config object.',
+        },
+      ];
+      const prompt = buildPrompt(makeInput({ inbox: cables }));
+      expect(prompt).toMatchSnapshot();
+    });
+
+    it('snapshot with mixed urgency cables', () => {
+      const cables: InboxEntry[] = [
+        {
+          urgency: 'high',
+          subject: 'Critical API change',
+          content: 'FROM: src-api\nTO: src-auth\nTYPE: breaking_change\nURGENCY: high\nSUBJECT: Critical API change\n\nBODY:\nEndpoint signature changed.',
+        },
+        {
+          urgency: 'normal',
+          subject: 'New utility available',
+          content: 'FROM: src-utils\nTO: src-auth\nTYPE: fyi\n\nBODY:\nformatDate() added.',
+        },
+        {
+          urgency: 'low',
+          subject: 'Docs updated',
+          content: 'FROM: _root\nTO: src-auth\nTYPE: fyi\n\nBODY:\nREADME refreshed.',
+        },
+      ];
+      const prompt = buildPrompt(makeInput({ inbox: cables }));
+      expect(prompt).toMatchSnapshot();
+    });
+  });
+
   describe('deterministic output', () => {
     it('produces identical output for identical input', () => {
       const input = makeInput();

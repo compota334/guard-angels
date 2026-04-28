@@ -427,8 +427,8 @@
         "tsc + vitest pass"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Cable module with writeCable/readInbox/parseCable. Prompt builder inbox rendering was already correct from US-014; added snapshot tests with cable content."
     },
     {
       "id": "US-020",
