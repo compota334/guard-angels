@@ -169,7 +169,7 @@
         "tsc + vitest pass"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "Subprocess invocation. Use execa, not raw child_process."
     },
     {

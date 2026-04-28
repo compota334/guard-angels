@@ -19,6 +19,8 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Synthetic test fixture at `tests/fixtures/projects/sample/` — has `.angels/_config.yml` with 3 angels (_root, src-auth, src-api), angel.md files for _root (active) and src-auth (draft), no angel.md for src-api.
 - Integration tests use `execaNode` from `execa` to run the built CLI. Build beforeAll in the test file. Use `nodeOptions: []` to avoid inheriting vitest's loader.
 - Folder heuristics: `src/angels/identify.ts` → `identifyCandidates(projectRoot, opts?)`. Ingest: `src/angels/ingest.ts` → `detectExistingMemory(folderPath, projectRoot)`.
+- Backend adapters: `src/backend/adapter.ts` (interface), `claude.ts`, `codex.ts`, `droid.ts`, `generic.ts` (implementations), `factory.ts` (`pickAdapter(config)` → adapter). All use execa with `input`/`reject:false`/`timeout`. Factory uses `parseCommandString` to split angel_cmd.
+- Test fixtures: `tests/fixtures/echo-backend.sh` (echoes stdin to stdout), `tests/fixtures/stderr-backend.sh` (writes to stderr, exits non-zero). Both are POSIX bash.
 
 ---
 
@@ -120,4 +122,15 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - Generic folder names are checked case-insensitively via `.toLowerCase()`. The list includes: utils, helpers, lib, common, shared, misc, types, config, assets, etc.
   - Hidden directories (starting with `.`) are skipped by identify.ts alongside the explicit skip list, so `.cache`, `.next`, etc. are excluded even if not in the skip set.
   - Tests use `mkdtemp` + `afterEach(rm)` for full isolation instead of shared fixtures, since identify/ingest are filesystem-heavy.
+---
+
+## 2026-04-28T06:05:00Z - US-008: Adaptadores de backend (claude/codex/droid/generic)
+- Implemented: Created `src/backend/{adapter.ts,claude.ts,codex.ts,droid.ts,generic.ts,factory.ts}`. BackendAdapter interface matches spec section 10 exactly. Each adapter uses execa with `input` for stdin piping, `timeout` for timeoutMs, `reject: false` for non-throwing. Claude adapter extracts session_id via regex; Codex extracts thread_id; Droid and Generic have no session ID extraction. Factory uses `parseCommandString` from execa to split angel_cmd, extracts basename of first token, maps to known adapter or falls back to Generic. Fake echo-backend.sh and stderr-backend.sh fixtures created for testing.
+- Files changed: src/backend/adapter.ts (new), src/backend/claude.ts (new), src/backend/codex.ts (new), src/backend/droid.ts (new), src/backend/generic.ts (new), src/backend/factory.ts (new), tests/unit/backend.test.ts (new, 25 tests), tests/fixtures/echo-backend.sh (new), tests/fixtures/stderr-backend.sh (new)
+- Verification: tsc=PASS  vitest=PASS (137 tests)  eslint=PASS
+- Learnings for future iterations:
+  - execa v9 `exitCode` is typed as `number | undefined` — use `?? 1` to satisfy strict typing.
+  - `parseCommandString` from execa splits on spaces naively. Paths with spaces (like `Guard Angel/`) will be split incorrectly. For real-world use this is fine since angel_cmd is typically a simple command name (`claude`, `codex`), but test fixtures must account for this.
+  - execa v9 `reject: false` returns the result object instead of throwing on non-zero exit — use this for adapters to capture all exit codes cleanly.
+  - Backend adapters are constructors taking `(cmd, args)` — the factory passes the parsed command and remaining args. This separates parsing from invocation cleanly.
 ---
