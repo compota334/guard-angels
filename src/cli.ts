@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { initAngels } from './commands/init.js';
 import { listAngels } from './commands/list.js';
 
 const program = new Command();
@@ -13,9 +14,13 @@ program
   .description('Bootstrap .angels/ in current project')
   .option('--auto', 'Accept all heuristic candidates')
   .option('--manual', 'Skip heuristics entirely')
-  .action(() => {
-    console.error('not implemented: init');
-    process.exit(1);
+  .action(async (options: { auto?: boolean; manual?: boolean }) => {
+    try {
+      await initAngels(process.cwd(), options);
+    } catch (err: unknown) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
   });
 
 program

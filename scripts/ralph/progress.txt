@@ -22,6 +22,7 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Backend adapters: `src/backend/adapter.ts` (interface), `claude.ts`, `codex.ts`, `droid.ts`, `generic.ts` (implementations), `factory.ts` (`pickAdapter(config)` → adapter). All use execa with `input`/`reject:false`/`timeout`. Factory uses `parseCommandString` to split angel_cmd.
 - Test fixtures: `tests/fixtures/echo-backend.sh` (echoes stdin to stdout), `tests/fixtures/stderr-backend.sh` (writes to stderr, exits non-zero). Both are POSIX bash.
 - Angel memory: `src/angels/memory.ts` — `readAngelMd(path)`, `writeAngelMd(path, angelMd)`, `updateMetadata(path, partial)`. Atomic write via tmpfile+rename. Zod-validated frontmatter (status, last_updated, last_updated_by). Exports `AngelFrontmatterSchema` and `AngelMd` type.
+- Init command: `src/commands/init.ts` — `initAngels(cwd, { auto?, manual? })`. Creates full `.angels/` directory tree, `_config.yml`, `_newspaper.md`, and `angel.md` for each angel. Supports interactive (readline prompt), `--auto` (accept all heuristic candidates), and `--manual` (user enters paths). Ingestion via backend adapter when AGENTS.md/CLAUDE.md exists; falls back to blank template on backend failure.
 
 ---
 
@@ -154,4 +155,16 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - Atomic write pattern: `crypto.randomBytes(6).toString('hex')` for tmpfile suffix, `fs.renameSync` for the rename. Cleanup of tmpfile on failure uses a try/catch that ignores cleanup errors.
   - Frontmatter parser is a simple key:value splitter (not a full YAML parser) — sufficient since angel.md frontmatter is flat scalars only. Handles both quoted and unquoted values.
   - `updateMetadata` reads the existing file, merges partial updates, then writes back — so a field update that fails Zod validation will throw before any write happens.
+---
+
+## 2026-04-28T06:25:00Z - US-010: Comando angels init (interactivo + --auto + --manual)
+- Implemented: Created `src/commands/init.ts` with `initAngels(cwd, opts)`. Three modes: interactive (readline-based number selection with "all"/"none" shortcuts), `--auto` (accepts all heuristic candidates), `--manual` (user enters folder paths one at a time with validation). Creates full `.angels/` directory tree: `_config.yml`, `_newspaper.md`, `_briefs/`, `_responses/`, `_inbox/`, `_outbox/`, `_locks/`, `_logs/`, `_cursors/`, `_archive/`. For each angel: creates `angel.md` with `status: draft`, `last_updated_by: main`. Ingestion: if folder has `AGENTS.md`/`CLAUDE.md`, invokes backend adapter with a focused prompt that asks the LLM to seed the angel.md body from existing content. Falls back to blank template if backend fails. Guards against re-initialization. Refuses `--auto` + `--manual` together. Wired into `cli.ts` replacing the stub.
+- Files changed: src/commands/init.ts (new), src/cli.ts (modified), tests/integration/init.test.ts (new, 5 tests)
+- Verification: tsc=PASS  vitest=PASS (166 tests)  eslint=PASS
+- Learnings for future iterations:
+  - The default `angel_cmd` is `claude -p --dangerously-skip-permissions` — on systems without Claude installed, ingestion silently falls back to the blank template with a warning. Integration tests rely on this fallback behavior.
+  - Interactive mode uses `readline.createInterface` from Node.js stdlib — no external prompt library needed. Manual mode also uses readline.
+  - `writeAngelMd` (from `memory.ts`) handles `mkdirSync({ recursive: true })` for the parent directory, so init doesn't need to pre-create the mirrored directory tree under `.angels/`.
+  - `yaml.stringify()` with `{ lineWidth: 0 }` prevents unwanted line wrapping in generated `_config.yml`.
+  - `pathToAngelId` (from `resolve.ts`) handles the path-to-id conversion; init doesn't need to duplicate that logic.
 ---

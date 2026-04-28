@@ -215,7 +215,7 @@
         "tsc + vitest pass"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "Largest task in M2. May spill into BUFFER if needed."
     },
     {
