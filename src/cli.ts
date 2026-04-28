@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { initAngels } from './commands/init.js';
 import { listAngels } from './commands/list.js';
 import { createAngel } from './commands/create.js';
+import { briefAngel } from './commands/brief.js';
 
 const program = new Command();
 
@@ -54,9 +55,14 @@ program
   .argument('<angel-id>', 'Angel identifier')
   .argument('<task>', 'Task description')
   .description('Phase 1: Write a brief, invoke angel in review mode')
-  .action(() => {
-    console.error('not implemented: brief');
-    process.exit(1);
+  .action(async (angelId: string, task: string) => {
+    try {
+      const exitCode = await briefAngel(process.cwd(), angelId, task);
+      process.exit(exitCode);
+    } catch (err: unknown) {
+      console.error((err as Error).message);
+      process.exit(3);
+    }
   });
 
 program

@@ -33,6 +33,7 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Protocol section parsing caveat: `extractSection` uses `\n(?=[A-Z][A-Z _]*:)` to detect next header. Lines in section content matching this pattern (e.g. `NOTE:`, `TODO:`) will truncate the section prematurely. Keep this in mind when designing response format (US-013).
 - Protocol response: `src/protocol/response.ts` — `writeResponse(projectRoot, data)`, `parseResponse(path)` / `parseResponseContent(raw)`. ResponseVerdict type: proceed|concerns|refuse|done|error. Done-only fields (CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED) validated at parse time.
 - Prompt builder: `src/protocol/prompt.ts` — `buildPrompt(input: PromptInput)` constructs the full angel system prompt. Four phases: init, review, execute, sweep. Fixed protocol header is shared; phase-specific instructions swap a single block. Inbox cables: high-urgency inlined in full, normal/low listed by subject only. `getProtocolHeaderLength()` exposes the header char count for token budget checks.
+- Brief command: `src/commands/brief.ts` — `briefAngel(cwd, angelId, task)` returns exit code (0=proceed, 1=concerns, 2=refuse, 3=error). Writes brief, invokes orchestrator in review mode, prints summary.
 
 ---
 
@@ -261,4 +262,15 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - The orchestrator computes the response path BEFORE invoking the backend, passing it in the prompt via `[OUTPUT INSTRUCTIONS]`. The fake backend extracts this path with `grep -oP` and writes the canned response there.
   - When the backend doesn't write a response file (or writes a malformed one), the orchestrator creates a synthetic `RESPONSE: error` response with the error details in the CONCERNS section. This avoids the caller needing to handle both "parsed response" and "no response" cases.
   - Lock is always released in a `finally` block, ensuring release on every code path including exceptions and timeouts.
+---
+
+## 2026-04-28T07:35:00Z - US-016: Comando angels brief (fase 1 / REVIEW)
+- Implemented: Created `src/commands/brief.ts` with `briefAngel(cwd, angelId, task)` function. Writes a brief with `phase: review`, invokes the orchestrator, prints a human-readable summary (CONCERNS, PROPOSED PLAN, QUESTIONS, PROCEED IF, TEST RESULTS sections), and returns exit code based on response verdict (0=proceed, 1=concerns, 2=refuse, 3=error). Wired into `src/cli.ts` replacing the stub. Integration tests cover all 4 response variants plus invalid angel-id.
+- Files changed: src/commands/brief.ts (new), src/cli.ts (modified), tests/integration/brief.test.ts (new, 5 tests), scripts/ralph/prd.json (updated)
+- Verification: tsc=PASS  vitest=PASS (286 tests)  eslint=PASS
+- Learnings for future iterations:
+  - `briefAngel` returns an exit code integer, not void — the CLI handler calls `process.exit(exitCode)`. This pattern keeps the command logic testable without mocking process.exit.
+  - Brief command integration tests use the same pattern as orchestrate.test.ts: call the function directly (not via CLI), set up tmpDir with fake backend scripts. This avoids the overhead of building the project in beforeAll.
+  - The brief command catches errors at the CLI level (process.exit(3)) but lets the `briefAngel` function throw — callers can choose their own error handling.
+  - `printResponseSummary` skips empty sections (only prints sections that have content) and indents each line with 2 spaces for readability.
 ---
