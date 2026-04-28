@@ -21,6 +21,7 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Folder heuristics: `src/angels/identify.ts` → `identifyCandidates(projectRoot, opts?)`. Ingest: `src/angels/ingest.ts` → `detectExistingMemory(folderPath, projectRoot)`.
 - Backend adapters: `src/backend/adapter.ts` (interface), `claude.ts`, `codex.ts`, `droid.ts`, `generic.ts` (implementations), `factory.ts` (`pickAdapter(config)` → adapter). All use execa with `input`/`reject:false`/`timeout`. Factory uses `parseCommandString` to split angel_cmd.
 - Test fixtures: `tests/fixtures/echo-backend.sh` (echoes stdin to stdout), `tests/fixtures/stderr-backend.sh` (writes to stderr, exits non-zero). Both are POSIX bash.
+- Angel memory: `src/angels/memory.ts` — `readAngelMd(path)`, `writeAngelMd(path, angelMd)`, `updateMetadata(path, partial)`. Atomic write via tmpfile+rename. Zod-validated frontmatter (status, last_updated, last_updated_by). Exports `AngelFrontmatterSchema` and `AngelMd` type.
 
 ---
 
@@ -142,4 +143,15 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Learnings for future iterations:
   - identify.ts has a double safety net for `.git`: it's in the SKIP_DIRS set AND hidden dirs (starting with `.`) are filtered by the `!entry.name.startsWith('.')` check. Either alone would suffice, but both existing is fine for clarity.
   - `reject: false` in execa v9 is the key pattern for adapters — it ensures the adapter never throws on subprocess failure. Timeout errors from execa will still throw, though — future orchestrator code (US-015) will need to catch those at a higher level.
+---
+
+## 2026-04-28T06:15:00Z - US-009: Lectura/escritura de angel.md con frontmatter
+- Implemented: Created `src/angels/memory.ts` with `readAngelMd(path)`, `writeAngelMd(path, angelMd)`, and `updateMetadata(path, partial)`. Zod schema validates frontmatter (`status: draft|active`, `last_updated: ISO string`, `last_updated_by: main|sweep|self`). Atomic writes via tmpfile + rename in same directory. Frontmatter parser handles quoted/unquoted YAML values. No silent defaults — all three fields required.
+- Files changed: src/angels/memory.ts (new), tests/unit/memory.test.ts (new, 24 tests)
+- Verification: tsc=PASS  vitest=PASS (161 tests)  eslint=PASS
+- Learnings for future iterations:
+  - `AngelFrontmatterSchema` and `AngelMd` type are exported from `src/angels/memory.ts` for use by other modules (init, execute, sweep).
+  - Atomic write pattern: `crypto.randomBytes(6).toString('hex')` for tmpfile suffix, `fs.renameSync` for the rename. Cleanup of tmpfile on failure uses a try/catch that ignores cleanup errors.
+  - Frontmatter parser is a simple key:value splitter (not a full YAML parser) — sufficient since angel.md frontmatter is flat scalars only. Handles both quoted and unquoted values.
+  - `updateMetadata` reads the existing file, merges partial updates, then writes back — so a field update that fails Zod validation will throw before any write happens.
 ---
