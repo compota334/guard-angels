@@ -33,7 +33,7 @@
         "vitest run passes (zero tests still fine)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

@@ -8,6 +8,8 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Vitest configured with `passWithNoTests: true` in `vitest.config.ts` so zero-test runs exit 0.
 - ESLint uses flat config (`eslint.config.js`) with `@eslint/js` + `typescript-eslint`.
 - Verification commands: `npx tsc --noEmit`, `npx vitest run`, `npx eslint . --quiet`.
+- tsconfig has `"types": ["node"]` — required for `process`, `Buffer`, etc.
+- CLI entry: `src/bin/angels.ts` (shebang) → imports `src/cli.ts` (commander program). Build: `npm run build` → `dist/bin/angels.js`.
 
 ---
 
@@ -20,4 +22,14 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - Vitest 4.x does not support `--reporter=basic` — just use `npx vitest run` without custom reporter
   - typescript-eslint uses flat config via `tseslint.config()` helper
   - zod 4.x was installed (latest stable); API may differ from zod 3.x docs
+---
+
+## 2026-04-28T05:25:00Z - US-002: CLI entrypoint con todos los comandos stub
+- Implemented: Created src/bin/angels.ts (shebang entry) and src/cli.ts (commander with all 10 commands as stubs). Added `types: ["node"]` to tsconfig.json for process global. Build produces dist/bin/angels.js with shebang preserved.
+- Files changed: src/bin/angels.ts, src/cli.ts, tsconfig.json
+- Verification: tsc=PASS  vitest=PASS  eslint=PASS
+- Learnings for future iterations:
+  - tsconfig needs `"types": ["node"]` explicitly for `process` to be available — NodeNext moduleResolution doesn't auto-include it
+  - commander preserves shebang through tsc build (tsc copies it as-is from the first line)
+  - Stub pattern: `console.error('not implemented: <name>'); process.exit(1);`
 ---
