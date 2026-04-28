@@ -20,6 +20,10 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Integration tests use `execaNode` from `execa` to run the built CLI. Build beforeAll in the test file. Use `nodeOptions: []` to avoid inheriting vitest's loader.
 - Folder heuristics: `src/angels/identify.ts` → `identifyCandidates(projectRoot, opts?)`. Ingest: `src/angels/ingest.ts` → `detectExistingMemory(folderPath, projectRoot)`.
 - Backend adapters: `src/backend/adapter.ts` (interface), `claude.ts`, `codex.ts`, `droid.ts`, `generic.ts` (implementations), `factory.ts` (`pickAdapter(config)` → adapter). All use execa with `input`/`reject:false`/`timeout`. Factory uses `parseCommandString` to split angel_cmd.
+- Lock module: `src/locks/lock.ts` — `acquireLock(projectRoot, ttlMs)`, `releaseLock(projectRoot)`, `readLock(lockPath)`, `isStale(info)`. Single global lock at `.angels/_locks/orchestrator.lock`. Stale detection: PID dead OR TTL elapsed.
+- Log module: `src/logs/log.ts` — `createLogStreams(projectRoot, angelId, timestamp)` returns `LogStreams` with `appendStdout`/`appendStderr`/`close`. Files at `_logs/<angel-id>/<timestamp>.{stdout,stderr}`. `writeLogMeta` writes `.meta.json`.
+- Orchestrator: `src/protocol/orchestrate.ts` — `invoke(projectRoot, input)` is the central coordination function. Acquires lock → builds prompt → spawns backend → logs → parses response → releases lock. Handles timeouts and missing response files with synthetic error responses.
+- execa `parseCommandString` splits on spaces — paths with spaces (like `Guard Angel/`) break. Integration tests must copy fixture scripts to `/tmp` (no spaces) before using them as `angel_cmd`.
 - Test fixtures: `tests/fixtures/echo-backend.sh` (echoes stdin to stdout), `tests/fixtures/stderr-backend.sh` (writes to stderr, exits non-zero). Both are POSIX bash.
 - Angel memory: `src/angels/memory.ts` — `readAngelMd(path)`, `writeAngelMd(path, angelMd)`, `updateMetadata(path, partial)`. Atomic write via tmpfile+rename. Zod-validated frontmatter (status, last_updated, last_updated_by). Exports `AngelFrontmatterSchema` and `AngelMd` type.
 - Init command: `src/commands/init.ts` — `initAngels(cwd, { auto?, manual? })`. Creates full `.angels/` directory tree, `_config.yml`, `_newspaper.md`, and `angel.md` for each angel. Supports interactive (readline prompt), `--auto` (accept all heuristic candidates), and `--manual` (user enters paths). Ingestion via backend adapter when AGENTS.md/CLAUDE.md exists; falls back to blank template on backend failure.
@@ -243,4 +247,18 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Learnings for future iterations:
   - The shared protocol header says REVIEW responds with "concerns or proceed" but the phase-specific REVIEW instructions add "refuse" as a third option. This mirrors the spec verbatim (section 8 of app requeriments.md) — not a bug, but future agents should be aware of this intentional asymmetry.
   - The section boundary regex `\n(?=[A-Z][A-Z_ ]*:)` in both brief.ts and response.ts has the same known limitation: content lines matching `^[A-Z][A-Z_ ]*:` (e.g. `NOTE:`, `ERROR:`, `TODO:`) will be misinterpreted as section boundaries. This is documented in BUG-006 notes and is inherent in the text format design.
+---
+
+## 2026-04-28T07:25:00Z - US-015: Orquestador: lock + spawn + log + parse
+- Implemented: Created three modules: `src/locks/lock.ts` (global orchestrator lock with PID+TTL stale detection and atomic acquire/release), `src/logs/log.ts` (streaming log file creation with `.stdout`, `.stderr`, and `.meta.json` for each angel invocation), and `src/protocol/orchestrate.ts` (central `invoke()` function that coordinates the full angel invocation flow: lock → prompt → spawn → log → parse → release). Also created `tests/fixtures/fake-review-backend.sh` for integration testing.
+- Files changed: src/locks/lock.ts (new), src/logs/log.ts (new), src/protocol/orchestrate.ts (new), tests/fixtures/fake-review-backend.sh (new), tests/unit/lock.test.ts (new, 18 tests), tests/unit/log.test.ts (new, 7 tests), tests/integration/orchestrate.test.ts (new, 5 tests)
+- Verification: tsc=PASS  vitest=PASS (281 tests)  eslint=PASS
+- Learnings for future iterations:
+  - execa `parseCommandString` naively splits on whitespace — the project path `Guard Angel/` contains a space, so fixture scripts used as `angel_cmd` must be copied to a space-free path (like `/tmp`) in integration tests. This is a known limitation documented in BUG-004 notes.
+  - Lock uses a plain-text format (`pid:`, `started_at:`, `ttl_ms:`) parsed by regex — NOT YAML or JSON. Simple enough that malformed files are treated as absent (return null).
+  - `isStale` checks PID liveness via `process.kill(pid, 0)` (signal 0 = existence check without actually sending a signal). Returns `false` if PID exists (catch → false), `true` if PID is dead.
+  - Log files use sanitized timestamps (colons → dashes) in filenames to avoid filesystem issues. Format: `_logs/<angel-id>/<ISO-with-dashes>.{stdout,stderr,meta.json}`.
+  - The orchestrator computes the response path BEFORE invoking the backend, passing it in the prompt via `[OUTPUT INSTRUCTIONS]`. The fake backend extracts this path with `grep -oP` and writes the canned response there.
+  - When the backend doesn't write a response file (or writes a malformed one), the orchestrator creates a synthetic `RESPONSE: error` response with the error details in the CONCERNS section. This avoids the caller needing to handle both "parsed response" and "no response" cases.
+  - Lock is always released in a `finally` block, ensuring release on every code path including exceptions and timeouts.
 ---
