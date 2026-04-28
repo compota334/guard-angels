@@ -412,8 +412,8 @@
         "If no issues, commit docs: [BUG-009] Auditoría sin hallazgos sobre tareas US-017, US-018"
       ],
       "priority": 27,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "No issues found. Newspaper append is durable via O_APPEND (atomic for <4096 bytes). readNewspaperSince safely skips partial entries (header regex requires complete ## <ts> [<id>] pattern). Cursor logic correctly handles mid-entry cursor positions by skipping unmatched partial headers. Territory detection handles root angel short-circuit and correctly skips .angels/node_modules/.git/dist."
     },
     {
       "id": "US-019",

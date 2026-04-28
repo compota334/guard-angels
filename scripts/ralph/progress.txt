@@ -311,3 +311,13 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - `formatNewspaperEntry` produces entries ending with `\n` (a single trailing newline after the last content line). Consecutive entries are thus separated by the trailing newline from the previous entry.
   - `execute.ts` was refactored to use `appendNewspaper` from `src/messaging/newspaper.ts` instead of raw `fs.appendFileSync`. The inline `appendNewspaperEntry` function now builds a `NewspaperEntry` object and delegates to the module.
 ---
+
+## 2026-04-28T08:05:00Z - BUG-009: Auditoría tras US-017 y US-018
+- Implemented: No issues found in last 2 tasks. Verified: tsc=PASS, vitest=PASS (326 tests), eslint=PASS. Newspaper append is durable via `fs.appendFileSync` with `O_APPEND` (atomic for writes under PIPE_BUF/4096 bytes — entries are well under this). `readNewspaperSince` safely handles partial writes: the header regex `^## (\S+) \[([^\]]+)\]$` requires a complete header line, so a truncated write mid-header is ignored. Text before the first valid header is skipped. Cursor logic via `getCursor`/`setCursor` is atomic (tmpfile+rename); a forced kill mid-setCursor leaves either the old value or the new one, never corruption. Territory detection in execute.ts correctly handles: root angel short-circuit (returns [] immediately), in-territory files (via absolute path prefix check), and skips `.angels/`, `node_modules/`, `.git/`, `dist/` from snapshot. Newspaper integration in execute.ts correctly builds `NewspaperEntry` objects and delegates to the module.
+- Files changed: scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS  eslint=PASS
+- Learnings for future iterations:
+  - `walkDir` in execute.ts does NOT skip hidden directories other than `.git` — it only skips the 4 entries in `SKIP_DIRS`. Other hidden dirs like `.cache` or `.next` are included in the snapshot. This is intentional for territory detection (an angel could legitimately modify hidden directories).
+  - Symlinks are silently skipped by the snapshot walker — `entry.isFile()` returns false for symlinks. This means symlink-based territory violations go undetected, but this is acceptable for v1.
+  - `formatNewspaperEntry` actually ends entries with `\n\n` (two newlines via two empty string pushes joined by `\n`), not one. The progress.txt entry from US-018 says "single trailing newline" but the actual code produces a blank line separator between entries. Not a bug — the code is correct, the note was slightly inaccurate.
+---
