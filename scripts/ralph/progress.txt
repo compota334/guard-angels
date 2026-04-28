@@ -99,3 +99,12 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - Integration tests need `nodeOptions: []` when using `execaNode` to avoid inheriting vitest's `--experimental-vm-modules` loader flag.
   - Frontmatter parsing uses simple regex on `status:` line rather than a full YAML parser — lightweight for read-only status display.
 ---
+
+## 2026-04-28T05:50:00Z - BUG-003: Auditoría tras US-005 y US-006
+- Implemented: No issues found in last 2 tasks. Verified: tsc=PASS, vitest=PASS (87 tests), eslint=PASS, build=PASS. Registry validates uniqueness + root constraints. List command exits 1 with clear error pointing at `angels init` when no config. Fixture at tests/fixtures/projects/sample/ is well-structured and reusable.
+- Files changed: scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS  eslint=PASS
+- Learnings for future iterations:
+  - The synthetic fixture at `tests/fixtures/projects/sample/` has empty src/auth/ and src/api/ directories — future tasks (US-007 heuristics) will need to add source files to those dirs for their own tests.
+  - `list.ts` passes `_root` (not `.`) to `angelMdFile` for the root angel — this matches the `.angels/_root/angel.md` convention.
+---

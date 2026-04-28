@@ -137,8 +137,8 @@
         "If no issues, commit docs: [BUG-003] Auditoría sin hallazgos sobre tareas US-005, US-006"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "No issues found. Registry validates uniqueness + root constraints correctly. List command handles missing config with clear error (exit 1). Fixture is reusable."
     },
     {
       "id": "US-007",
