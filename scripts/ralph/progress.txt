@@ -1,0 +1,23 @@
+# Ralph Progress Log
+Started: Tue Apr 28 04:57:10 AM CEST 2026
+---
+
+## Codebase Patterns
+- Project uses ESM (`"type": "module"` in package.json). All imports need `.js` extensions for TypeScript NodeNext resolution.
+- tsconfig: strict, ES2022, NodeNext module/resolution, outDir=dist, rootDir=src.
+- Vitest configured with `passWithNoTests: true` in `vitest.config.ts` so zero-test runs exit 0.
+- ESLint uses flat config (`eslint.config.js`) with `@eslint/js` + `typescript-eslint`.
+- Verification commands: `npx tsc --noEmit`, `npx vitest run`, `npx eslint . --quiet`.
+
+---
+
+## 2026-04-28T05:10:00Z - US-001: Inicializar proyecto npm + TypeScript
+- Implemented: Bootstrap project with package.json (ESM, Node>=20, bin.angels), tsconfig.json (strict, ES2022, NodeNext), .editorconfig, vitest.config.ts, eslint.config.js, src/index.ts placeholder, README.md stub
+- Files changed: package.json, package-lock.json, tsconfig.json, vitest.config.ts, eslint.config.js, .editorconfig, src/index.ts, README.md
+- Verification: tsc=PASS  vitest=PASS  eslint=PASS
+- Learnings for future iterations:
+  - Vitest 4.x requires `passWithNoTests: true` in vitest.config.ts; otherwise exits 1 with no test files
+  - Vitest 4.x does not support `--reporter=basic` — just use `npx vitest run` without custom reporter
+  - typescript-eslint uses flat config via `tseslint.config()` helper
+  - zod 4.x was installed (latest stable); API may differ from zod 3.x docs
+---

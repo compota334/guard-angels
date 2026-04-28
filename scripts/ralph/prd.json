@@ -1,0 +1,733 @@
+{
+  "project": "Guard Angels",
+  "branchName": "ralph/guard-angels-v1",
+  "description": "Build the Guard Angels CLI orchestrator end-to-end per app requeriments.md. Milestones M1-M6: skeleton, init/create, brief/execute protocol, newspaper/cables, sweep, doctor/polish. Bug-hunt audits every 2 implementation tasks. Buffer slots at the end for emergent work.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Inicializar proyecto npm + TypeScript",
+      "description": "Bootstrap the Node project: package.json, tsconfig.json, .editorconfig, README.md placeholder, npm scripts (build, test, typecheck, lint). Install runtime deps (commander, execa, yaml, zod) and dev deps (typescript, @types/node, vitest, eslint + a sensible config). Set bin entry as `angels` -> dist/bin/angels.js. Commit must leave `npx tsc --noEmit` passing on an empty src/.",
+      "acceptanceCriteria": [
+        "package.json declares Node >=20, type=module, bin.angels, scripts {build,test,typecheck,lint}, with latest stable versions of commander/execa/yaml/zod/typescript/@types/node/vitest/eslint",
+        "tsconfig.json with strict:true, target ES2022, module NodeNext, moduleResolution NodeNext, outDir dist, rootDir src",
+        "src/ exists with a placeholder src/index.ts (empty export {})",
+        "npx tsc --noEmit exits 0",
+        "npx vitest run does not error on a fresh install (zero tests is OK)",
+        "README.md is a stub with name, one-line description, and a TODO note pointing at app requeriments.md"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "First task. Establishes the verification commands the rest of the loop relies on."
+    },
+    {
+      "id": "US-002",
+      "title": "CLI entrypoint con todos los comandos stub",
+      "description": "Wire commander. Create src/bin/angels.ts (shebang + import) and src/cli.ts that registers every command: init, list, create, brief, execute, cable, inbox, newspaper, sweep, doctor. Each handler prints `not implemented: <command>` and exits 1. Build must produce dist/bin/angels.js that runs end-to-end via `node dist/bin/angels.js --help`.",
+      "acceptanceCriteria": [
+        "src/bin/angels.ts is the executable entry, with #!/usr/bin/env node",
+        "src/cli.ts uses commander to register all 10 commands listed in app requeriments.md section 7",
+        "Each command's action handler currently logs `not implemented: <name>` and process.exit(1)",
+        "npm run build produces dist/bin/angels.js with the shebang preserved",
+        "node dist/bin/angels.js --help lists every command",
+        "npx tsc --noEmit passes",
+        "vitest run passes (zero tests still fine)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BUG-001",
+      "title": "Auditoría tras US-001 y US-002",
+      "description": "Bug-hunt pass over the project bootstrap. Verify the build is clean, the CLI executes, no orphaned files, no missing scripts, no version pins to outdated packages.",
+      "acceptanceCriteria": [
+        "Read the diff for the last 2 commits with `git log --stat -2`",
+        "Run npx tsc --noEmit, npm run build, node dist/bin/angels.js --help, npx vitest run, and (if eslint is configured) npx eslint . --quiet — all must pass",
+        "Verify no debug logs / TODOs left from US-001 or US-002 unless intentional",
+        "If issues found: fix in the smallest possible diff, commit as fix: [BUG-001]",
+        "If no issues: append `## Codebase Patterns` notes to progress.txt about how the bootstrap is structured, then commit docs: [BUG-001] Auditoría sin hallazgos sobre tareas US-001, US-002"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Carga y validación de _config.yml",
+      "description": "Implement src/config/{schema.ts,defaults.ts,load.ts}. Use zod to validate the YAML config per app requeriments.md section 6.1. load() reads .angels/_config.yml relative to the current working directory; throws a clear error if missing or malformed. Provide a defaults.ts with the canonical default values (backend.angel_cmd, timeout, sweep autonomy).",
+      "acceptanceCriteria": [
+        "src/config/schema.ts exports a Zod schema matching the YAML structure exactly",
+        "src/config/load.ts: loadConfig(cwd: string) that reads .angels/_config.yml, parses with `yaml`, validates with Zod, returns typed Config",
+        "Errors are descriptive and name the offending field — no silent defaults for missing required fields",
+        "src/config/defaults.ts exports DEFAULT_BACKEND_CMD, DEFAULT_TIMEOUT_SECONDS, etc.",
+        "Unit tests in tests/unit/config.test.ts cover: valid config, missing file, invalid YAML, schema violation",
+        "tsc + vitest pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Utilidades de paths y resolución de angel-id",
+      "description": "Implement src/paths/{layout.ts,resolve.ts}. layout.ts exports canonical paths under .angels/ (briefsDir, responsesDir, inboxDir, outboxDir, locksDir, logsDir, cursorsDir, archiveDir, newspaperFile, configFile, rootAngelDir). resolve.ts converts angel-id <-> folder path per the convention in section 5 (slashes -> dashes, _root special-case).",
+      "acceptanceCriteria": [
+        "src/paths/layout.ts: pure functions taking the project root and returning absolute paths for every well-known location",
+        "src/paths/resolve.ts: angelIdToPath(id), pathToAngelId(path), isRootAngel(id)",
+        "Unit tests cover: nested paths (src/auth -> src-auth), root angel (_root <-> '.'), invalid inputs throw",
+        "tsc + vitest pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BUG-002",
+      "title": "Auditoría tras US-003 y US-004",
+      "description": "Bug-hunt pass over config and path utilities.",
+      "acceptanceCriteria": [
+        "Read git log --stat -2",
+        "Run all verification commands",
+        "Verify schema rejects every malformed shape it should; verify path utilities round-trip correctly for at least: deeply nested paths, paths with hyphens already in segment names (edge case for the slash->dash convention), '.' for root",
+        "Fix any issues found with smallest diff",
+        "If no issues, commit docs: [BUG-002] Auditoría sin hallazgos sobre tareas US-003, US-004"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Registro de ángeles en memoria",
+      "description": "Implement src/angels/registry.ts. Loads the `angels` array from _config.yml and exposes lookup-by-id, list-all, get-root. Validates that no two angels share an id or path, and that the _root angel exists with type=root.",
+      "acceptanceCriteria": [
+        "src/angels/registry.ts exports class or factory: AngelRegistry.fromConfig(config) -> { getById, listAll, getRoot, getByPath }",
+        "Throws on duplicate id, duplicate path, or missing _root",
+        "Unit tests cover happy path, duplicates, missing root",
+        "tsc + vitest pass"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Comando angels list",
+      "description": "Implement src/commands/list.ts. Reads config, builds registry, prints a clean table: id | type | path | status (status read from angel.md frontmatter when present, else `-`). Wire it into cli.ts so `angels list` works end-to-end.",
+      "acceptanceCriteria": [
+        "src/commands/list.ts replaces the stub in cli.ts for `list`",
+        "Output is human-readable; if no .angels/_config.yml exists, prints a clear error pointing at `angels init`",
+        "Status column reads YAML frontmatter from each angel's angel.md if it exists; shows `-` if missing",
+        "Integration test: build a synthetic project tree under tests/fixtures/projects/, run the compiled CLI via execa, snapshot the output",
+        "tsc + vitest pass"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BUG-003",
+      "title": "Auditoría tras US-005 y US-006",
+      "description": "Bug-hunt pass over registry and list command.",
+      "acceptanceCriteria": [
+        "Read git log --stat -2 and verify the synthetic fixture is reusable for later tests",
+        "Run all verification commands",
+        "Verify `angels list` exits with a non-zero code when no config exists, and prints a useful error",
+        "Fix any issues found",
+        "If no issues, commit docs: [BUG-003] Auditoría sin hallazgos sobre tareas US-005, US-006"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Heurísticas de carpetas significativas + ingestión",
+      "description": "Implement src/angels/{identify.ts,ingest.ts}. identify.ts walks a project tree and returns folder candidates per heuristics in app requeriments.md section 12 (M2): at least 3 source files OR a non-generic name OR contains an index/main file. ingest.ts checks if a candidate folder has AGENTS.md or non-root CLAUDE.md and returns its content for seeding angel.md drafts.",
+      "acceptanceCriteria": [
+        "identify.ts: identifyCandidates(projectRoot, opts?) -> Array<{ path, reason }>. Skips node_modules, dist, .git, .angels, common build outputs",
+        "ingest.ts: detectExistingMemory(folderPath) -> { source: 'AGENTS.md' | 'CLAUDE.md' | null, content: string | null }. Project-root CLAUDE.md is never treated as a folder memory file",
+        "Unit tests with synthetic fixtures: a folder with 5 .ts files (yes), a folder named `utils` with 1 file (no — generic name), a folder with index.ts (yes), a folder with an AGENTS.md (ingest detects it)",
+        "tsc + vitest pass"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Adaptadores de backend (claude/codex/droid/generic)",
+      "description": "Implement src/backend/{adapter.ts,claude.ts,codex.ts,droid.ts,generic.ts,factory.ts}. adapter.ts defines the BackendAdapter interface from app requeriments.md section 10. factory.ts inspects the configured angel_cmd, parses the first token, and returns the matching adapter (or generic). Each adapter spawns the configured CLI via execa, pipes the prompt via stdin, captures stdout/stderr, and (where supported) extracts a session/thread ID from stdout via best-effort regex.",
+      "acceptanceCriteria": [
+        "BackendAdapter interface matches the spec in section 10",
+        "claude adapter pipes prompt via stdin, supports --dangerously-skip-permissions and any extra args from config",
+        "codex adapter shells out to `codex exec`, pipes prompt via stdin",
+        "droid adapter shells out to `droid exec`, pipes prompt via stdin",
+        "generic adapter takes any command string and pipes prompt via stdin",
+        "factory.pick(config) parses backend.angel_cmd and returns the right adapter",
+        "Unit tests use a fake echo-script as the backend command; verify stdout/stderr/code capture and session-id extraction stubs",
+        "tsc + vitest pass"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Subprocess invocation. Use execa, not raw child_process."
+    },
+    {
+      "id": "BUG-004",
+      "title": "Auditoría tras US-007 y US-008",
+      "description": "Bug-hunt pass over identification heuristics and backend adapters.",
+      "acceptanceCriteria": [
+        "Read git log --stat -2",
+        "Run all verification commands",
+        "Verify the heuristics don't pick up node_modules / dist / .git in any synthetic fixture; verify each backend adapter handles a non-zero exit code from the subprocess without throwing unexpectedly",
+        "Fix any issues found",
+        "If no issues, commit docs: [BUG-004] Auditoría sin hallazgos sobre tareas US-007, US-008"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Lectura/escritura de angel.md con frontmatter",
+      "description": "Implement src/angels/memory.ts. Reads angel.md as { frontmatter: { status, last_updated, last_updated_by }, body: string }. Writes back atomically. Validates frontmatter via zod. Provides a helper to update only the metadata fields without disturbing the body.",
+      "acceptanceCriteria": [
+        "memory.ts: readAngelMd(path), writeAngelMd(path, { frontmatter, body }), updateMetadata(path, partial). Atomic write via tmpfile + rename",
+        "Frontmatter schema (zod): status: 'draft' | 'active'; last_updated: ISO datetime; last_updated_by: 'main' | 'sweep' | 'self'",
+        "Unit tests: round-trip read/write, malformed frontmatter throws, missing frontmatter throws (no silent defaults)",
+        "tsc + vitest pass"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Comando angels init (interactivo + --auto + --manual)",
+      "description": "Implement src/commands/init.ts. Walks the project tree, runs heuristics from US-007, presents candidates to the user in interactive mode (default), accepts toggles, then for each chosen folder: creates .angels/<mirrored-path>/ with a draft angel.md (status: draft). For ingestion, if the folder has AGENTS.md/CLAUDE.md, the backend CLI is invoked (one shot per folder) with a tight prompt that produces the draft from the existing content. If no existing memory, a minimal blank-template draft is created without invoking the backend. Also creates _config.yml with the chosen angels registered, plus the empty _newspaper.md, _briefs/, _responses/, etc. directories. --auto accepts every heuristic candidate. --manual skips heuristics and only registers folders the user explicitly names via prompts.",
+      "acceptanceCriteria": [
+        "Interactive mode uses commander's built-in prompts or a simple readline loop — no extra inquirer dep unless trivial",
+        "--auto and --manual flags work as described",
+        ".angels/_config.yml is generated with one entry per chosen angel plus _root",
+        "Each generated angel.md has YAML frontmatter with status: draft and last_updated_by: main",
+        "Existing AGENTS.md/CLAUDE.md content is passed to the backend adapter in a focused prompt for ingestion",
+        "Integration test using the fake-backend script (see US-028) verifies the full init flow on a synthetic project tree",
+        "tsc + vitest pass"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Largest task in M2. May spill into BUFFER if needed."
+    },
+    {
+      "id": "BUG-005",
+      "title": "Auditoría tras US-009 y US-010",
+      "description": "Bug-hunt pass over angel.md memory and init command.",
+      "acceptanceCriteria": [
+        "Read git log --stat -2",
+        "Run all verification commands",
+        "Verify atomic writes don't leave .tmp files behind on failure; verify init creates exactly the expected directory tree on a fresh fixture; verify --manual skips ingestion entirely when the user provides no folders",
+        "Fix any issues found",
+        "If no issues, commit docs: [BUG-005] Auditoría sin hallazgos sobre tareas US-009, US-010"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Comando angels create <path>",
+      "description": "Implement src/commands/create.ts. Adds a new angel for a specific folder: registers it in _config.yml, creates .angels/<mirrored-path>/angel.md (draft, with ingestion if applicable). Refuses if an angel already exists at that path or with that id. Refuses if the path is outside the project root.",
+      "acceptanceCriteria": [
+        "create.ts: angels create <path> registers a new angel and creates the draft angel.md",
+        "Refuses with a clear error on duplicate, non-existent path, or path outside project root",
+        "Reuses the ingestion path from US-010",
+        "Integration test verifies success and at least two failure modes",
+        "tsc + vitest pass"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Formato de briefs (escritor + parser)",
+      "description": "Implement src/protocol/brief.ts. writeBrief({ angelId, phase, type, task, context, expectedScope, priorResponse? }) writes a file at _briefs/<angel-id>/<iso>-<seq>.md, computing seq from existing same-day files (max+1, zero-padded). parseBrief(path) reads and validates the file back into a structured object.",
+      "acceptanceCriteria": [
+        "writeBrief returns the full path of the file it wrote",
+        "Sequence numbering: same-day briefs increment 001, 002, 003... independently per angel-id",
+        "parseBrief validates required fields (TO, FROM, TIMESTAMP, PHASE, TYPE, TASK) and throws on malformed input",
+        "Unit tests: round-trip, sequence collision handling, malformed brief throws",
+        "tsc + vitest pass"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BUG-006",
+      "title": "Auditoría tras US-011 y US-012",
+      "description": "Bug-hunt pass over create command and brief format.",
+      "acceptanceCriteria": [
+        "Read git log --stat -2",
+        "Run all verification commands",
+        "Verify sequence numbering doesn't double-up under rapid successive calls in the same second; verify brief parser handles trailing whitespace, missing optional sections, and CRLF gracefully",
+        "Fix any issues found",
+        "If no issues, commit docs: [BUG-006] Auditoría sin hallazgos sobre tareas US-011, US-012"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Formato de respuestas (escritor + parser)",
+      "description": "Implement src/protocol/response.ts. writeResponse and parseResponse for the format in app requeriments.md section 6.4. RESPONSE field must be one of: proceed, concerns, refuse, done, error. Parser validates the enum and the conditional fields (CABLES SENT / FILES CHANGED / ANGEL_MD_UPDATED only valid when RESPONSE: done).",
+      "acceptanceCriteria": [
+        "writeResponse + parseResponse round-trip cleanly",
+        "Parser rejects RESPONSE values outside the enum",
+        "Parser rejects 'done'-only fields appearing on non-'done' responses",
+        "Optional TEST_RESULTS section is parsed if present",
+        "Unit tests cover each RESPONSE variant",
+        "tsc + vitest pass"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Constructor de prompt (REVIEW/EXECUTE/INIT/SWEEP)",
+      "description": "Implement src/protocol/prompt.ts. buildPrompt({ phase, angel, angelMd, newspaperDelta, inbox, brief, responsePath }) -> string. Concatenates the fixed protocol header (per app requeriments.md section 8) + a phase-specific instructions block + identity + memory + newspaper delta + inbox + brief + output instructions. Header text is centralized; phase variants only swap a single block.",
+      "acceptanceCriteria": [
+        "Four phase variants: init, review, execute, sweep",
+        "Snapshot tests for each phase (deterministic input -> deterministic prompt)",
+        "Header explicitly states: read any file, write only inside designated folder",
+        "Token cost is a concern: keep the fixed header under ~600 tokens (rough check via length)",
+        "tsc + vitest pass"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BUG-007",
+      "title": "Auditoría tras US-013 y US-014",
+      "description": "Bug-hunt pass over response parser and prompt builder.",
+      "acceptanceCriteria": [
+        "Read git log --stat -2",
+        "Run all verification commands",
+        "Verify response parser rejects every invalid combination it should; verify prompt builder produces stable output across runs (no nondeterministic ordering of inbox cables, etc.)",
+        "Fix any issues found",
+        "If no issues, commit docs: [BUG-007] Auditoría sin hallazgos sobre tareas US-013, US-014"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Orquestador: lock + spawn + log + parse",
+      "description": "Implement src/protocol/orchestrate.ts and src/locks/lock.ts and src/logs/log.ts. orchestrate.invoke({ phase, angelId, briefPath }) -> response: (1) acquires the global orchestrator lock, (2) builds the prompt, (3) spawns the backend adapter, (4) streams stdout/stderr to .angels/_logs/<angel-id>/<timestamp>.{stdout,stderr}, (5) writes optional .meta.json with sessionId on success, (6) parses the response file the angel wrote, (7) releases the lock. Lock file: PID + ISO start time, TTL = angel_timeout_seconds + 30s. If lock is held but TTL expired, treat as stale and reclaim.",
+      "acceptanceCriteria": [
+        "Single global lock at .angels/_locks/orchestrator.lock; never per-angel locks in v1",
+        "Stale-lock detection: PID no longer alive OR TTL elapsed",
+        "Logs are written incrementally (streamed), not buffered, so a hung backend leaves partial logs for debugging",
+        "Timeout enforced via execa's timeout option; on timeout, kill the subprocess and write a synthetic error response",
+        "Integration test using the fake-backend script: invoke a REVIEW with a happy-path canned response, verify lock acquired+released, logs written, response parsed",
+        "tsc + vitest pass"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Comando angels brief (fase 1 / REVIEW)",
+      "description": "Implement src/commands/brief.ts. Wires US-012 (write brief) + US-015 (orchestrate) for phase=review. Prints a clean human-readable summary of the angel's response to stdout (RESPONSE, CONCERNS, PROPOSED PLAN, QUESTIONS, PROCEED IF). Returns exit code 0 on RESPONSE: proceed | concerns; non-zero on refuse | error.",
+      "acceptanceCriteria": [
+        "angels brief <angel-id> \"<task>\" works end-to-end against the fake backend",
+        "Output formatting is clean: section headers, bullet lists for concerns/questions",
+        "Exit codes encode the response variant (0 = proceed, 1 = concerns, 2 = refuse, 3 = error)",
+        "Integration test covers each response variant",
+        "tsc + vitest pass"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BUG-008",
+      "title": "Auditoría tras US-015 y US-016",
+      "description": "Bug-hunt pass over orchestrator and brief command.",
+      "acceptanceCriteria": [
+        "Read git log --stat -2",
+        "Run all verification commands",
+        "Verify lock release happens on every code path including thrown exceptions; verify timeout actually kills the subprocess and produces a parseable error response; verify integration tests aren't flaky under repeated runs",
+        "Fix any issues found",
+        "If no issues, commit docs: [BUG-008] Auditoría sin hallazgos sobre tareas US-015, US-016"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Comando angels execute (fase 2 / EXECUTE) + detección de territorio",
+      "description": "Implement src/commands/execute.ts. Re-invokes the angel with the original brief plus an APPROVED flag, in execute phase. Before invocation: snapshot the project's git working tree state (or a folder-tree mtime+size snapshot if git absent). After invocation: diff against the snapshot, identify any writes outside the angel's territory, and append a warning entry to the newspaper if any (do not fail the command in v1).",
+      "acceptanceCriteria": [
+        "angels execute <angel-id> <brief-path> works end-to-end against the fake backend",
+        "Out-of-territory writes are detected and logged to the newspaper as warnings",
+        "Newspaper entry is appended on success regardless (one entry per execute)",
+        "Integration tests cover: clean in-territory write, out-of-territory write detected, fake-backend reporting RESPONSE: error",
+        "tsc + vitest pass"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Newspaper + cursores",
+      "description": "Implement src/messaging/{newspaper.ts,cursors.ts}. appendNewspaper(entry) is atomic and concurrent-safe enough for the v1 sequential model. readNewspaperSince(cursor) returns entries newer than the cursor. Cursor is byte-offset based (simpler than timestamp parsing). cursors.ts provides per-angel get/set with files at .angels/_cursors/<angel-id>.",
+      "acceptanceCriteria": [
+        "Newspaper is plain Markdown, append-only, with the format from section 6.6",
+        "Cursors are single-line byte-offset files",
+        "readNewspaperSince(cursor) returns ONLY entries fully written after the cursor (no partial entry returned during a concurrent append)",
+        "Unit tests: append, read-since, partial-write protection, missing cursor file (treat as offset 0)",
+        "tsc + vitest pass"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BUG-009",
+      "title": "Auditoría tras US-017 y US-018",
+      "description": "Bug-hunt pass over execute command, territory detection, newspaper, cursors.",
+      "acceptanceCriteria": [
+        "Read git log --stat -2",
+        "Run all verification commands",
+        "Verify newspaper append is durable: a forced kill mid-append leaves a parseable file (worst case: trailing partial entry that read-since safely ignores); verify cursor logic correctly skips a partially-written entry",
+        "Fix any issues found",
+        "If no issues, commit docs: [BUG-009] Auditoría sin hallazgos sobre tareas US-017, US-018"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Cables (inbox/outbox) + integración con prompt builder",
+      "description": "Implement src/messaging/cables.ts. writeCable({ from, to, type, urgency, subject, body, references }) writes to _outbox/<from>/<timestamp>-<short>.md AND copies to _inbox/<to>/<same-name>.md atomically (write outbox first, then inbox; if inbox copy fails, do not roll back outbox — outbox is the audit trail). readInbox(angelId) lists pending cables. The prompt builder (US-014) is updated to surface inbox content to the angel; high-urgency cables are inlined in full, normal/low are listed by subject only.",
+      "acceptanceCriteria": [
+        "writeCable produces both outbox and inbox files with identical content",
+        "readInbox returns sorted-by-timestamp ascending",
+        "Prompt builder snapshot tests updated to include inbox content per urgency rule",
+        "Unit tests for cable parser/writer; integration test where one angel's EXECUTE produces a cable that lands in another angel's inbox and shows up in the prompt on next invocation",
+        "tsc + vitest pass"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Comandos angels cable / inbox / newspaper",
+      "description": "Implement src/commands/{cable.ts,inbox.ts,newspaper.ts}. cable: thin wrapper over writeCable. inbox: pretty-prints pending cables for an angel. newspaper: prints recent entries with optional --since=<iso> filter.",
+      "acceptanceCriteria": [
+        "All three commands work end-to-end against the fake backend or directly on .angels/ files",
+        "newspaper --since accepts an ISO timestamp (no git dependency for v1)",
+        "Integration tests cover each command",
+        "tsc + vitest pass"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BUG-010",
+      "title": "Auditoría tras US-019 y US-020",
+      "description": "Bug-hunt pass over cables and the three messaging commands.",
+      "acceptanceCriteria": [
+        "Read git log --stat -2",
+        "Run all verification commands",
+        "Verify cables can't be sent to non-existent angel-ids without a clear error; verify newspaper --since rejects malformed timestamps",
+        "Fix any issues found",
+        "If no issues, commit docs: [BUG-010] Auditoría sin hallazgos sobre tareas US-019, US-020"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Variante de prompt SWEEP + parseo de reportes",
+      "description": "Add the sweep phase to the prompt builder (US-014). The sweep prompt instructs the angel to read its inbox, the newspaper delta, and its folder; report drift; optionally update its own angel.md (frontmatter last_updated, last_updated_by: sweep); send cables. Response format reuses the existing one with RESPONSE: done | concerns. Implement parsing of the sweep-specific 'drift report' content from the response body (a free-text section, captured verbatim into the newspaper entry).",
+      "acceptanceCriteria": [
+        "Snapshot test for the sweep prompt variant",
+        "Sweep responses where ANGEL_MD_UPDATED: true and the angel rewrote angel.md must round-trip through the frontmatter parser",
+        "tsc + vitest pass"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Comando angels sweep",
+      "description": "Implement src/commands/sweep.ts. Iterates every angel in registry order, invokes each in sweep phase, collects drift reports, prints a clean per-angel summary at the end. Report-only — never edits files outside what the angel itself writes via its own EXECUTE-style permissions (but in sweep mode the angel may still update its own angel.md and send cables; it MUST NOT modify other code).",
+      "acceptanceCriteria": [
+        "angels sweep works end-to-end against the fake backend",
+        "Optional --since=<iso> filter passes through to the per-angel newspaper delta computation",
+        "Integration test verifies all angels are invoked sequentially and the summary is correct",
+        "tsc + vitest pass"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BUG-011",
+      "title": "Auditoría tras US-021 y US-022",
+      "description": "Bug-hunt pass over sweep prompt variant and command.",
+      "acceptanceCriteria": [
+        "Read git log --stat -2",
+        "Run all verification commands",
+        "Verify sweep is genuinely report-only (no out-of-territory writes, no main-code edits); verify --since correctly limits the newspaper delta passed to each angel",
+        "Fix any issues found",
+        "If no issues, commit docs: [BUG-011] Auditoría sin hallazgos sobre tareas US-021, US-022"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Comando angels doctor (sin --archive)",
+      "description": "Implement src/commands/doctor.ts (first half). Checks: orphaned angels (registered in config but folder no longer exists), folders that look significant by US-007 heuristics but have no registered angel, stale locks (TTL elapsed), draft angel.md files older than N days. Prints a categorized report. --archive flag is added in US-024.",
+      "acceptanceCriteria": [
+        "Each check is a pure function returning a structured report; doctor.ts composes them and prints",
+        "Stale lock detection uses the same logic as orchestrate.ts (US-015)",
+        "Integration tests cover: clean project (zero findings), orphaned angel, missing-angel folder, stale lock",
+        "tsc + vitest pass"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Comando angels doctor --archive [--older-than=N]",
+      "description": "Add the archive policy to doctor.ts. --archive moves files in _briefs/, _responses/, _logs/ older than --older-than=<days, default 30> into .angels/_archive/<YYYY-MM>/. Newspaper, cursors, _config.yml, and angel.md are NEVER archived. Prints what was moved.",
+      "acceptanceCriteria": [
+        "Files are moved (not copied), preserving relative path under each top-level directory",
+        "Default threshold is 30 days; --older-than=0 archives everything older than today",
+        "Newspaper, cursors, config, and angel.md files are explicitly skipped",
+        "Integration test on a synthetic .angels/ tree verifies correct files moved and others untouched",
+        "tsc + vitest pass"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BUG-012",
+      "title": "Auditoría tras US-023 y US-024",
+      "description": "Bug-hunt pass over doctor command including --archive.",
+      "acceptanceCriteria": [
+        "Read git log --stat -2",
+        "Run all verification commands",
+        "Verify --archive never moves angel.md, newspaper, cursors, or config; verify --older-than=0 doesn't catastrophically archive in-flight work; verify orphan detection doesn't false-positive on case-sensitivity quirks",
+        "Fix any issues found",
+        "If no issues, commit docs: [BUG-012] Auditoría sin hallazgos sobre tareas US-023, US-024"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Fixtures de tests: fake-backend.sh + proyectos sintéticos",
+      "description": "Create tests/fixtures/fake-backend.sh — a shell script that takes the prompt on stdin, scans for a PHASE: line, dispatches to a phase-specific handler, and writes a canned response file at the path mentioned in the prompt's [OUTPUT INSTRUCTIONS]. Also: a tiny tests/fixtures/projects/sample/ tree (a few directories with .ts files, one with an existing AGENTS.md). This fixture is referenced by every integration test from US-006 onward; this task formalizes and consolidates it.",
+      "acceptanceCriteria": [
+        "fake-backend.sh is portable POSIX bash, executable, no external deps beyond grep/sed/awk",
+        "It supports REVIEW, EXECUTE, INIT, SWEEP phases with sensible canned responses",
+        "Sample project tree has at least 2 candidate folders, one with AGENTS.md, one without",
+        "All prior integration tests are migrated (if not already) to use these consolidated fixtures",
+        "tsc + vitest pass"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": "Tests in earlier tasks may have inlined ad-hoc fixtures. This task consolidates them."
+    },
+    {
+      "id": "US-026",
+      "title": "README + nota de composición con Ralph",
+      "description": "Write README.md with: project description, install (npm i -g @guard-angels/cli), quickstart (init -> create -> brief -> execute -> sweep), backend configuration, file layout cheat-sheet, error-handling philosophy, the main-agent prompt addendum from app requeriments.md section 9 ready-to-paste, and a 'Composing with Ralph' section explaining that Guard Angels can be the per-task delegate inside a Ralph outer loop.",
+      "acceptanceCriteria": [
+        "README is self-contained and usable by someone who has never read app requeriments.md",
+        "Composition-with-Ralph section is concrete: one paragraph + a copy-pasteable prompt-addendum example",
+        "tsc + vitest pass"
+      ],
+      "priority": 38,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BUG-013",
+      "title": "Auditoría tras US-025 y US-026",
+      "description": "Bug-hunt pass over fixtures consolidation and README.",
+      "acceptanceCriteria": [
+        "Read git log --stat -2",
+        "Run all verification commands",
+        "Run every integration test against the consolidated fixtures and verify nothing depends on prior ad-hoc fixtures that may have been deleted; verify README install instructions are accurate against the actual package.json",
+        "Fix any issues found",
+        "If no issues, commit docs: [BUG-013] Auditoría sin hallazgos sobre tareas US-025, US-026"
+      ],
+      "priority": 39,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Tests de integración del protocolo end-to-end",
+      "description": "Add tests/integration/protocol.test.ts: full flow of init -> create -> brief (REVIEW) -> execute (EXECUTE) -> newspaper -> sweep -> doctor on a synthetic project, using fake-backend.sh. Verifies: every CLI command exits 0, every expected file is created, newspaper grows monotonically, cursors advance, no out-of-territory writes for the canned in-territory response, the territory-warning path is exercised by a separate canned EXECUTE response that writes outside.",
+      "acceptanceCriteria": [
+        "Single integration test file that runs the entire happy path on a fresh fixture",
+        "Separate test (or describe block) for the territory-warning path",
+        "Tests run in under 10 seconds total (fake-backend is fast; no real LLM calls)",
+        "tsc + vitest pass"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Pulido de mensajes de error y exit codes",
+      "description": "Sweep every command's error path: ensure errors are descriptive, name the offending field/file/path, and exit with a meaningful non-zero code. No generic 'error' messages. No silent fallbacks. No empty stack traces in user-facing output (stack traces only on --verbose / DEBUG).",
+      "acceptanceCriteria": [
+        "Every command returns documented exit codes (document them in README)",
+        "Every error message names the file or field involved",
+        "--verbose flag (global) enables stack traces and DEBUG logs",
+        "Integration tests assert error messages include the relevant context",
+        "tsc + vitest pass"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BUG-014",
+      "title": "Auditoría final tras US-027 y US-028",
+      "description": "Final bug-hunt pass before declaring v1 complete.",
+      "acceptanceCriteria": [
+        "Read git log --stat -3 (covers the last three implementation tasks)",
+        "Run all verification commands",
+        "Run every integration test; verify zero flakes over 3 consecutive runs",
+        "Run angels init, list, create, brief, execute, sweep, doctor against a fresh fixture using the fake backend; verify every command works",
+        "Fix any issues found",
+        "If no issues, commit docs: [BUG-014] Auditoría final sin hallazgos antes de cierre de v1"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BUFFER-001",
+      "title": "Slot reservado para trabajo emergente #1",
+      "description": "Intentionally empty. If earlier tasks left follow-up work or a missing capability blocks progress, define and implement it here. Otherwise mark passes: true with notes 'unused' and commit chore: [BUFFER-001] ...",
+      "acceptanceCriteria": [
+        "Either: the slot is genuinely repurposed (define real description+criteria, implement, commit feat or fix) — or — the slot is marked unused (notes='unused', single chore commit)",
+        "Do NOT use this slot to add scope-creep features outside app requeriments.md"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": "Reserved for emergent work."
+    },
+    {
+      "id": "BUFFER-002",
+      "title": "Slot reservado para trabajo emergente #2",
+      "description": "Intentionally empty. Same rules as BUFFER-001.",
+      "acceptanceCriteria": [
+        "Either repurpose with real work or mark unused",
+        "Do NOT add scope-creep features"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": "Reserved for emergent work."
+    },
+    {
+      "id": "BUFFER-003",
+      "title": "Slot reservado para trabajo emergente #3",
+      "description": "Intentionally empty. Same rules as BUFFER-001.",
+      "acceptanceCriteria": [
+        "Either repurpose with real work or mark unused",
+        "Do NOT add scope-creep features"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": "Reserved for emergent work."
+    },
+    {
+      "id": "BUFFER-004",
+      "title": "Slot reservado para trabajo emergente #4",
+      "description": "Intentionally empty. Same rules as BUFFER-001.",
+      "acceptanceCriteria": [
+        "Either repurpose with real work or mark unused",
+        "Do NOT add scope-creep features"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": "Reserved for emergent work."
+    },
+    {
+      "id": "BUFFER-005",
+      "title": "Slot reservado para trabajo emergente #5",
+      "description": "Intentionally empty. Same rules as BUFFER-001.",
+      "acceptanceCriteria": [
+        "Either repurpose with real work or mark unused",
+        "Do NOT add scope-creep features"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": "Reserved for emergent work."
+    },
+    {
+      "id": "BUFFER-006",
+      "title": "Slot reservado para trabajo emergente #6",
+      "description": "Intentionally empty. Same rules as BUFFER-001.",
+      "acceptanceCriteria": [
+        "Either repurpose with real work or mark unused",
+        "Do NOT add scope-creep features"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": "Reserved for emergent work."
+    },
+    {
+      "id": "BUFFER-007",
+      "title": "Slot reservado para trabajo emergente #7",
+      "description": "Intentionally empty. Same rules as BUFFER-001.",
+      "acceptanceCriteria": [
+        "Either repurpose with real work or mark unused",
+        "Do NOT add scope-creep features"
+      ],
+      "priority": 56,
+      "passes": false,
+      "notes": "Reserved for emergent work."
+    },
+    {
+      "id": "BUFFER-008",
+      "title": "Slot reservado para trabajo emergente #8",
+      "description": "Intentionally empty. Same rules as BUFFER-001.",
+      "acceptanceCriteria": [
+        "Either repurpose with real work or mark unused",
+        "Do NOT add scope-creep features"
+      ],
+      "priority": 57,
+      "passes": false,
+      "notes": "Reserved for emergent work."
+    }
+  ]
+}

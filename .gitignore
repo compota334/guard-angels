@@ -1,0 +1,48 @@
+# Node / TypeScript
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+coverage/
+.eslintcache
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Claude / agent tooling (keep out of repo)
+CLAUDE.md
+AGENTS.md
+.claude/
+.agents/
+
+# Ralph runtime artifacts (keep prd.json and progress.txt tracked though)
+scripts/ralph/.last-branch
+scripts/ralph/archive/
+
+# Guard Angels' own runtime artifacts when this tool is dogfooded
+.angels/_briefs/
+.angels/_responses/
+.angels/_inbox/
+.angels/_outbox/
+.angels/_logs/
+.angels/_locks/
+.angels/_cursors/
+.angels/_archive/
