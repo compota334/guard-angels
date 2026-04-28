@@ -168,3 +168,12 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - `yaml.stringify()` with `{ lineWidth: 0 }` prevents unwanted line wrapping in generated `_config.yml`.
   - `pathToAngelId` (from `resolve.ts`) handles the path-to-id conversion; init doesn't need to duplicate that logic.
 ---
+
+## 2026-04-28T06:30:00Z - BUG-005: Auditoría tras US-009 y US-010
+- Implemented: No issues found in last 2 tasks. Verified: tsc=PASS (clean), vitest=PASS (166 tests), eslint=PASS. Atomic writes in memory.ts have proper cleanup (tmpfile + rename, catch handler removes tmpfile on failure). Test covers no leftover tmp files after success. Init command creates exact expected directory tree on fresh project. --manual with empty input creates only _root angel without ingestion. --auto + --manual rejection works. Re-initialization guard works. Ingestion fallback to blank template on backend failure works.
+- Files changed: scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS  eslint=PASS
+- Learnings for future iterations:
+  - NEVER delete the shell's CWD (/tmp dirs) from inside a command chain — it permanently corrupts the session's shell state. Always clean up temp dirs from a stable directory.
+  - init.ts uses string template `${cwd}/${path}` instead of `path.join()` for path concatenation — works on Linux but is not the codebase convention. Not a bug, but future tasks touching init.ts could normalize this.
+---
