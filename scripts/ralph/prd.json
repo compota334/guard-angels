@@ -184,8 +184,8 @@
         "If no issues, commit docs: [BUG-004] Auditoría sin hallazgos sobre tareas US-007, US-008"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "No issues found. Heuristics correctly skip node_modules/dist/.git/.angels and all hidden dirs. All 4 adapters handle non-zero exit codes via reject:false without throwing."
     },
     {
       "id": "US-009",

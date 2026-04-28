@@ -134,3 +134,12 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - execa v9 `reject: false` returns the result object instead of throwing on non-zero exit — use this for adapters to capture all exit codes cleanly.
   - Backend adapters are constructors taking `(cmd, args)` — the factory passes the parsed command and remaining args. This separates parsing from invocation cleanly.
 ---
+
+## 2026-04-28T06:10:00Z - BUG-004: Auditoría tras US-007 y US-008
+- Implemented: No issues found in last 2 tasks. Verified: tsc=PASS, vitest=PASS (137 tests), eslint=PASS. Heuristics correctly skip node_modules, dist, .git, .angels, and all hidden directories — tested with synthetic fixtures for each. All 4 backend adapters handle non-zero exit codes without throwing (via execa `reject: false`), confirmed by dedicated test cases per adapter. Factory handles empty commands with descriptive error. Session/thread ID extraction is best-effort and tested.
+- Files changed: scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS  eslint=PASS
+- Learnings for future iterations:
+  - identify.ts has a double safety net for `.git`: it's in the SKIP_DIRS set AND hidden dirs (starting with `.`) are filtered by the `!entry.name.startsWith('.')` check. Either alone would suffice, but both existing is fine for clarity.
+  - `reject: false` in execa v9 is the key pattern for adapters — it ensures the adapter never throws on subprocess failure. Timeout errors from execa will still throw, though — future orchestrator code (US-015) will need to catch those at a higher level.
+---
