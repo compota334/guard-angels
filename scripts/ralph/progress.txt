@@ -10,6 +10,8 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Verification commands: `npx tsc --noEmit`, `npx vitest run`, `npx eslint . --quiet`.
 - tsconfig has `"types": ["node"]` — required for `process`, `Buffer`, etc.
 - CLI entry: `src/bin/angels.ts` (shebang) → imports `src/cli.ts` (commander program). Build: `npm run build` → `dist/bin/angels.js`.
+- ESLint enforces `preserve-caught-error` — always pass `{ cause: err }` when wrapping caught errors in new Error.
+- Config loading: `src/config/load.ts` → `loadConfig(cwd)`. Schema: `src/config/schema.ts`. Defaults: `src/config/defaults.ts`.
 
 ---
 
@@ -41,4 +43,15 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Learnings for future iterations:
   - Version string `.version('0.1.0')` is hardcoded in cli.ts — consider reading from package.json in a future task if drift becomes a concern
   - `src/index.ts` is a dead placeholder from US-001; will be repurposed or removed when real exports are added
+---
+
+## 2026-04-28T05:50:00Z - US-003: Carga y validación de _config.yml
+- Implemented: Created src/config/{schema.ts,defaults.ts,load.ts}. Zod schema validates _config.yml structure exactly per section 6.1. loadConfig reads/parses YAML/validates with descriptive errors naming the offending field. defaults.ts exports canonical constants.
+- Files changed: src/config/schema.ts, src/config/defaults.ts, src/config/load.ts, tests/unit/config.test.ts
+- Verification: tsc=PASS  vitest=PASS (13 tests)  eslint=PASS
+- Learnings for future iterations:
+  - ESLint has `preserve-caught-error` rule — always pass `{ cause: err }` when re-throwing wrapped errors
+  - Zod 4.x API is fully compatible with 3.x for object/string/number/enum/literal/array/min/optional
+  - `z.infer<typeof Schema>` works as type-only construct in zod 4.x (no runtime `z.infer`)
+  - Config module path: `src/config/` with schema.ts (Zod schema + types), defaults.ts (constants), load.ts (loadConfig function)
 ---
