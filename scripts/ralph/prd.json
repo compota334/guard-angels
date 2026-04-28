@@ -367,8 +367,8 @@
         "If no issues, commit docs: [BUG-008] Auditoría sin hallazgos sobre tareas US-015, US-016"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "No issues found. Lock release via try/finally on all code paths (normal, exception, timeout). Timeout kills subprocess via execa timeout option and produces parseable synthetic error response. Integration tests stable across 3 consecutive runs."
     },
     {
       "id": "US-017",

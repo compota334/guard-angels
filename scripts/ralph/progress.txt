@@ -274,3 +274,13 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - The brief command catches errors at the CLI level (process.exit(3)) but lets the `briefAngel` function throw — callers can choose their own error handling.
   - `printResponseSummary` skips empty sections (only prints sections that have content) and indents each line with 2 spaces for readability.
 ---
+
+## 2026-04-28T07:40:00Z - BUG-008: Auditoría tras US-015 y US-016
+- Implemented: No issues found in last 2 tasks. Verified: tsc=PASS, vitest=PASS (286 tests), eslint=PASS. Lock release uses try/finally wrapping the entire post-acquire body — covers normal flow, thrown exceptions, and timeout errors. Timeout kills subprocess via execa's timeout option and writes a synthetic RESPONSE: error that is parseable by parseResponse. releaseLock only removes if owned by current PID and handles ENOENT gracefully. Integration tests (orchestrate + brief) stable across 3 consecutive runs with no flakes.
+- Files changed: scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS  eslint=PASS
+- Learnings for future iterations:
+  - The timeout synthetic response in orchestrate.ts has empty `concerns` field — the timeout detail is only in log files and meta.json (`timedOut: true`). The "missing response" synthetic error is more descriptive (includes the error message). Not a bug, but future code consuming the response should check meta.json for timeout context.
+  - `writeResponseFile` in orchestrate.ts duplicates the format logic from `formatResponse` in response.ts — both produce identical output. If the format changes, both must be updated.
+  - Lock PID check (`process.kill(pid, 0)`) is Linux-reliable but not cross-platform. Fine for v1 since Guard Angels targets Node.js on Linux/Mac.
+---
