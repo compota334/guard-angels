@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { listAngels } from './commands/list.js';
 
 const program = new Command();
 
@@ -21,8 +22,12 @@ program
   .command('list')
   .description('List all registered angels')
   .action(() => {
-    console.error('not implemented: list');
-    process.exit(1);
+    try {
+      listAngels(process.cwd());
+    } catch (err: unknown) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
   });
 
 program

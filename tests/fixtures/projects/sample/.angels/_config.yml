@@ -1,0 +1,16 @@
+version: 1
+backend:
+  angel_cmd: "echo test"
+  angel_timeout_seconds: 60
+angels:
+  - id: _root
+    type: root
+    path: "."
+  - id: src-auth
+    type: folder
+    path: "src/auth"
+  - id: src-api
+    type: folder
+    path: "src/api"
+sweep:
+  autonomy: report-only

@@ -15,6 +15,9 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Path utilities: `src/paths/layout.ts` (canonical .angels/ paths), `src/paths/resolve.ts` (angel-id ↔ path conversion).
 - Angel ID encoding: `/` → `-`, literal `-` → `--`. Root angel: `_root` ↔ `.`. Decoder uses char-by-char greedy parse (`--` = escaped hyphen, `-` = separator). Segments consisting entirely of hyphens are rejected by `pathToAngelId` since they cannot round-trip.
 - Angel registry: `src/angels/registry.ts` — `AngelRegistry.fromConfig(config)`. Pure in-memory. Lookup by id/path, list all, get root. Validates uniqueness + root constraints.
+- Commands go in `src/commands/<name>.ts`, wired into `src/cli.ts`. Each exports a function taking `cwd: string`.
+- Synthetic test fixture at `tests/fixtures/projects/sample/` — has `.angels/_config.yml` with 3 angels (_root, src-auth, src-api), angel.md files for _root (active) and src-auth (draft), no angel.md for src-api.
+- Integration tests use `execaNode` from `execa` to run the built CLI. Build beforeAll in the test file. Use `nodeOptions: []` to avoid inheriting vitest's loader.
 
 ---
 
@@ -85,4 +88,14 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - AngelRegistry is pure in-memory — takes a Config, returns lookup functions. No filesystem access.
   - `listAll()` returns a `ReadonlyArray` preserving config order. Same reference on every call.
   - `AngelEntry` type comes from `src/config/schema.ts` (Zod-inferred). Fields: id, type ('root'|'folder'), path.
+---
+
+## 2026-04-28T05:45:00Z - US-006: Comando angels list
+- Implemented: Created `src/commands/list.ts` with `listAngels(cwd)` function. Loads config, builds registry, reads angel.md frontmatter for status column (returns `-` if missing). Prints a formatted table with dynamic column widths (ID, TYPE, PATH, STATUS). Wired into `src/cli.ts` replacing the stub. On missing config, prints clear error pointing at `angels init` and exits 1.
+- Files changed: src/commands/list.ts (new), src/cli.ts (modified), tests/integration/list.test.ts (new), tests/fixtures/projects/sample/ (new fixture tree)
+- Verification: tsc=PASS  vitest=PASS (87 tests, 2 new integration)  eslint=PASS
+- Learnings for future iterations:
+  - `angelMdFile(cwd, angelPath)` takes the angel's path, not its ID. For root angel, pass `_root` since that's the directory name under `.angels/`.
+  - Integration tests need `nodeOptions: []` when using `execaNode` to avoid inheriting vitest's `--experimental-vm-modules` loader flag.
+  - Frontmatter parsing uses simple regex on `status:` line rather than a full YAML parser — lightweight for read-only status display.
 ---
