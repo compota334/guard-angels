@@ -235,3 +235,12 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - Protocol header is ~540 chars → ~135 tokens (well under 600 token budget). Phase instructions add ~200-400 chars each.
   - Snapshot tests are deterministic because inbox order is preserved as-is (array order). No sorting happens inside buildPrompt — callers must pre-sort if needed.
 ---
+
+## 2026-04-28T07:15:00Z - BUG-007: Auditoría tras US-013 y US-014
+- Implemented: No issues found in last 2 tasks. Verified: tsc=PASS, vitest=PASS (254 tests), eslint=PASS. Response parser correctly rejects all invalid RESPONSE verdict values and all 3 done-only fields (CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED) on every non-done verdict (proceed, concerns, refuse, error). Section boundary regex `[A-Z][A-Z_ ]*:` matches all 8 section/header names including multi-word names with spaces/underscores. Prompt builder is fully deterministic — no unordered data structures, inbox preserves input array order. Snapshot tests stable across repeated runs.
+- Files changed: scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS  eslint=PASS
+- Learnings for future iterations:
+  - The shared protocol header says REVIEW responds with "concerns or proceed" but the phase-specific REVIEW instructions add "refuse" as a third option. This mirrors the spec verbatim (section 8 of app requeriments.md) — not a bug, but future agents should be aware of this intentional asymmetry.
+  - The section boundary regex `\n(?=[A-Z][A-Z_ ]*:)` in both brief.ts and response.ts has the same known limitation: content lines matching `^[A-Z][A-Z_ ]*:` (e.g. `NOTE:`, `ERROR:`, `TODO:`) will be misinterpreted as section boundaries. This is documented in BUG-006 notes and is inherent in the text format design.
+---

@@ -321,8 +321,8 @@
         "If no issues, commit docs: [BUG-007] Auditoría sin hallazgos sobre tareas US-013, US-014"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "No issues found. Response parser correctly rejects all invalid verdict values and all done-only fields on non-done responses. Prompt builder output is fully deterministic — no unordered data structures, inbox preserves array order. All 254 tests pass across repeated runs."
     },
     {
       "id": "US-015",
