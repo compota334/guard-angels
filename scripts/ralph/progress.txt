@@ -34,6 +34,8 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Protocol response: `src/protocol/response.ts` — `writeResponse(projectRoot, data)`, `parseResponse(path)` / `parseResponseContent(raw)`. ResponseVerdict type: proceed|concerns|refuse|done|error. Done-only fields (CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED) validated at parse time.
 - Prompt builder: `src/protocol/prompt.ts` — `buildPrompt(input: PromptInput)` constructs the full angel system prompt. Four phases: init, review, execute, sweep. Fixed protocol header is shared; phase-specific instructions swap a single block. Inbox cables: high-urgency inlined in full, normal/low listed by subject only. `getProtocolHeaderLength()` exposes the header char count for token budget checks.
 - Brief command: `src/commands/brief.ts` — `briefAngel(cwd, angelId, task)` returns exit code (0=proceed, 1=concerns, 2=refuse, 3=error). Writes brief, invokes orchestrator in review mode, prints summary.
+- Execute command: `src/commands/execute.ts` — `executeAngel(cwd, angelId, briefPath)` returns exit code (0=done, 1=anything else). Parses original brief, writes execute-phase brief, invokes orchestrator, detects territory violations via mtime+size snapshot, appends newspaper entry. Territory detection skips `.angels/`, `node_modules/`, `.git/`, `dist/`.
+- Fake execute backend: `tests/fixtures/fake-execute-backend.sh` — supports `FAKE_BACKEND_WRITE_FILES` (comma-separated absolute paths) to actually create files during tests, enabling real territory detection.
 
 ---
 
@@ -283,4 +285,16 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - The timeout synthetic response in orchestrate.ts has empty `concerns` field — the timeout detail is only in log files and meta.json (`timedOut: true`). The "missing response" synthetic error is more descriptive (includes the error message). Not a bug, but future code consuming the response should check meta.json for timeout context.
   - `writeResponseFile` in orchestrate.ts duplicates the format logic from `formatResponse` in response.ts — both produce identical output. If the format changes, both must be updated.
   - Lock PID check (`process.kill(pid, 0)`) is Linux-reliable but not cross-platform. Fine for v1 since Guard Angels targets Node.js on Linux/Mac.
+---
+
+## 2026-04-28T07:45:00Z - US-017: Comando angels execute (fase 2 / EXECUTE) + detección de territorio
+- Implemented: Created `src/commands/execute.ts` with `executeAngel(cwd, angelId, briefPath)` function. Parses the original review brief to extract task/type/scope, writes an execute-phase brief referencing it via `priorResponse`, invokes the orchestrator in execute mode. Territory detection uses folder-tree snapshot (mtime+size) before and after invocation — compares to find new/modified files, then checks each against the angel's territory path. Out-of-territory writes are logged as warnings to `_newspaper.md` but do not fail the command (v1: warn only). Newspaper entry appended on every execute regardless of verdict. Created `tests/fixtures/fake-execute-backend.sh` supporting actual file creation via `FAKE_BACKEND_WRITE_FILES` env var. Wired into `src/cli.ts` replacing the stub.
+- Files changed: src/commands/execute.ts (new), src/cli.ts (modified), tests/fixtures/fake-execute-backend.sh (new), tests/integration/execute.test.ts (new, 4 tests), scripts/ralph/prd.json (updated)
+- Verification: tsc=PASS  vitest=PASS (290 tests)  eslint=PASS
+- Learnings for future iterations:
+  - Execute command parses the original brief to extract the task field — do NOT pass the raw brief file content as the TASK section, because the section parser uses header-regex lookahead and nested brief content containing `TASK:` etc. will break parsing.
+  - Territory detection snapshot skips `.angels/`, `node_modules/`, `.git/`, `dist/` to avoid noise. `.angels/` internal file changes (responses, briefs, logs) are not flagged as territory violations because they aren't snapshotted.
+  - `fake-execute-backend.sh` writes actual files to disk when `FAKE_BACKEND_WRITE_FILES` is set (comma-separated absolute paths). This lets integration tests verify real territory detection via mtime/size changes.
+  - Root angel (`angelPath === '.'`) short-circuits territory detection — everything is in-territory for root. Future tasks should test this.
+  - Execute command: exit code 0 = done, exit code 1 = any other verdict (error, concerns, etc.). Simpler than brief's 4-value exit code scheme.
 ---

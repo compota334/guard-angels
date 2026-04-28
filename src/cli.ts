@@ -3,6 +3,7 @@ import { initAngels } from './commands/init.js';
 import { listAngels } from './commands/list.js';
 import { createAngel } from './commands/create.js';
 import { briefAngel } from './commands/brief.js';
+import { executeAngel } from './commands/execute.js';
 
 const program = new Command();
 
@@ -70,9 +71,14 @@ program
   .argument('<angel-id>', 'Angel identifier')
   .argument('<brief>', 'Path to brief file')
   .description('Phase 2: Re-invoke angel with approval in execute mode')
-  .action(() => {
-    console.error('not implemented: execute');
-    process.exit(1);
+  .action(async (angelId: string, briefPath: string) => {
+    try {
+      const exitCode = await executeAngel(process.cwd(), angelId, briefPath);
+      process.exit(exitCode);
+    } catch (err: unknown) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
   });
 
 program

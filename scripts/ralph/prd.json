@@ -382,8 +382,8 @@
         "tsc + vitest pass"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Territory detection uses folder-tree mtime+size snapshot (no git dependency). Fake-execute-backend.sh supports actual file creation via FAKE_BACKEND_WRITE_FILES env var."
     },
     {
       "id": "US-018",
