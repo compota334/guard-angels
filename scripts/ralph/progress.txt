@@ -14,6 +14,7 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Config loading: `src/config/load.ts` → `loadConfig(cwd)`. Schema: `src/config/schema.ts`. Defaults: `src/config/defaults.ts`.
 - Path utilities: `src/paths/layout.ts` (canonical .angels/ paths), `src/paths/resolve.ts` (angel-id ↔ path conversion).
 - Angel ID encoding: `/` → `-`, literal `-` → `--`. Root angel: `_root` ↔ `.`. Decoder uses char-by-char greedy parse (`--` = escaped hyphen, `-` = separator). Segments consisting entirely of hyphens are rejected by `pathToAngelId` since they cannot round-trip.
+- Angel registry: `src/angels/registry.ts` — `AngelRegistry.fromConfig(config)`. Pure in-memory. Lookup by id/path, list all, get root. Validates uniqueness + root constraints.
 
 ---
 
@@ -74,4 +75,14 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Learnings for future iterations:
   - The `replaceAll` approach for decode (`--` → placeholder → restore) is broken when consecutive hyphens create ambiguity. Always use character-by-character parsing for decoding schemes with overlapping escape/separator sequences.
   - Paths with segments that are entirely hyphens (e.g. `src/-/auth`) are degenerate but valid on filesystems. The encoding rejects them explicitly rather than silently producing wrong results.
+---
+
+## 2026-04-28T05:40:00Z - US-005: Registro de ángeles en memoria
+- Implemented: Created `src/angels/registry.ts` with `AngelRegistry` class. Factory method `fromConfig(config)` builds lookup maps by id and path. Validates: no duplicate IDs, no duplicate paths, exactly one root angel with id `_root` and path `.`. Exposes `getById`, `getByPath`, `getRoot`, `listAll` (preserves config order).
+- Files changed: src/angels/registry.ts, tests/unit/registry.test.ts
+- Verification: tsc=PASS  vitest=PASS (85 tests, 16 new)  eslint=PASS
+- Learnings for future iterations:
+  - AngelRegistry is pure in-memory — takes a Config, returns lookup functions. No filesystem access.
+  - `listAll()` returns a `ReadonlyArray` preserving config order. Same reference on every call.
+  - `AngelEntry` type comes from `src/config/schema.ts` (Zod-inferred). Fields: id, type ('root'|'folder'), path.
 ---
