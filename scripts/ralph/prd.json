@@ -48,7 +48,7 @@
         "If no issues: append `## Codebase Patterns` notes to progress.txt about how the bootstrap is structured, then commit docs: [BUG-001] Auditoría sin hallazgos sobre tareas US-001, US-002"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
