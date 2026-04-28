@@ -26,6 +26,7 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Shared draft creation: `src/angels/draft.ts` — `createAngelDraft(config, entry, cwd)` creates angel.md with ingestion. Reused by both init and create commands.
 - Create command: `src/commands/create.ts` — `createAngel(cwd, folderPath)`. Loads config, validates path, checks duplicates, creates draft, updates _config.yml.
 - Protocol module: `src/protocol/brief.ts` — `writeBrief(projectRoot, data)` creates brief files at `_briefs/<angel-id>/<date>T<HHMM>-<seq>.md`. `parseBrief(path)` / `parseBriefContent(raw)` parse back. Sequence numbering is per-angel-id, per-day, max+1 zero-padded to 3 digits.
+- Protocol section parsing caveat: `extractSection` uses `\n(?=[A-Z][A-Z _]*:)` to detect next header. Lines in section content matching this pattern (e.g. `NOTE:`, `TODO:`) will truncate the section prematurely. Keep this in mind when designing response format (US-013).
 
 ---
 
@@ -200,4 +201,13 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - Brief filename format: `<YYYY-MM-DD>T<HHMM>-<seq>.md` where seq is 3-digit zero-padded. Sequence is computed by scanning same-day files in the angel's briefs directory.
   - Section parsing uses a regex lookahead for the next `ALL_CAPS_WORD:` header to delimit section boundaries. This works because all headers in the brief format use uppercase.
   - `parseBriefContent(raw)` is exported separately from `parseBrief(filePath)` for testing without filesystem.
+---
+
+## 2026-04-28T06:55:00Z - BUG-006: Auditoría tras US-011 y US-012
+- Implemented: No issues found in last 2 tasks. Verified: tsc=PASS, vitest=PASS (191 tests), eslint=PASS. Sequence numbering handles rapid same-timestamp calls correctly (each call scans dir and picks max(seq)+1). Brief parser handles CRLF (regex `$` and `\s*` handle `\r` correctly, `.trim()` strips it), trailing whitespace (`.trim()` on field values), and missing optional sections (return empty string). Create command validates all error paths correctly (duplicate, non-existent, outside root, uninitialized project, root path). Draft.ts extraction from init.ts is clean — both init and create use `createAngelDraft` consistently.
+- Files changed: scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS  eslint=PASS
+- Learnings for future iterations:
+  - Brief section parser has a known limitation: section content with lines matching `^[A-Z][A-Z _]*:` (e.g. `NOTE:`, `TODO:`, `FIX:`) will be misinterpreted as section boundaries. This is inherent in the text format design. Future tasks implementing response parsing (US-013) should be aware of this and consider whether it matters for response content.
+  - `generateBlankTemplate` and `ingestWithBackend` are exported from `draft.ts` but only used internally. They could be private, but the export is harmless and may be useful for testing.
 ---
