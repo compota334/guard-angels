@@ -23,6 +23,8 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Test fixtures: `tests/fixtures/echo-backend.sh` (echoes stdin to stdout), `tests/fixtures/stderr-backend.sh` (writes to stderr, exits non-zero). Both are POSIX bash.
 - Angel memory: `src/angels/memory.ts` — `readAngelMd(path)`, `writeAngelMd(path, angelMd)`, `updateMetadata(path, partial)`. Atomic write via tmpfile+rename. Zod-validated frontmatter (status, last_updated, last_updated_by). Exports `AngelFrontmatterSchema` and `AngelMd` type.
 - Init command: `src/commands/init.ts` — `initAngels(cwd, { auto?, manual? })`. Creates full `.angels/` directory tree, `_config.yml`, `_newspaper.md`, and `angel.md` for each angel. Supports interactive (readline prompt), `--auto` (accept all heuristic candidates), and `--manual` (user enters paths). Ingestion via backend adapter when AGENTS.md/CLAUDE.md exists; falls back to blank template on backend failure.
+- Shared draft creation: `src/angels/draft.ts` — `createAngelDraft(config, entry, cwd)` creates angel.md with ingestion. Reused by both init and create commands.
+- Create command: `src/commands/create.ts` — `createAngel(cwd, folderPath)`. Loads config, validates path, checks duplicates, creates draft, updates _config.yml.
 
 ---
 
@@ -176,4 +178,14 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Learnings for future iterations:
   - NEVER delete the shell's CWD (/tmp dirs) from inside a command chain — it permanently corrupts the session's shell state. Always clean up temp dirs from a stable directory.
   - init.ts uses string template `${cwd}/${path}` instead of `path.join()` for path concatenation — works on Linux but is not the codebase convention. Not a bug, but future tasks touching init.ts could normalize this.
+---
+
+## 2026-04-28T06:45:00Z - US-011: Comando angels create <path>
+- Implemented: Created `src/commands/create.ts` with `createAngel(cwd, folderPath)`. Validates: path is not root, project is initialized (loads config first), folder exists and is a directory, path is inside project root, no duplicate id or path in registry. Creates draft angel.md (with ingestion if AGENTS.md/CLAUDE.md exists) via shared `createAngelDraft` from new `src/angels/draft.ts`. Updates `_config.yml` with the new entry. Extracted shared ingestion/template logic from `init.ts` into `src/angels/draft.ts` (reused by both init and create).
+- Files changed: src/commands/create.ts (new), src/angels/draft.ts (new, extracted from init.ts), src/commands/init.ts (refactored to use draft.ts), src/cli.ts (wired create command), tests/integration/create.test.ts (new, 6 tests)
+- Verification: tsc=PASS  vitest=PASS (172 tests)  eslint=PASS
+- Learnings for future iterations:
+  - Shared angel draft creation logic lives in `src/angels/draft.ts` — `createAngelDraft(config, entry, cwd)` handles ingestion + blank template + writeAngelMd in one call. Both `init.ts` and `create.ts` use it.
+  - `create.ts` loads config BEFORE validating the folder path — this ensures "not initialized" errors surface before "folder not found" errors, which is the expected UX.
+  - Integration tests for create must create the target folder AFTER `init --auto` to avoid it being auto-detected by heuristics. Non-generic folder names like "payments" are picked up by the heuristic even with <3 files.
 ---

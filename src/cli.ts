@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { initAngels } from './commands/init.js';
 import { listAngels } from './commands/list.js';
+import { createAngel } from './commands/create.js';
 
 const program = new Command();
 
@@ -39,9 +40,13 @@ program
   .command('create')
   .argument('<path>', 'Folder path to create an angel for')
   .description('Create an angel for a specific folder')
-  .action(() => {
-    console.error('not implemented: create');
-    process.exit(1);
+  .action(async (folderPath: string) => {
+    try {
+      await createAngel(process.cwd(), folderPath);
+    } catch (err: unknown) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
   });
 
 program
