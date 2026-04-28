@@ -93,8 +93,8 @@
         "If no issues, commit docs: [BUG-002] Auditoría sin hallazgos sobre tareas US-003, US-004"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Fixed path encoding bug: decoder used placeholder-based replaceAll which was ambiguous for consecutive hyphens; replaced with character-by-character parser. Added validation rejecting hyphen-only segment names."
     },
     {
       "id": "US-005",

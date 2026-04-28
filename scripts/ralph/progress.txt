@@ -13,7 +13,7 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - ESLint enforces `preserve-caught-error` — always pass `{ cause: err }` when wrapping caught errors in new Error.
 - Config loading: `src/config/load.ts` → `loadConfig(cwd)`. Schema: `src/config/schema.ts`. Defaults: `src/config/defaults.ts`.
 - Path utilities: `src/paths/layout.ts` (canonical .angels/ paths), `src/paths/resolve.ts` (angel-id ↔ path conversion).
-- Angel ID encoding: `/` → `-`, literal `-` → `--`. Root angel: `_root` ↔ `.`. This encoding is bijective (round-trips correctly).
+- Angel ID encoding: `/` → `-`, literal `-` → `--`. Root angel: `_root` ↔ `.`. Decoder uses char-by-char greedy parse (`--` = escaped hyphen, `-` = separator). Segments consisting entirely of hyphens are rejected by `pathToAngelId` since they cannot round-trip.
 
 ---
 
@@ -65,4 +65,13 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Learnings for future iterations:
   - Angel ID encoding uses double-hyphen (`--`) to escape literal hyphens in path segment names. This makes the encoding bijective and round-trippable. E.g. `src/my-component` → `src-my--component`.
   - layout.ts functions take `projectRoot` (for top-level dirs) or `projectRoot + angelId/angelPath` (for per-angel dirs). The `angelDir`/`angelMdFile` functions take the angel's path (not ID), while `angelBriefsDir`, `angelLogsDir`, etc. take the angel ID.
+---
+
+## 2026-04-28T05:35:00Z - BUG-002: Auditoría tras US-003 y US-004
+- Implemented: Found and fixed a bug in `angelIdToPath` decoder — the `replaceAll('--', PLACEHOLDER)` approach was ambiguous for paths with segments consisting entirely of hyphens (e.g. `src/-/auth` encoded as `src----auth` would decode to `src--auth` instead of `src/-/auth`). Replaced with a character-by-character greedy parser. Added `pathToAngelId` validation to reject segment names consisting entirely of hyphens since they can't round-trip even with the fixed decoder. Config schema (US-003) verified — rejects all malformed shapes correctly. Added 5 new test cases.
+- Files changed: src/paths/resolve.ts, tests/unit/paths.test.ts, scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS (69 tests)  eslint=PASS
+- Learnings for future iterations:
+  - The `replaceAll` approach for decode (`--` → placeholder → restore) is broken when consecutive hyphens create ambiguity. Always use character-by-character parsing for decoding schemes with overlapping escape/separator sequences.
+  - Paths with segments that are entirely hyphens (e.g. `src/-/auth`) are degenerate but valid on filesystems. The encoding rejects them explicitly rather than silently producing wrong results.
 ---

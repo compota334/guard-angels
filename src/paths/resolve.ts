@@ -19,12 +19,22 @@ export function angelIdToPath(id: string): string {
   if (id === ROOT_ANGEL_ID) {
     return ROOT_ANGEL_PATH;
   }
-  // Replace `--` with a placeholder, then `-` with `/`, then restore `--` as `-`
-  const PLACEHOLDER = '\x00';
-  return id
-    .replaceAll('--', PLACEHOLDER)
-    .replaceAll('-', '/')
-    .replaceAll(PLACEHOLDER, '-');
+  // Character-by-character parse: `--` = literal `-`, single `-` = `/`
+  let result = '';
+  let i = 0;
+  while (i < id.length) {
+    if (id[i] === '-' && i + 1 < id.length && id[i + 1] === '-') {
+      result += '-';
+      i += 2;
+    } else if (id[i] === '-') {
+      result += '/';
+      i += 1;
+    } else {
+      result += id[i];
+      i += 1;
+    }
+  }
+  return result;
 }
 
 /**
@@ -45,6 +55,15 @@ export function pathToAngelId(path: string): string {
   const normalized = normalizePath(path);
   if (normalized === ROOT_ANGEL_PATH) {
     return ROOT_ANGEL_ID;
+  }
+  // Validate that no segment consists entirely of hyphens (cannot round-trip)
+  const segments = normalized.split('/');
+  for (const segment of segments) {
+    if (/^-+$/.test(segment)) {
+      throw new Error(
+        `Path segment "${segment}" consists entirely of hyphens and cannot be encoded as an angel ID`,
+      );
+    }
   }
   // First escape existing hyphens in segment names, then replace slashes
   return normalized

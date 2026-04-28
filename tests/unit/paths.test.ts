@@ -145,6 +145,14 @@ describe('angelIdToPath', () => {
     expect(() => angelIdToPath('   ')).toThrow('non-empty');
   });
 
+  it('converts angel ID ending with escaped hyphen', () => {
+    expect(angelIdToPath('src-utils--')).toBe('src/utils-');
+  });
+
+  it('converts angel ID with adjacent escaped hyphens and separator', () => {
+    expect(angelIdToPath('my--app-auth')).toBe('my-app/auth');
+  });
+
   it('throws on angel ID containing slashes', () => {
     expect(() => angelIdToPath('src/auth')).toThrow('slashes');
   });
@@ -193,6 +201,18 @@ describe('pathToAngelId', () => {
 
   it('handles paths where multiple segments have hyphens', () => {
     expect(pathToAngelId('my-app/my-component')).toBe('my--app-my--component');
+  });
+
+  it('throws on segment consisting entirely of hyphens', () => {
+    expect(() => pathToAngelId('src/-/auth')).toThrow('consists entirely of hyphens');
+  });
+
+  it('throws on segment that is double-hyphen', () => {
+    expect(() => pathToAngelId('src/--/auth')).toThrow('consists entirely of hyphens');
+  });
+
+  it('throws on single-segment path that is just a hyphen', () => {
+    expect(() => pathToAngelId('-')).toThrow('consists entirely of hyphens');
   });
 
   it('throws on empty string', () => {
