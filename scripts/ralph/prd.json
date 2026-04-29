@@ -498,8 +498,8 @@
         "If no issues, commit docs: [BUG-011] Auditoría sin hallazgos sobre tareas US-021, US-022"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "No issues found. Sweep is report-only (enforced by prompt instruction, no territory detection code path). --since correctly filters newspaper delta via ISO string comparison after cursor-based offset. Drift report section parsed and included in newspaper entries. BriefPhase extended correctly. All 391 tests pass, sweep tests stable across 3 consecutive runs."
     },
     {
       "id": "US-023",

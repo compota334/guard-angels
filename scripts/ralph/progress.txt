@@ -382,3 +382,12 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - The `--since` filter applies to the newspaper delta computation only — it filters the entries returned by `readNewspaperSince(cursor)` by ISO timestamp comparison. The cursor-based offset still provides the base set of entries.
   - Fake sweep backend defaults to `RESPONSE: done` with `DRIFT REPORT: No drift detected.` for happy-path tests.
 ---
+
+## 2026-04-29T03:30:00Z - BUG-011: Auditoría tras US-021 y US-022
+- Implemented: No issues found in last 2 tasks. Verified: tsc=PASS, vitest=PASS (391 tests), eslint=PASS. Sweep is genuinely report-only: it uses `invoke()` directly (not `executeAngel`) and includes no territory detection logic — the report-only constraint is enforced by the prompt instruction "This is a report-only pass. You should NOT make changes to source code." The `--since` flag correctly limits newspaper delta: `computeNewspaperDelta` first reads entries since the cursor byte offset via `readNewspaperSince`, then filters by `e.timestamp >= since` (ISO string comparison). Drift report is correctly extracted from parsed response and included verbatim in newspaper entries via `appendSweepNewspaperEntry`. `BriefPhase` type was correctly extended from `'review' | 'execute'` to include `'sweep'`, and the brief parser validation updated accordingly. Sweep tests stable across 3 consecutive runs (5 tests, ~230ms each run).
+- Files changed: scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS  eslint=PASS
+- Learnings for future iterations:
+  - Sweep command does NOT use territory detection (unlike execute). Report-only enforcement is prompt-level only. A malicious or buggy backend could still write files outside the angel's territory during sweep — but this is by design in v1 (trust the prompt).
+  - The `computeNewspaperDelta` function applies two layers of filtering: cursor-based (byte offset) first, then `--since` timestamp comparison. This means `--since` can only further restrict the delta, never expand it beyond the cursor.
+---
