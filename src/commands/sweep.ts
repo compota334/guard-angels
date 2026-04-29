@@ -115,9 +115,18 @@ async function sweepSingleAngel(
   // 5. Append a newspaper entry for this sweep
   appendSweepNewspaperEntry(cwd, angelId, result.response);
 
-  // 6. Advance the angel's cursor to the current end of the newspaper
-  const newCursor = getNewspaperSize(cwd);
-  setCursor(cwd, angelId, newCursor);
+  // 6. Advance the angel's cursor — but ONLY if the angel actually consumed
+  // the delta. On RESPONSE: error or RESPONSE: refuse the angel did not
+  // successfully process the newspaper entries presented to it, so we leave
+  // the cursor where it was; the next sweep will re-present the same delta
+  // (along with this sweep's failure entry, which is informative).
+  if (
+    result.response.response === 'done' ||
+    result.response.response === 'concerns'
+  ) {
+    const newCursor = getNewspaperSize(cwd);
+    setCursor(cwd, angelId, newCursor);
+  }
 
   // 7. Print per-angel result
   printAngelSweepResult(angelId, result.response);

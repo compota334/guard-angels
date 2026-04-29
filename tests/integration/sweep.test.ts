@@ -113,6 +113,38 @@ describe('sweepAngels', () => {
     expect(newspaper).toContain('SWEEP finished with RESPONSE: error');
   });
 
+  it('does NOT advance the angel cursor when the angel responds with error', async () => {
+    // Pre-seed a newspaper entry the angel will be shown as delta and
+    // pre-set the cursor to 0 so the entry is in scope.
+    appendNewspaper(tmpDir, {
+      timestamp: '2026-04-28T12:00:00Z',
+      angelId: '_root',
+      summary: 'Pre-existing entry the angel must consume.',
+    });
+    setCursor(tmpDir, 'src-auth', 0);
+
+    const wrapperPath = createBackendWrapper(
+      tmpDir,
+      fakeBackendPath,
+      {
+        FAKE_BACKEND_VERDICT: 'error',
+        FAKE_BACKEND_CONCERNS: 'Cannot process delta — disk full',
+      },
+      'sweep-error-cursor-wrapper.sh',
+    );
+    updateConfig(tmpDir, wrapperPath);
+
+    await sweepAngels(tmpDir);
+
+    // The src-auth cursor must still be 0 — the angel did not consume the
+    // delta successfully, so the next sweep needs to re-present it.
+    const authCursor = parseInt(
+      fs.readFileSync(join(tmpDir, '.angels', '_cursors', 'src-auth'), 'utf-8').trim(),
+      10,
+    );
+    expect(authCursor).toBe(0);
+  });
+
   it('passes --since filter to scope newspaper delta', async () => {
     // Add a pre-existing newspaper entry with a known timestamp
     appendNewspaper(tmpDir, {
