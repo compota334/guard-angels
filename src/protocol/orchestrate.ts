@@ -17,6 +17,25 @@ import type { LogMeta } from '../logs/log.js';
 
 const LOCK_TTL_PADDING_MS = 30_000;
 
+/**
+ * Thrown when an angel invocation fails in a way that produces no usable
+ * response: timeout, missing response file, or unparseable response file.
+ * Lock release and log writes still happen before this is thrown.
+ */
+export class OrchestrationError extends Error {
+  override readonly name = 'OrchestrationError';
+  constructor(
+    message: string,
+    public readonly kind: 'timeout' | 'missing_response',
+    public readonly logStdoutPath: string,
+    public readonly logStderrPath: string,
+    public readonly logMetaPath: string,
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
+  }
+}
+
 export interface InvokeInput {
   phase: PromptPhase;
   angelId: string;
@@ -110,6 +129,7 @@ export async function invoke(
     const logs = createLogStreams(projectRoot, input.angelId, timestamp);
 
     let timedOut = false;
+    let timeoutCause: unknown;
     let exitCode = 1;
     let sessionId: string | undefined;
     let stdout = '';
@@ -136,30 +156,10 @@ export async function invoke(
       if (isTimeoutError(err)) {
         timedOut = true;
         exitCode = 124; // conventional timeout exit code
+        timeoutCause = err;
 
         const timeoutStderr = `Angel invocation timed out after ${config.backend.angel_timeout_seconds} seconds`;
         logs.appendStderr(timeoutStderr);
-
-        // Write a synthetic error response
-        const syntheticResponse: ResponseData = {
-          from: input.angelId,
-          timestamp,
-          response: 'error',
-          concerns: '',
-          proposedPlan: '',
-          questionsForMain: '',
-          proceedIf: '',
-          testResults: '',
-          driftReport: '',
-          cablesSent: '',
-          filesChanged: '',
-          angelMdUpdated: '',
-        };
-
-        // Ensure response directory exists
-        const responseDir = angelResponsesDir(projectRoot, input.angelId);
-        fs.mkdirSync(responseDir, { recursive: true });
-        writeResponseFile(responsePath, syntheticResponse);
       } else {
         throw err;
       }
@@ -167,7 +167,8 @@ export async function invoke(
       logs.close();
     }
 
-    // 9. Write meta.json
+    // 9. Write meta.json (always, even on timeout — the .meta.json carries
+    // the timedOut flag which is the source of truth for "how did this end")
     const meta: LogMeta = {
       angelId: input.angelId,
       phase: input.phase,
@@ -181,32 +182,34 @@ export async function invoke(
     };
     const logMetaPath = writeLogMeta(projectRoot, input.angelId, timestamp, meta);
 
-    // 10. Parse the response file
+    // 10. If the invocation timed out, throw — there is no response file to
+    // parse, and the orchestrator must not fabricate one.
+    if (timedOut) {
+      throw new OrchestrationError(
+        `Angel "${input.angelId}" timed out after ${config.backend.angel_timeout_seconds}s. Logs: ${logs.stderrPath}`,
+        'timeout',
+        logs.stdoutPath,
+        logs.stderrPath,
+        logMetaPath,
+        timeoutCause ? { cause: timeoutCause } : undefined,
+      );
+    }
+
+    // 11. Parse the response file. If the angel exited cleanly but didn't
+    // write a parseable response, that's a hard failure — throw rather than
+    // fabricate a synthetic response on disk.
     let response: ResponseData;
     try {
       response = parseResponse(responsePath);
     } catch (err: unknown) {
-      // If the angel didn't write a response file (or wrote a malformed one),
-      // create a synthetic error response
-      response = {
-        from: input.angelId,
-        timestamp,
-        response: 'error',
-        concerns: `Angel did not produce a valid response file at ${responsePath}: ${(err as Error).message}`,
-        proposedPlan: '',
-        questionsForMain: '',
-        proceedIf: '',
-        testResults: '',
-        driftReport: '',
-        cablesSent: '',
-        filesChanged: '',
-        angelMdUpdated: '',
-      };
-
-      // Write the synthetic response so it exists on disk for later reference
-      const responseDir = angelResponsesDir(projectRoot, input.angelId);
-      fs.mkdirSync(responseDir, { recursive: true });
-      writeResponseFile(responsePath, response);
+      throw new OrchestrationError(
+        `Angel "${input.angelId}" did not produce a valid response file at ${responsePath}. Logs: ${logs.stderrPath}`,
+        'missing_response',
+        logs.stdoutPath,
+        logs.stderrPath,
+        logMetaPath,
+        { cause: err },
+      );
     }
 
     return {
@@ -217,7 +220,7 @@ export async function invoke(
       logMetaPath,
     };
   } finally {
-    // 11. Always release the lock
+    // 12. Always release the lock
     releaseLock(projectRoot);
   }
 }
@@ -278,44 +281,4 @@ function isTimeoutError(err: unknown): boolean {
     return (err as Record<string, unknown>).timedOut === true;
   }
   return false;
-}
-
-/**
- * Write a response to a specific path (not using writeResponse which
- * auto-generates the path).
- */
-function writeResponseFile(filePath: string, data: ResponseData): void {
-  const lines: string[] = [
-    `FROM: ${data.from}`,
-    `TIMESTAMP: ${data.timestamp}`,
-    `RESPONSE: ${data.response}`,
-    '',
-    'CONCERNS:',
-    data.concerns,
-    '',
-    'PROPOSED PLAN:',
-    data.proposedPlan,
-    '',
-    'QUESTIONS FOR MAIN:',
-    data.questionsForMain,
-    '',
-    'PROCEED IF:',
-    data.proceedIf,
-    '',
-    'TEST_RESULTS:',
-    data.testResults,
-    '',
-    'DRIFT REPORT:',
-    data.driftReport,
-    '',
-  ];
-
-  if (data.response === 'done') {
-    lines.push(`CABLES SENT: ${data.cablesSent}`);
-    lines.push(`FILES CHANGED: ${data.filesChanged}`);
-    lines.push(`ANGEL_MD_UPDATED: ${data.angelMdUpdated}`);
-    lines.push('');
-  }
-
-  fs.writeFileSync(filePath, lines.join('\n'), 'utf-8');
 }

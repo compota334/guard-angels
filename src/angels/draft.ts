@@ -36,8 +36,10 @@ export function generateBlankTemplate(entry: AngelEntry): string {
 }
 
 /**
- * Attempt to ingest an existing memory file (AGENTS.md or CLAUDE.md) via the
- * backend adapter. Falls back to a blank template if the backend fails.
+ * Ingest an existing memory file (AGENTS.md or CLAUDE.md) via the backend
+ * adapter. Throws on backend failure or empty stdout — callers must decide
+ * whether to abort or skip the ingestion (this function never substitutes a
+ * blank template silently).
  */
 export async function ingestWithBackend(
   config: Config,
@@ -47,31 +49,38 @@ export async function ingestWithBackend(
   cwd: string,
 ): Promise<string> {
   const prompt = buildIngestionPrompt(entry, memoryContent, source);
+  const adapter = pickAdapter(config);
 
+  let result;
   try {
-    const adapter = pickAdapter(config);
-    const result = await adapter.invoke({
+    result = await adapter.invoke({
       prompt,
       cwd,
       timeoutMs: config.backend.angel_timeout_seconds * 1000,
     });
-
-    if (result.code === 0 && result.stdout.trim().length > 0) {
-      return result.stdout.trim() + '\n';
-    }
-
-    // Backend failed or returned empty — fall back to blank template
-    console.warn(`  Backend returned exit code ${result.code} for ${entry.id}, using blank template.`);
-    if (result.stderr.trim()) {
-      console.warn(`  stderr: ${result.stderr.trim().split('\n')[0]}`);
-    }
-    return generateBlankTemplate(entry);
   } catch (err: unknown) {
-    console.warn(
-      `  Backend invocation failed for ${entry.id}: ${(err as Error).message}. Using blank template.`,
+    throw new Error(
+      `Backend invocation failed during ingestion for angel "${entry.id}" (source: ${source})`,
+      { cause: err },
     );
-    return generateBlankTemplate(entry);
   }
+
+  if (result.code !== 0) {
+    const stderrFirstLine = result.stderr.trim().split('\n')[0] ?? '';
+    throw new Error(
+      `Backend exited with code ${result.code} during ingestion for angel "${entry.id}" (source: ${source})${
+        stderrFirstLine ? `: ${stderrFirstLine}` : ''
+      }`,
+    );
+  }
+
+  if (result.stdout.trim().length === 0) {
+    throw new Error(
+      `Backend produced empty stdout during ingestion for angel "${entry.id}" (source: ${source})`,
+    );
+  }
+
+  return result.stdout.trim() + '\n';
 }
 
 function buildIngestionPrompt(entry: AngelEntry, memoryContent: string, source: string): string {
@@ -110,8 +119,9 @@ Output ONLY the markdown body. No frontmatter. No code fences wrapping the outpu
 }
 
 /**
- * Create an angel.md draft for a single angel entry.
- * Handles ingestion of existing memory files and fallback to blank template.
+ * Create an angel.md draft for a single angel entry. If the folder contains
+ * an AGENTS.md or CLAUDE.md, the backend is invoked to seed the draft from
+ * its content; backend failures propagate (no silent fallback).
  */
 export async function createAngelDraft(
   config: Config,

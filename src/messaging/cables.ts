@@ -100,12 +100,19 @@ export function readInbox(
   for (const entry of entries) {
     if (!entry.endsWith('.md')) continue;
     const filePath = join(dir, entry);
+    let raw: string;
     try {
-      const raw = readFileSync(filePath, 'utf-8');
+      raw = readFileSync(filePath, 'utf-8');
+    } catch (err: unknown) {
+      throw new Error(`Failed to read cable file at ${filePath}`, { cause: err });
+    }
+    try {
       cables.push(parseCableContent(raw, filePath));
-    } catch {
-      // Skip malformed cables — don't block the whole inbox
-      continue;
+    } catch (err: unknown) {
+      throw new Error(
+        `Failed to parse cable file at ${filePath}. Fix or remove the file before reading the inbox again.`,
+        { cause: err },
+      );
     }
   }
 

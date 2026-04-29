@@ -21,19 +21,22 @@ describe('angels init', () => {
 
   /**
    * Build a synthetic project tree with folders that match heuristics.
-   * - src/auth: has 4 .ts files (meets >= 3 source files) + AGENTS.md for ingestion
+   * - src/auth: has 4 .ts files (meets >= 3 source files)
    * - src/api: has index.ts (meets index/main file heuristic) + non-generic name
    * - utils: generic name, 1 file only => should NOT be a candidate
+   *
+   * Does NOT include any AGENTS.md / CLAUDE.md by default — those force
+   * ingestion via the backend, which is not available in the test env.
+   * Tests that exercise ingestion call addAuthAgentsMd() explicitly.
    */
   function buildSyntheticProject(): void {
-    // src/auth — 4 source files + AGENTS.md
+    // src/auth — 4 source files
     const authDir = join(tmpDir, 'src', 'auth');
     fs.mkdirSync(authDir, { recursive: true });
     fs.writeFileSync(join(authDir, 'session.ts'), 'export {};');
     fs.writeFileSync(join(authDir, 'middleware.ts'), 'export {};');
     fs.writeFileSync(join(authDir, 'types.ts'), 'export {};');
     fs.writeFileSync(join(authDir, 'utils.ts'), 'export {};');
-    fs.writeFileSync(join(authDir, 'AGENTS.md'), '# Auth Module\nHandles user authentication and sessions.\n');
 
     // src/api — has index.ts + non-generic name
     const apiDir = join(tmpDir, 'src', 'api');
@@ -50,6 +53,14 @@ describe('angels init', () => {
     const utilsDir = join(tmpDir, 'utils');
     fs.mkdirSync(utilsDir, { recursive: true });
     fs.writeFileSync(join(utilsDir, 'helper.ts'), 'export {};');
+  }
+
+  /** Add AGENTS.md to src/auth to force ingestion (and exercise the backend). */
+  function addAuthAgentsMd(): void {
+    fs.writeFileSync(
+      join(tmpDir, 'src', 'auth', 'AGENTS.md'),
+      '# Auth Module\nHandles user authentication and sessions.\n',
+    );
   }
 
   it('creates full .angels/ structure with --auto flag', async () => {
@@ -133,33 +144,24 @@ describe('angels init', () => {
     expect(apiContent).toContain('## Charter');
   });
 
-  it('uses fake-backend for ingestion when AGENTS.md exists', async () => {
+  it('fails loudly when AGENTS.md ingestion is required but the backend is unavailable', async () => {
     buildSyntheticProject();
+    addAuthAgentsMd();
 
-    // Use the echo-backend which echoes stdin to stdout
-    // The init command will send the ingestion prompt to the backend
-    // and use stdout as the angel.md body
+    // The default angel_cmd in a fresh init is 'claude -p ...', which is not
+    // available in the test environment. Since src/auth/AGENTS.md exists,
+    // init MUST attempt ingestion via the backend and MUST fail loudly when
+    // the backend cannot run — never silently substituting a blank template.
     const result = await execaNode(CLI_PATH, ['init', '--auto'], {
       cwd: tmpDir,
       nodeOptions: [],
-      env: {
-        ...process.env,
-        // Override the config — but since init creates the config, we can't override angel_cmd from env
-        // The default angel_cmd is 'claude -p --dangerously-skip-permissions' which won't exist
-        // So ingestion will fail and fall back to blank template
-        // This test verifies that the fallback works correctly
-      },
+      reject: false,
     });
 
-    expect(result.exitCode).toBe(0);
-
-    // auth has AGENTS.md, but since default backend (claude) isn't available,
-    // it should fall back to blank template with a warning
-    const authMd = join(tmpDir, '.angels', 'src', 'auth', 'angel.md');
-    const authContent = fs.readFileSync(authMd, 'utf-8');
-    expect(authContent).toContain('status: draft');
-    // Blank template should have the Charter section
-    expect(authContent).toContain('## Charter');
+    expect(result.exitCode).not.toBe(0);
+    const combined = `${result.stdout}\n${result.stderr}`;
+    expect(combined).toMatch(/ingestion|ingest/i);
+    expect(combined).toContain('src-auth');
   });
 
   it('refuses to re-initialize an already initialized project', async () => {

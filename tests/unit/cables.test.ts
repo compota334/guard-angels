@@ -354,19 +354,16 @@ describe('readInbox', () => {
     expect(cables).toHaveLength(1);
   });
 
-  it('skips malformed cable files without throwing', () => {
+  it('throws on a malformed cable file (no silent skip)', () => {
     writeCable(tmpDir, makeCable());
     // Add a malformed .md file
     const inDir = path.join(tmpDir, '.angels', '_inbox', 'src-auth');
-    fs.writeFileSync(
-      path.join(inDir, 'bad-cable.md'),
-      'this is not a valid cable',
-      'utf-8',
-    );
+    const badPath = path.join(inDir, 'bad-cable.md');
+    fs.writeFileSync(badPath, 'this is not a valid cable', 'utf-8');
 
-    const cables = readInbox(tmpDir, 'src-auth');
-    expect(cables).toHaveLength(1); // Only the valid one
-    expect(cables[0].from).toBe('src-api');
+    expect(() => readInbox(tmpDir, 'src-auth')).toThrowError(
+      /Failed to parse cable file at .*bad-cable\.md/,
+    );
   });
 
   it('reads multiple cables from different senders', () => {

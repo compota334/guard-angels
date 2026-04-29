@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import { join } from 'node:path';
-import { invoke } from '../../src/protocol/orchestrate.js';
+import { invoke, OrchestrationError } from '../../src/protocol/orchestrate.js';
 import { writeBrief } from '../../src/protocol/brief.js';
 import { lockFilePath } from '../../src/locks/lock.js';
 import {
@@ -155,7 +155,7 @@ describe('orchestrate.invoke', () => {
     expect(result.response).toBeDefined();
   });
 
-  it('produces a synthetic error response when angel writes no response file', async () => {
+  it('throws OrchestrationError when angel writes no response file', async () => {
     // Use echo-backend which does NOT write a response file
     updateConfig(tmpDir, echoBackendPath);
 
@@ -171,15 +171,30 @@ describe('orchestrate.invoke', () => {
       priorResponse: 'none',
     });
 
-    const result = await invoke(tmpDir, {
-      phase: 'review',
-      angelId: 'src-auth',
-      briefPath,
-    });
+    let caught: unknown;
+    try {
+      await invoke(tmpDir, {
+        phase: 'review',
+        angelId: 'src-auth',
+        briefPath,
+      });
+    } catch (err) {
+      caught = err;
+    }
 
-    // Should get a synthetic error response
-    expect(result.response.response).toBe('error');
-    expect(result.response.concerns).toContain('did not produce a valid response');
+    // Should throw OrchestrationError of kind missing_response — not fabricate
+    // a synthetic on-disk response file.
+    expect(caught).toBeInstanceOf(OrchestrationError);
+    const err = caught as OrchestrationError;
+    expect(err.kind).toBe('missing_response');
+    expect(err.message).toContain('src-auth');
+    expect(err.message).toContain('did not produce a valid response');
+    expect(fs.existsSync(err.logMetaPath)).toBe(true);
+
+    // No response file should have been fabricated on disk
+    const responseDir = join(tmpDir, '.angels', '_responses', 'src-auth');
+    const responseFiles = fs.existsSync(responseDir) ? fs.readdirSync(responseDir) : [];
+    expect(responseFiles).toEqual([]);
 
     // Lock should still be released
     const lp = lockFilePath(tmpDir);
