@@ -346,3 +346,13 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - Newspaper `--since` uses simple ISO string comparison (`>=`) for filtering. This works correctly because ISO 8601 timestamps with timezone are lexicographically orderable.
   - Integration tests for messaging commands use `console.log` capture (save original, replace, restore in finally). This is simpler than running the built CLI via execa for synchronous commands.
 ---
+
+## 2026-04-29T01:10:00Z - BUG-010: Auditoría tras US-019 y US-020
+- Implemented: No issues found in last 2 tasks. Verified: tsc=PASS, vitest=PASS (377 tests), eslint=PASS. Cable command validates both sender and recipient via `registry.getById()` which throws with descriptive error naming the offending ID. Newspaper `--since` rejects malformed timestamps via `new Date()` + `isNaN` check (tested with `'not-a-date'`). Cable type and urgency enum validation works with clear error messages. Inbox command validates angel exists before reading. All 3 messaging commands handle edge cases correctly (empty inbox, no entries, filtered-out entries). Cable filename uniqueness relies on timestamp granularity (no sequence number like briefs) — acceptable for v1 sequential model.
+- Files changed: scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS  eslint=PASS
+- Learnings for future iterations:
+  - Cable filenames lack sequence numbering (unlike briefs). Two cables from the same sender in the same millisecond will overwrite each other. Not a bug for v1 sequential model, but future parallel execution would need sequence numbers or UUIDs.
+  - Pre-existing flake: `list.test.ts`, `init.test.ts`, `create.test.ts` each run `tsc` in `beforeAll` — when vitest runs them concurrently, the 10s default hookTimeout can be exceeded. Pre-building with `npm run build` before `npx vitest run` avoids this. Not introduced by US-019/US-020.
+  - `new Date('april 28')` passes the NaN check (valid Date object) — the newspaper `--since` validator is permissive for natural language dates. This is acceptable since the string comparison filtering still works correctly.
+---

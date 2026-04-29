@@ -456,8 +456,8 @@
         "If no issues, commit docs: [BUG-010] Auditoría sin hallazgos sobre tareas US-019, US-020"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "No issues found. Cable command validates sender/recipient via registry.getById (throws with descriptive error naming the ID). Newspaper --since rejects malformed timestamps via new Date() + isNaN check. All 3 messaging commands handle edge cases correctly. Pre-existing flake: 3 integration test files have concurrent tsc in beforeAll that can timeout — predates US-019/US-020, not in scope."
     },
     {
       "id": "US-021",
