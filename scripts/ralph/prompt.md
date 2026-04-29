@@ -53,7 +53,7 @@ Run these commands. ALL must pass before you commit:
 
 ```bash
 npx tsc --noEmit
-npx vitest run --reporter=basic
+npx vitest run
 ```
 
 If `eslint` is configured (check `.eslintrc*` or `eslint.config.*`):
