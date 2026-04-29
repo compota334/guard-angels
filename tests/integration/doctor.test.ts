@@ -11,6 +11,7 @@ import {
   checkStaleLocks,
   checkStaleDrafts,
   runDoctorChecks,
+  archiveOldFiles,
 } from '../../src/commands/doctor.js';
 import { loadConfig } from '../../src/config/load.js';
 import { AngelRegistry } from '../../src/angels/registry.js';
@@ -148,6 +149,169 @@ describe('doctor command', () => {
     setupCleanProject(tmpDir);
     const result = checkStaleLocks(tmpDir);
     expect(result).toBeNull();
+  });
+});
+
+describe('doctor --archive', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-archive-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('archives old briefs/responses/logs and preserves relative paths', () => {
+    setupCleanProject(tmpDir);
+    const angelsDir = join(tmpDir, '.angels');
+
+    // Create old files in _briefs, _responses, _logs
+    const oldDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000); // 45 days ago
+
+    // Brief file
+    const briefDir = join(angelsDir, '_briefs', 'auth');
+    fs.mkdirSync(briefDir, { recursive: true });
+    const briefFile = join(briefDir, '2026-03-15T1400-001.md');
+    fs.writeFileSync(briefFile, 'old brief content', 'utf-8');
+    fs.utimesSync(briefFile, oldDate, oldDate);
+
+    // Response file
+    const responseDir = join(angelsDir, '_responses', 'auth');
+    fs.mkdirSync(responseDir, { recursive: true });
+    const responseFile = join(responseDir, '2026-03-15T1400-001.md');
+    fs.writeFileSync(responseFile, 'old response content', 'utf-8');
+    fs.utimesSync(responseFile, oldDate, oldDate);
+
+    // Log files
+    const logDir = join(angelsDir, '_logs', 'auth');
+    fs.mkdirSync(logDir, { recursive: true });
+    const logFile = join(logDir, '2026-03-15T14-00-00.stdout');
+    fs.writeFileSync(logFile, 'old log content', 'utf-8');
+    fs.utimesSync(logFile, oldDate, oldDate);
+
+    const result = archiveOldFiles(tmpDir, 30);
+
+    // All 3 files should be moved
+    expect(result.movedFiles).toHaveLength(3);
+    expect(result.thresholdDays).toBe(30);
+
+    // Original files should be gone
+    expect(fs.existsSync(briefFile)).toBe(false);
+    expect(fs.existsSync(responseFile)).toBe(false);
+    expect(fs.existsSync(logFile)).toBe(false);
+
+    // Files should exist in _archive/<YYYY-MM>/ with preserved structure
+    const archiveBase = join(angelsDir, '_archive');
+    expect(fs.existsSync(archiveBase)).toBe(true);
+
+    // Check that at least one archive YYYY-MM directory was created
+    const archiveDirs = fs.readdirSync(archiveBase);
+    expect(archiveDirs.length).toBeGreaterThanOrEqual(1);
+
+    // Verify files are accessible at their new locations
+    for (const moved of result.movedFiles) {
+      expect(fs.existsSync(moved.destPath)).toBe(true);
+      const content = fs.readFileSync(moved.destPath, 'utf-8');
+      expect(content).toContain('old');
+    }
+  });
+
+  it('does not archive recent files', () => {
+    setupCleanProject(tmpDir);
+    const angelsDir = join(tmpDir, '.angels');
+
+    // Create a recent file in _briefs
+    const briefDir = join(angelsDir, '_briefs', '_root');
+    fs.mkdirSync(briefDir, { recursive: true });
+    const recentBrief = join(briefDir, '2026-04-29T1000-001.md');
+    fs.writeFileSync(recentBrief, 'recent brief', 'utf-8');
+    // mtime is now (just created) — well within 30 days
+
+    const result = archiveOldFiles(tmpDir, 30);
+
+    expect(result.movedFiles).toHaveLength(0);
+    expect(fs.existsSync(recentBrief)).toBe(true);
+  });
+
+  it('never archives newspaper, cursors, config, or angel.md', () => {
+    setupCleanProject(tmpDir);
+    const angelsDir = join(tmpDir, '.angels');
+
+    // Set old mtimes on protected files
+    const oldDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // 90 days ago
+
+    const protectedFiles = [
+      join(angelsDir, '_newspaper.md'),
+      join(angelsDir, '_config.yml'),
+      join(angelsDir, '_root', 'angel.md'),
+      join(angelsDir, 'auth', 'angel.md'),
+    ];
+
+    // Create cursor file
+    const cursorDir = join(angelsDir, '_cursors');
+    fs.mkdirSync(cursorDir, { recursive: true });
+    const cursorFile = join(cursorDir, 'auth');
+    fs.writeFileSync(cursorFile, '0', 'utf-8');
+    protectedFiles.push(cursorFile);
+
+    for (const f of protectedFiles) {
+      if (fs.existsSync(f)) {
+        fs.utimesSync(f, oldDate, oldDate);
+      }
+    }
+
+    const result = archiveOldFiles(tmpDir, 0);
+
+    // None of the protected files should be moved
+    expect(result.movedFiles).toHaveLength(0);
+    for (const f of protectedFiles) {
+      expect(fs.existsSync(f)).toBe(true);
+    }
+  });
+
+  it('--older-than=0 archives everything older than today', () => {
+    setupCleanProject(tmpDir);
+    const angelsDir = join(tmpDir, '.angels');
+
+    // Create a file with yesterday's date
+    const yesterday = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const briefDir = join(angelsDir, '_briefs', 'auth');
+    fs.mkdirSync(briefDir, { recursive: true });
+    const briefFile = join(briefDir, 'old.md');
+    fs.writeFileSync(briefFile, 'yesterday brief', 'utf-8');
+    fs.utimesSync(briefFile, yesterday, yesterday);
+
+    const result = archiveOldFiles(tmpDir, 0);
+
+    // With threshold 0, any file with age > 0ms should be archived
+    expect(result.movedFiles).toHaveLength(1);
+    expect(fs.existsSync(briefFile)).toBe(false);
+  });
+
+  it('runDoctor with --archive prints archive results', async () => {
+    setupCleanProject(tmpDir);
+    const angelsDir = join(tmpDir, '.angels');
+
+    // Create an old file
+    const oldDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+    const briefDir = join(angelsDir, '_briefs', '_root');
+    fs.mkdirSync(briefDir, { recursive: true });
+    const briefFile = join(briefDir, 'old-brief.md');
+    fs.writeFileSync(briefFile, 'old content', 'utf-8');
+    fs.utimesSync(briefFile, oldDate, oldDate);
+
+    const logs: string[] = [];
+    const origLog = console.log;
+    console.log = (msg: string) => logs.push(msg);
+    try {
+      const exitCode = await runDoctor(tmpDir, { archive: true, olderThanDays: 30 });
+      expect(exitCode).toBe(0); // no doctor issues, just archive
+      expect(logs.some((l) => l.includes('Archive: moved 1 file(s)'))).toBe(true);
+    } finally {
+      console.log = origLog;
+    }
   });
 });
 

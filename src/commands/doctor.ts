@@ -1,11 +1,11 @@
 import * as fs from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, join, relative, dirname, basename } from 'node:path';
 import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
 import { identifyCandidates } from '../angels/identify.js';
 import { readLock, isStale, lockFilePath, type LockInfo } from '../locks/lock.js';
 import { readAngelMd } from '../angels/memory.js';
-import { angelMdFile } from '../paths/layout.js';
+import { angelMdFile, briefsDir, responsesDir, logsDir, archiveDir } from '../paths/layout.js';
 import type { Config } from '../config/schema.js';
 
 // --- Report types ---
@@ -30,6 +30,16 @@ export interface StaleDraft {
   angelPath: string;
   lastUpdated: string;
   daysStale: number;
+}
+
+export interface ArchivedFile {
+  sourcePath: string;
+  destPath: string;
+}
+
+export interface ArchiveResult {
+  movedFiles: ArchivedFile[];
+  thresholdDays: number;
 }
 
 export interface DoctorReport {
@@ -135,6 +145,134 @@ export function checkStaleDrafts(
   return staleDrafts;
 }
 
+// --- Archive ---
+
+const ARCHIVABLE_DIRS = ['_briefs', '_responses', '_logs'] as const;
+
+/**
+ * Recursively collect all files under a directory.
+ */
+function collectFiles(dir: string): string[] {
+  const files: string[] = [];
+  if (!fs.existsSync(dir)) return files;
+
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectFiles(fullPath));
+    } else if (entry.isFile()) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+/**
+ * Archive old files from _briefs/, _responses/, _logs/ into _archive/<YYYY-MM>/.
+ * Files are moved (not copied), preserving their relative path under each top-level directory.
+ * Newspaper, cursors, _config.yml, and angel.md files are NEVER archived.
+ */
+export function archiveOldFiles(
+  projectRoot: string,
+  thresholdDays: number,
+): ArchiveResult {
+  const now = Date.now();
+  const thresholdMs = thresholdDays * 24 * 60 * 60 * 1000;
+  const archive = archiveDir(projectRoot);
+  const movedFiles: ArchivedFile[] = [];
+
+  const sourceDirs: Record<string, string> = {
+    _briefs: briefsDir(projectRoot),
+    _responses: responsesDir(projectRoot),
+    _logs: logsDir(projectRoot),
+  };
+
+  for (const [topName, topDir] of Object.entries(sourceDirs)) {
+    const files = collectFiles(topDir);
+    for (const filePath of files) {
+      // Skip angel.md files (should never appear here, but belt-and-suspenders)
+      if (basename(filePath) === 'angel.md') continue;
+
+      const stat = fs.statSync(filePath);
+      const fileAge = now - stat.mtimeMs;
+
+      if (fileAge > thresholdMs) {
+        // Compute archive destination: _archive/<YYYY-MM>/<topName>/<relative-path>
+        const fileDate = new Date(stat.mtimeMs);
+        const yearMonth = `${fileDate.getFullYear()}-${String(fileDate.getMonth() + 1).padStart(2, '0')}`;
+        const relPath = relative(topDir, filePath);
+        const destPath = join(archive, yearMonth, topName, relPath);
+
+        // Create destination directory
+        fs.mkdirSync(dirname(destPath), { recursive: true });
+
+        // Move file (rename if same filesystem, copy+delete otherwise)
+        try {
+          fs.renameSync(filePath, destPath);
+        } catch {
+          // Cross-device move: copy then delete
+          fs.copyFileSync(filePath, destPath);
+          fs.unlinkSync(filePath);
+        }
+
+        movedFiles.push({ sourcePath: filePath, destPath });
+      }
+    }
+  }
+
+  // Clean up empty directories left behind in the source dirs
+  for (const topDir of Object.values(sourceDirs)) {
+    cleanEmptyDirs(topDir);
+  }
+
+  return { movedFiles, thresholdDays };
+}
+
+/**
+ * Recursively remove empty directories (bottom-up).
+ */
+function cleanEmptyDirs(dir: string): void {
+  if (!fs.existsSync(dir)) return;
+
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      cleanEmptyDirs(join(dir, entry.name));
+    }
+  }
+
+  // Re-read after recursive cleanup — directory may now be empty
+  const remaining = fs.readdirSync(dir);
+  if (remaining.length === 0) {
+    // Don't remove the top-level archivable dirs themselves
+    const parentBase = basename(dir);
+    if (ARCHIVABLE_DIRS.includes(parentBase as typeof ARCHIVABLE_DIRS[number])) {
+      return;
+    }
+    fs.rmdirSync(dir);
+  }
+}
+
+/**
+ * Format archive results as a human-readable string.
+ */
+export function formatArchiveResult(result: ArchiveResult): string {
+  const lines: string[] = [];
+
+  if (result.movedFiles.length === 0) {
+    lines.push(`Archive: no files older than ${result.thresholdDays} day(s) found.`);
+    return lines.join('\n');
+  }
+
+  lines.push(`Archive: moved ${result.movedFiles.length} file(s) (threshold: ${result.thresholdDays} day(s)).\n`);
+  for (const f of result.movedFiles) {
+    lines.push(`  ${f.sourcePath} → ${f.destPath}`);
+  }
+
+  return lines.join('\n');
+}
+
 // --- Composition + output ---
 
 /**
@@ -218,19 +356,26 @@ export function formatDoctorReport(report: DoctorReport): string {
 }
 
 /**
- * Main entry point for the `angels doctor` command (without --archive).
- * Returns exit code: 0 if no issues, 1 if findings exist.
+ * Main entry point for the `angels doctor` command.
+ * Returns exit code: 0 if no issues (and no archive action), 1 if findings exist.
  */
 export async function runDoctor(
   cwd: string,
-  _options?: { draftThresholdDays?: number },
+  options?: { draftThresholdDays?: number; archive?: boolean; olderThanDays?: number },
 ): Promise<number> {
   const config = loadConfig(cwd);
   const registry = AngelRegistry.fromConfig(config);
-  const report = await runDoctorChecks(cwd, config, registry, _options);
+  const report = await runDoctorChecks(cwd, config, registry, options);
 
   const output = formatDoctorReport(report);
   console.log(output);
+
+  if (options?.archive) {
+    const thresholdDays = options.olderThanDays ?? 30;
+    const archiveResult = archiveOldFiles(cwd, thresholdDays);
+    const archiveOutput = formatArchiveResult(archiveResult);
+    console.log(archiveOutput);
+  }
 
   const totalFindings =
     report.orphanedAngels.length +

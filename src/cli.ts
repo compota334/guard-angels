@@ -151,12 +151,16 @@ program
   .option('--older-than <days>', 'Archive threshold in days (default: 30)')
   .action(async (options: { archive?: boolean; olderThan?: string }) => {
     try {
-      if (options.archive) {
-        console.error('not implemented: doctor --archive');
+      const olderThanDays = options.olderThan !== undefined ? parseInt(options.olderThan, 10) : undefined;
+      if (olderThanDays !== undefined && (isNaN(olderThanDays) || olderThanDays < 0)) {
+        console.error(`Invalid --older-than value: "${options.olderThan}". Must be a non-negative integer.`);
         process.exit(1);
         return;
       }
-      const exitCode = await runDoctor(process.cwd());
+      const exitCode = await runDoctor(process.cwd(), {
+        archive: options.archive,
+        olderThanDays,
+      });
       process.exit(exitCode);
     } catch (err: unknown) {
       console.error((err as Error).message);
