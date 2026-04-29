@@ -654,8 +654,8 @@
         "Do NOT add scope-creep features"
       ],
       "priority": 51,
-      "passes": false,
-      "notes": "Reserved for emergent work."
+      "passes": true,
+      "notes": "unused — no emergent work needed; v1 cerrado tras BUFFER-001"
     },
     {
       "id": "BUFFER-003",
@@ -666,8 +666,8 @@
         "Do NOT add scope-creep features"
       ],
       "priority": 52,
-      "passes": false,
-      "notes": "Reserved for emergent work."
+      "passes": true,
+      "notes": "unused — no emergent work needed; v1 cerrado tras BUFFER-001"
     },
     {
       "id": "BUFFER-004",
@@ -678,8 +678,8 @@
         "Do NOT add scope-creep features"
       ],
       "priority": 53,
-      "passes": false,
-      "notes": "Reserved for emergent work."
+      "passes": true,
+      "notes": "unused — no emergent work needed; v1 cerrado tras BUFFER-001"
     },
     {
       "id": "BUFFER-005",
@@ -690,8 +690,8 @@
         "Do NOT add scope-creep features"
       ],
       "priority": 54,
-      "passes": false,
-      "notes": "Reserved for emergent work."
+      "passes": true,
+      "notes": "unused — no emergent work needed; v1 cerrado tras BUFFER-001"
     },
     {
       "id": "BUFFER-006",
@@ -702,8 +702,8 @@
         "Do NOT add scope-creep features"
       ],
       "priority": 55,
-      "passes": false,
-      "notes": "Reserved for emergent work."
+      "passes": true,
+      "notes": "unused — no emergent work needed; v1 cerrado tras BUFFER-001"
     },
     {
       "id": "BUFFER-007",
@@ -714,8 +714,8 @@
         "Do NOT add scope-creep features"
       ],
       "priority": 56,
-      "passes": false,
-      "notes": "Reserved for emergent work."
+      "passes": true,
+      "notes": "unused — no emergent work needed; v1 cerrado tras BUFFER-001"
     },
     {
       "id": "BUFFER-008",
@@ -726,8 +726,8 @@
         "Do NOT add scope-creep features"
       ],
       "priority": 57,
-      "passes": false,
-      "notes": "Reserved for emergent work."
+      "passes": true,
+      "notes": "unused — no emergent work needed; v1 cerrado tras BUFFER-001"
     }
   ]
 }
