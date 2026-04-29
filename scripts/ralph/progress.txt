@@ -399,6 +399,9 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Verification: tsc=PASS  vitest=PASS (400 tests)  eslint=PASS
 - Learnings for future iterations:
   - Doctor command: `src/commands/doctor.ts`. Four pure check functions + `runDoctorChecks` composition + `formatDoctorReport` formatter + `runDoctor` CLI entry.
+- Consolidated fake backend: `tests/fixtures/fake-backend.sh` — single script dispatching REVIEW/EXECUTE/INIT/SWEEP via PHASE detection from prompt. Env vars: FAKE_BACKEND_VERDICT, FAKE_BACKEND_CONCERNS, FAKE_BACKEND_EXIT, FAKE_BACKEND_WRITE_FILES, etc. Also supports echo mode (FAKE_BACKEND_ECHO_MODE=true) and stderr mode (FAKE_BACKEND_STDERR_MODE=true).
+- Shared test helpers: `tests/helpers/setup-project.ts` — `setupProject()`, `updateConfig()`, `createBackendWrapper()`, `copyFakeBackend()`, `copyEchoBackend()`. Import in integration tests to avoid duplicating project setup.
+- Sample project fixture: `tests/fixtures/projects/sample/` — has `src/auth/` (3 .ts files + AGENTS.md) and `src/api/` (2 .ts files, no AGENTS.md). Pre-configured `.angels/` with 3 angels (_root, src-auth, src-api).
   - `checkMissingAngels` is async because `identifyCandidates` (from `identify.ts`) is async. All other checks are synchronous.
   - `checkStaleDrafts` takes a `thresholdDays` parameter (default 7 days inside `runDoctorChecks`). Reads angel.md frontmatter for each registered angel and checks if status is "draft" and `last_updated` is older than the threshold.
   - Test fixtures for doctor must avoid intermediate folders (like `src/`) that trigger the `identifyCandidates` heuristic as significant (non-generic name). Using direct folder names (`auth/` instead of `src/auth/`) avoids false "missing angel" reports in clean-project tests.
@@ -424,4 +427,16 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Learnings for future iterations:
   - `archiveOldFiles` is implicitly protected from moving newspaper/cursors/config/angel.md because it only recurses `_briefs/`, `_responses/`, `_logs/` — the architectural decision to keep protected files outside these dirs provides the real safety, not any explicit file-name filtering.
   - `--older-than=0` means `thresholdMs=0` and `fileAge > 0` — archives everything except files created at the exact same `Date.now()` millisecond. In v1 sequential model this is safe because doctor runs standalone, not concurrently with brief/execute.
+---
+
+## 2026-04-29T04:30:00Z - US-025: Fixtures de tests: fake-backend.sh + proyectos sintéticos
+- Implemented: Created consolidated `tests/fixtures/fake-backend.sh` — a single POSIX bash script that detects PHASE from the prompt (REVIEW/EXECUTE/INIT/SWEEP) and dispatches to phase-specific handlers with appropriate canned responses. Supports echo mode and stderr mode as drop-in replacements for the legacy `echo-backend.sh` and `stderr-backend.sh`. Enhanced sample project fixture (`tests/fixtures/projects/sample/`) with source files in `src/auth/` (3 .ts files + AGENTS.md for ingestion testing) and `src/api/` (2 .ts files including index.ts, no AGENTS.md). Created shared test helpers module (`tests/helpers/setup-project.ts`) exporting `setupProject`, `updateConfig`, `createBackendWrapper`, `copyFakeBackend`, `copyEchoBackend` — eliminates 4 copies of identical setup/config/wrapper functions. Migrated 4 integration test files (orchestrate, brief, execute, sweep) to use the shared helpers and consolidated backend. Legacy per-phase scripts kept for backward compatibility.
+- Files changed: tests/fixtures/fake-backend.sh (new), tests/fixtures/projects/sample/src/auth/{session,middleware,types}.ts (new), tests/fixtures/projects/sample/src/auth/AGENTS.md (new), tests/fixtures/projects/sample/src/api/{index,routes}.ts (new), tests/helpers/setup-project.ts (new), tests/integration/orchestrate.test.ts (migrated), tests/integration/brief.test.ts (migrated), tests/integration/execute.test.ts (migrated), tests/integration/sweep.test.ts (migrated), scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS (405 tests)  eslint=PASS
+- Learnings for future iterations:
+  - The consolidated `fake-backend.sh` detects phase via `grep -oP '^PHASE: \K\w+'` from the brief section in the prompt. Default phase is `review` if not found.
+  - EXECUTE phase uses `FAKE_BACKEND_WRITE_FILES` (comma-separated absolute paths) to actually create files on disk, enabling real territory detection in integration tests.
+  - Sweep phase defaults verdict to `done` with drift report "No drift detected." while review phase defaults to `proceed` — matching the natural semantics of each phase.
+  - `tests/helpers/setup-project.ts` exports `DEFAULT_ANGELS` (standard _root + src-auth config) reused by most integration tests. Custom angels can be passed via the `angels` option.
+  - Legacy scripts (`fake-review-backend.sh`, `fake-execute-backend.sh`, `fake-sweep-backend.sh`, `echo-backend.sh`, `stderr-backend.sh`) are kept for now. Future cleanup could remove them once all consumers are migrated, but the unit tests for backend adapters still reference `echo-backend.sh` and `stderr-backend.sh` directly.
 ---

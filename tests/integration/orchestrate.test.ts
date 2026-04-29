@@ -1,14 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
-import { join, resolve } from 'node:path';
-import { stringify as yamlStringify } from 'yaml';
+import { join } from 'node:path';
 import { invoke } from '../../src/protocol/orchestrate.js';
 import { writeBrief } from '../../src/protocol/brief.js';
-import { writeAngelMd } from '../../src/angels/memory.js';
 import { lockFilePath } from '../../src/locks/lock.js';
-
-const FIXTURES_DIR = resolve(import.meta.dirname, '../fixtures');
+import {
+  copyFakeBackend,
+  copyEchoBackend,
+  setupProject,
+  updateConfig,
+  createBackendWrapper,
+} from '../helpers/setup-project.js';
 
 describe('orchestrate.invoke', () => {
   let tmpDir: string;
@@ -20,14 +23,10 @@ describe('orchestrate.invoke', () => {
 
     // Copy fixture scripts into tmpDir (which has no spaces in path)
     // to avoid execa parseCommandString splitting on spaces
-    fakeBackendPath = join(tmpDir, 'fake-review-backend.sh');
-    echoBackendPath = join(tmpDir, 'echo-backend.sh');
-    fs.copyFileSync(resolve(FIXTURES_DIR, 'fake-review-backend.sh'), fakeBackendPath);
-    fs.copyFileSync(resolve(FIXTURES_DIR, 'echo-backend.sh'), echoBackendPath);
-    fs.chmodSync(fakeBackendPath, 0o755);
-    fs.chmodSync(echoBackendPath, 0o755);
+    fakeBackendPath = copyFakeBackend(tmpDir);
+    echoBackendPath = copyEchoBackend(tmpDir);
 
-    setupProject(tmpDir, fakeBackendPath);
+    setupProject(tmpDir, { backendScript: fakeBackendPath });
   });
 
   afterEach(() => {
@@ -88,18 +87,15 @@ describe('orchestrate.invoke', () => {
   });
 
   it('invokes with "concerns" verdict from fake backend', async () => {
-    // Create a wrapper script with env vars for the concerns verdict
-    const wrapperPath = join(tmpDir, 'concerns-wrapper.sh');
-    const wrapperContent = [
-      '#!/usr/bin/env bash',
-      'set -euo pipefail',
-      'export FAKE_BACKEND_VERDICT="concerns"',
-      'export FAKE_BACKEND_CONCERNS="This change may break session management"',
-      `exec ${fakeBackendPath} "$@"`,
-      '',
-    ].join('\n');
-    fs.writeFileSync(wrapperPath, wrapperContent, { mode: 0o755 });
-
+    const wrapperPath = createBackendWrapper(
+      tmpDir,
+      fakeBackendPath,
+      {
+        FAKE_BACKEND_VERDICT: 'concerns',
+        FAKE_BACKEND_CONCERNS: 'This change may break session management',
+      },
+      'concerns-wrapper.sh',
+    );
     updateConfig(tmpDir, wrapperPath);
 
     const briefPath = writeBrief(tmpDir, {
@@ -125,17 +121,12 @@ describe('orchestrate.invoke', () => {
   });
 
   it('releases lock even when backend fails with non-zero exit', async () => {
-    // Create a wrapper that exits 1 but still writes a response
-    const wrapperPath = join(tmpDir, 'exit1-wrapper.sh');
-    const wrapperContent = [
-      '#!/usr/bin/env bash',
-      'set -euo pipefail',
-      'export FAKE_BACKEND_EXIT="1"',
-      `exec ${fakeBackendPath} "$@"`,
-      '',
-    ].join('\n');
-    fs.writeFileSync(wrapperPath, wrapperContent, { mode: 0o755 });
-
+    const wrapperPath = createBackendWrapper(
+      tmpDir,
+      fakeBackendPath,
+      { FAKE_BACKEND_EXIT: '1' },
+      'exit1-wrapper.sh',
+    );
     updateConfig(tmpDir, wrapperPath);
 
     const briefPath = writeBrief(tmpDir, {
@@ -219,93 +210,3 @@ describe('orchestrate.invoke', () => {
     expect(stdoutContent.length).toBeGreaterThan(0);
   });
 });
-
-/**
- * Set up a synthetic project with .angels/ structure, config, and angel.md
- */
-function setupProject(projectRoot: string, backendScript: string): void {
-  // Create source directories
-  const authDir = join(projectRoot, 'src', 'auth');
-  fs.mkdirSync(authDir, { recursive: true });
-  fs.writeFileSync(join(authDir, 'session.ts'), 'export {};');
-
-  // Create .angels/ structure
-  const angelsDir = join(projectRoot, '.angels');
-  fs.mkdirSync(join(angelsDir, '_briefs'), { recursive: true });
-  fs.mkdirSync(join(angelsDir, '_responses'), { recursive: true });
-  fs.mkdirSync(join(angelsDir, '_inbox'), { recursive: true });
-  fs.mkdirSync(join(angelsDir, '_outbox'), { recursive: true });
-  fs.mkdirSync(join(angelsDir, '_locks'), { recursive: true });
-  fs.mkdirSync(join(angelsDir, '_logs'), { recursive: true });
-  fs.mkdirSync(join(angelsDir, '_cursors'), { recursive: true });
-
-  // Write _config.yml pointing to the fake backend
-  const config = {
-    version: 1,
-    backend: {
-      angel_cmd: backendScript,
-      angel_timeout_seconds: 30,
-    },
-    angels: [
-      { id: '_root', type: 'root', path: '.' },
-      { id: 'src-auth', type: 'folder', path: 'src/auth' },
-    ],
-    sweep: {
-      autonomy: 'report-only',
-    },
-  };
-  fs.writeFileSync(
-    join(angelsDir, '_config.yml'),
-    yamlStringify(config, { lineWidth: 0 }),
-    'utf-8',
-  );
-
-  // Create _newspaper.md
-  fs.writeFileSync(join(angelsDir, '_newspaper.md'), '', 'utf-8');
-
-  // Create angel.md for src-auth
-  const srcAuthAngelDir = join(angelsDir, 'src', 'auth');
-  fs.mkdirSync(srcAuthAngelDir, { recursive: true });
-  writeAngelMd(join(srcAuthAngelDir, 'angel.md'), {
-    frontmatter: {
-      status: 'active',
-      last_updated: '2026-04-28T10:00:00Z',
-      last_updated_by: 'main',
-    },
-    body: '# Angel: src/auth (folder)\n\n## Charter\nHandles authentication and session management.\n',
-  });
-
-  // Create angel.md for _root
-  const rootAngelDir = join(angelsDir, '_root');
-  fs.mkdirSync(rootAngelDir, { recursive: true });
-  writeAngelMd(join(rootAngelDir, 'angel.md'), {
-    frontmatter: {
-      status: 'active',
-      last_updated: '2026-04-28T10:00:00Z',
-      last_updated_by: 'main',
-    },
-    body: '# Angel: . (root)\n\n## Charter\nRoot angel for the project.\n',
-  });
-}
-
-/**
- * Update the _config.yml with a new angel_cmd.
- */
-function updateConfig(projectRoot: string, angelCmd: string): void {
-  const configPath = join(projectRoot, '.angels', '_config.yml');
-  const config = {
-    version: 1,
-    backend: {
-      angel_cmd: angelCmd,
-      angel_timeout_seconds: 30,
-    },
-    angels: [
-      { id: '_root', type: 'root', path: '.' },
-      { id: 'src-auth', type: 'folder', path: 'src/auth' },
-    ],
-    sweep: {
-      autonomy: 'report-only',
-    },
-  };
-  fs.writeFileSync(configPath, yamlStringify(config, { lineWidth: 0 }), 'utf-8');
-}

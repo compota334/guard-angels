@@ -557,8 +557,8 @@
         "tsc + vitest pass"
       ],
       "priority": 37,
-      "passes": false,
-      "notes": "Tests in earlier tasks may have inlined ad-hoc fixtures. This task consolidates them."
+      "passes": true,
+      "notes": "Created consolidated fake-backend.sh with multi-phase dispatch (REVIEW/EXECUTE/INIT/SWEEP) + echo/stderr modes. Enhanced sample project fixture with source files + AGENTS.md. Created tests/helpers/setup-project.ts with shared setupProject/updateConfig/createBackendWrapper/copyFakeBackend. Migrated orchestrate/brief/execute/sweep integration tests. Legacy per-phase scripts kept for backward compat."
     },
     {
       "id": "US-026",
