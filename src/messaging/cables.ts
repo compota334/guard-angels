@@ -6,6 +6,10 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { angelInboxDir, angelOutboxDir } from '../paths/layout.js';
+import {
+  extractRequiredField,
+  extractSection,
+} from '../protocol/parser-utils.js';
 
 export type CableType =
   | 'breaking_change'
@@ -264,42 +268,3 @@ function buildCableFilename(data: CableData): string {
   return `${sanitizedTs}-cable-from-${fromSlug}.md`;
 }
 
-function extractRequiredField(
-  raw: string,
-  field: string,
-  source: string,
-): string {
-  const regex = new RegExp(`^${escapeRegex(field)}:\\s*(.+)$`, 'm');
-  const match = raw.match(regex);
-  if (!match) {
-    throw new Error(`Missing required field "${field}" in cable ${source}`);
-  }
-  return match[1].trim();
-}
-
-function extractSection(raw: string, sectionName: string): string | null {
-  const headerRegex = new RegExp(
-    `^${escapeRegex(sectionName)}:\\s*$`,
-    'm',
-  );
-  const headerMatch = headerRegex.exec(raw);
-  if (!headerMatch) {
-    return null;
-  }
-
-  const startIndex = headerMatch.index + headerMatch[0].length;
-  const remaining = raw.slice(startIndex);
-
-  // Find the next header (a line that starts with ALL-CAPS word(s) followed by colon)
-  const nextHeaderMatch = remaining.match(/\n(?=[A-Z][A-Z_ ]*:)/);
-  const body = nextHeaderMatch
-    ? remaining.slice(0, nextHeaderMatch.index)
-    : remaining;
-
-  const trimmed = body.trim();
-  return trimmed === '' ? null : trimmed;
-}
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}

@@ -11,6 +11,7 @@ import { parseResponse } from './response.js';
 import { parseBrief } from './brief.js';
 import { angelMdFile, angelResponsesDir } from '../paths/layout.js';
 import { angelIdToPath } from '../paths/resolve.js';
+import { extractDatePrefix, computeNextSeq } from './parser-utils.js';
 import type { PromptPhase, InboxEntry } from './prompt.js';
 import type { ResponseData } from './response.js';
 import type { LogMeta } from '../logs/log.js';
@@ -236,44 +237,9 @@ function computeResponsePath(
   const dir = angelResponsesDir(projectRoot, angelId);
   fs.mkdirSync(dir, { recursive: true });
 
-  const datePrefix = extractDatePrefix(isoTimestamp);
+  const datePrefix = extractDatePrefix(isoTimestamp, 'response');
   const seq = computeNextSeq(dir, datePrefix);
   return join(dir, `${datePrefix}-${seq}.md`);
-}
-
-function extractDatePrefix(isoTimestamp: string): string {
-  const match = isoTimestamp.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/);
-  if (!match) {
-    throw new Error(
-      `Invalid ISO timestamp for response filename: "${isoTimestamp}"`,
-    );
-  }
-  const [, date, hours, minutes] = match;
-  return `${date}T${hours}${minutes}`;
-}
-
-function computeNextSeq(dir: string, datePrefix: string): string {
-  const dateOnly = datePrefix.slice(0, 10);
-  let maxSeq = 0;
-
-  let entries: string[];
-  try {
-    entries = fs.readdirSync(dir);
-  } catch {
-    entries = [];
-  }
-
-  for (const entry of entries) {
-    const match = entry.match(/^(\d{4}-\d{2}-\d{2})T\d{4}-(\d{3})\.md$/);
-    if (match && match[1] === dateOnly) {
-      const seq = parseInt(match[2], 10);
-      if (seq > maxSeq) {
-        maxSeq = seq;
-      }
-    }
-  }
-
-  return String(maxSeq + 1).padStart(3, '0');
 }
 
 function isTimeoutError(err: unknown): boolean {

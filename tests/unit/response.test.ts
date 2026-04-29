@@ -357,7 +357,7 @@ describe('parseResponseContent', () => {
       '',
     ].join('\n');
 
-    expect(() => parseResponseContent(content)).toThrow('Missing required field: FROM');
+    expect(() => parseResponseContent(content)).toThrow('Missing required field "FROM"');
   });
 
   it('throws on missing TIMESTAMP field', () => {
@@ -377,7 +377,7 @@ describe('parseResponseContent', () => {
       '',
     ].join('\n');
 
-    expect(() => parseResponseContent(content)).toThrow('Missing required field: TIMESTAMP');
+    expect(() => parseResponseContent(content)).toThrow('Missing required field "TIMESTAMP"');
   });
 
   it('throws on missing RESPONSE field', () => {
@@ -397,7 +397,7 @@ describe('parseResponseContent', () => {
       '',
     ].join('\n');
 
-    expect(() => parseResponseContent(content)).toThrow('Missing required field: RESPONSE');
+    expect(() => parseResponseContent(content)).toThrow('Missing required field "RESPONSE"');
   });
 
   it('rejects done-only fields on proceed response', () => {

@@ -169,7 +169,7 @@ describe('parseBrief', () => {
       '',
       'PRIOR RESPONSE: none',
     ].join('\n');
-    expect(() => parseBriefContent(content)).toThrow('Missing required field: TO');
+    expect(() => parseBriefContent(content)).toThrow('Missing required field "TO"');
   });
 
   it('throws on missing TASK section', () => {
