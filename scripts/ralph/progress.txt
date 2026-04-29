@@ -416,3 +416,12 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - `--older-than` value is parsed as integer in CLI (from string), validated as non-negative. Default is 30 days.
   - Archive destination format: `_archive/<YYYY-MM>/<_briefs|_responses|_logs>/<relative-path>`. Month is 1-indexed, zero-padded.
 ---
+
+## 2026-04-29T04:15:00Z - BUG-012: Auditoría tras US-023 y US-024
+- Implemented: No issues found in last 2 tasks. Verified: tsc=PASS, vitest=PASS (405 tests), eslint=PASS. Archive protections are correct by design: `archiveOldFiles` only walks `_briefs/`, `_responses/`, `_logs/` — newspaper, cursors, config, and angel.md files live outside these directories and are never touched. Belt-and-suspenders `basename === 'angel.md'` check adds extra safety. `--older-than=0` sets `thresholdMs=0`, archiving everything with `fileAge > 0ms` — aggressive but not catastrophic since files are moved (not deleted) and v1 sequential model has no truly in-flight work in archivable dirs. Orphan detection uses `fs.existsSync` which is case-sensitive on Linux (ext4), correct behavior since config paths must match exact filesystem paths. `cleanEmptyDirs` correctly preserves top-level archivable dirs via basename check against `ARCHIVABLE_DIRS`. All 405 tests pass across 3 runs.
+- Files changed: scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS  eslint=PASS
+- Learnings for future iterations:
+  - `archiveOldFiles` is implicitly protected from moving newspaper/cursors/config/angel.md because it only recurses `_briefs/`, `_responses/`, `_logs/` — the architectural decision to keep protected files outside these dirs provides the real safety, not any explicit file-name filtering.
+  - `--older-than=0` means `thresholdMs=0` and `fileAge > 0` — archives everything except files created at the exact same `Date.now()` millisecond. In v1 sequential model this is safe because doctor runs standalone, not concurrently with brief/execute.
+---

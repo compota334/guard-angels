@@ -542,8 +542,8 @@
         "If no issues, commit docs: [BUG-012] Auditoría sin hallazgos sobre tareas US-023, US-024"
       ],
       "priority": 36,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "No issues found. Archive only walks _briefs/_responses/_logs (protected files live outside). --older-than=0 is aggressive but not catastrophic (files moved, not deleted; v1 sequential model has no in-flight work). Orphan detection case-sensitive on Linux, correct behavior."
     },
     {
       "id": "US-025",
