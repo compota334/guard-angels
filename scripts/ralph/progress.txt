@@ -458,3 +458,14 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - Integration tests are fully decoupled from legacy per-phase scripts. If legacy scripts are eventually removed, only `backend.test.ts` (unit) needs updating.
   - The README's file layout diagram shows a nested `.angels/src/auth/` and `.angels/src/api/` structure — this accurately reflects how `angelDir` in `layout.ts` mirrors the project tree inside `.angels/`.
 ---
+
+## 2026-04-29T05:15:00Z - US-027: Tests de integración del protocolo end-to-end
+- Implemented: Created `tests/integration/protocol.test.ts` with two test cases: (1) full happy path exercising init→create→list→brief→execute→newspaper→sweep→doctor on a fresh synthetic fixture, verifying every command exits successfully, every expected file is created, newspaper grows monotonically, cursors advance, and no territory warnings appear for in-territory writes; (2) separate territory-warning test that exercises the out-of-territory detection path, verifying the newspaper warning is appended and both files (in and out of territory) are created.
+- Files changed: tests/integration/protocol.test.ts (new)
+- Verification: tsc=PASS  vitest=PASS (407 tests)  eslint=PASS
+- Learnings for future iterations:
+  - `briefAngel` only returns exit code, not the brief path. For e2e tests that need to chain brief→execute, call `writeBrief` directly for the execute step (same pattern as `execute.test.ts`).
+  - `initAngels` with `--auto` generates its own `_config.yml` using `DEFAULT_BACKEND_CMD`. To use the fake backend for subsequent commands, read the init-generated config to get the angels list, then `updateConfig` with the fake backend path while preserving the angels array.
+  - The e2e test runs both test cases in ~200ms total — well under the 10s budget. The fake backend is fast enough that the full protocol flow (8 steps) completes near-instantly.
+  - `updateConfig` from `setup-project.ts` overwrites the entire `_config.yml` — callers must pass the full angels list, not just the backend command. Read the existing config first if you need to preserve init-generated angels.
+---

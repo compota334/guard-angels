@@ -599,8 +599,8 @@
         "tsc + vitest pass"
       ],
       "priority": 40,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Full protocol e2e test: init→create→list→brief→execute→newspaper→sweep→doctor in one test. Separate territory-warning test. Both tests run in ~200ms total."
     },
     {
       "id": "US-028",
