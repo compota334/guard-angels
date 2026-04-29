@@ -5,7 +5,7 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 ## Codebase Patterns
 - Project uses ESM (`"type": "module"` in package.json). All imports need `.js` extensions for TypeScript NodeNext resolution.
 - tsconfig: strict, ES2022, NodeNext module/resolution, outDir=dist, rootDir=src.
-- Vitest configured with `passWithNoTests: true` in `vitest.config.ts` so zero-test runs exit 0.
+- Vitest configured with `passWithNoTests: true` and `globalSetup: ['tests/global-setup.ts']` in `vitest.config.ts`. The globalSetup runs `tsc` once before all test suites — never put `tsc` in per-file `beforeAll` hooks (causes concurrent build races and timeouts).
 - ESLint uses flat config (`eslint.config.js`) with `@eslint/js` + `typescript-eslint`.
 - Verification commands: `npx tsc --noEmit`, `npx vitest run`, `npx eslint . --quiet`.
 - tsconfig has `"types": ["node"]` — required for `process`, `Buffer`, etc.
@@ -482,4 +482,14 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - `formatError` walks the `Error.cause` chain, showing each cause with its stack frames. This surfaces the original system-level error (e.g. ENOENT) alongside the application-level message.
   - The `newspaper --since` validation was only reached when entries existed. Moving it before `readNewspaperSince` ensures invalid timestamps are always rejected.
   - Registry error messages listing available IDs use `[...map.keys()].join(', ')` — readable for small registries, could be noisy for very large ones (not a concern for v1).
+---
+
+## 2026-04-29T06:45:00Z - BUG-014: Auditoría final tras US-027 y US-028
+- Implemented: Fixed flaky test timeouts in 3 integration test files (list.test.ts, init.test.ts, create.test.ts) that ran concurrent `tsc` in `beforeAll`, causing 10s hookTimeout failures when vitest parallelized them. Solution: added `tests/global-setup.ts` (runs `tsc` once before all suites via vitest `globalSetup` config) and removed redundant `beforeAll(tsc)` from the 3 files. Verified all 10 CLI commands end-to-end against fake backend on a fresh fixture: init, list, create, brief, execute, newspaper, cable, inbox, sweep, doctor (including --archive).
+- Files changed: vitest.config.ts, tests/global-setup.ts (new), tests/integration/list.test.ts, tests/integration/init.test.ts, tests/integration/create.test.ts, scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS (422 tests, 3 consecutive runs, zero flakes)  eslint=PASS
+- Learnings for future iterations:
+  - Never run `tsc` in individual test file `beforeAll` hooks — vitest parallelizes test files, causing concurrent builds that race and timeout. Use vitest's `globalSetup` option instead to build once before all tests.
+  - The `globalSetup` file exports a `setup()` async function that vitest calls before any test suite loads. This guarantees `dist/` is fresh before integration tests that run the CLI via `execaNode`.
+  - `src/index.ts` is still a dead placeholder from US-001 (contains only `export {}`). Not harmful but could be removed in a future cleanup.
 ---

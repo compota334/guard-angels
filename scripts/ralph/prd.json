@@ -630,8 +630,8 @@
         "If no issues, commit docs: [BUG-014] Auditoría final sin hallazgos antes de cierre de v1"
       ],
       "priority": 42,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Fixed flaky test timeouts: 3 integration tests (list, init, create) ran concurrent tsc in beforeAll causing 10s hookTimeout. Added vitest globalSetup that builds once before all tests. All 422 tests pass with zero flakes across 3 consecutive runs. All 10 CLI commands verified end-to-end against fake backend."
     },
     {
       "id": "BUFFER-001",

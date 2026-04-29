@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execaNode } from 'execa';
 import { resolve, join } from 'node:path';
 import * as fs from 'node:fs';
@@ -10,13 +10,6 @@ const CLI_PATH = resolve(PROJECT_ROOT, 'dist/bin/angels.js');
 
 describe('angels init', () => {
   let tmpDir: string;
-
-  beforeAll(async () => {
-    await execaNode(resolve(PROJECT_ROOT, 'node_modules/.bin/tsc'), [], {
-      cwd: PROJECT_ROOT,
-      nodeOptions: [],
-    });
-  });
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-init-'));

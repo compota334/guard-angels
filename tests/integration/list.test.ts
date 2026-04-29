@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { execaNode } from 'execa';
 import { resolve } from 'node:path';
 
@@ -7,12 +7,6 @@ const CLI_PATH = resolve(PROJECT_ROOT, 'dist/bin/angels.js');
 const FIXTURE_PROJECT = resolve(PROJECT_ROOT, 'tests/fixtures/projects/sample');
 
 describe('angels list', () => {
-  beforeAll(async () => {
-    await execaNode(resolve(PROJECT_ROOT, 'node_modules/.bin/tsc'), [], {
-      cwd: PROJECT_ROOT,
-      nodeOptions: [],
-    });
-  });
 
   it('prints a formatted table of all registered angels with status', async () => {
     const result = await execaNode(CLI_PATH, ['list'], {
