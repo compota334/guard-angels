@@ -7,6 +7,7 @@ import { executeAngel } from './commands/execute.js';
 import { sendCable } from './commands/cable.js';
 import { showInbox } from './commands/inbox.js';
 import { showNewspaper } from './commands/newspaper.js';
+import { sweepAngels } from './commands/sweep.js';
 
 const program = new Command();
 
@@ -131,10 +132,15 @@ program
 program
   .command('sweep')
   .description('Wake every angel in maintenance mode (report-only in v1)')
-  .option('--since <ref>', 'Git commit or ISO timestamp to scope the sweep')
-  .action(() => {
-    console.error('not implemented: sweep');
-    process.exit(1);
+  .option('--since <ref>', 'ISO timestamp to scope the newspaper delta')
+  .action(async (options: { since?: string }) => {
+    try {
+      const exitCode = await sweepAngels(process.cwd(), options);
+      process.exit(exitCode);
+    } catch (err: unknown) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
   });
 
 program

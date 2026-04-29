@@ -2,7 +2,7 @@ import { mkdirSync, readdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { angelBriefsDir } from '../paths/layout.js';
 
-export type BriefPhase = 'review' | 'execute';
+export type BriefPhase = 'review' | 'execute' | 'sweep';
 export type BriefType = 'change_request' | 'consultation' | 'sweep';
 
 export interface BriefData {
@@ -62,8 +62,8 @@ export function parseBriefContent(raw: string): BriefData {
   const type = extractRequiredField(raw, 'TYPE');
   const priorResponse = extractRequiredField(raw, 'PRIOR RESPONSE');
 
-  if (phase !== 'review' && phase !== 'execute') {
-    throw new Error(`Invalid PHASE value: "${phase}". Must be "review" or "execute"`);
+  if (phase !== 'review' && phase !== 'execute' && phase !== 'sweep') {
+    throw new Error(`Invalid PHASE value: "${phase}". Must be "review", "execute", or "sweep"`);
   }
 
   if (type !== 'change_request' && type !== 'consultation' && type !== 'sweep') {

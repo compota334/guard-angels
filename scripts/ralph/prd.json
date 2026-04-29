@@ -483,8 +483,8 @@
         "tsc + vitest pass"
       ],
       "priority": 32,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Sweep iterates all angels sequentially via registry.listAll(). Each angel gets its inbox + newspaper delta since last cursor. Drift report included verbatim in newspaper entry. BriefPhase type extended to include 'sweep'. Fake-sweep-backend.sh fixture created."
     },
     {
       "id": "BUG-011",

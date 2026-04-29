@@ -40,7 +40,9 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Cursor module: `src/messaging/cursors.ts` — `getCursor(projectRoot, angelId)`, `setCursor(projectRoot, angelId, offset)`. Single-line byte-offset files at `_cursors/<angel-id>`. Missing file → offset 0. Atomic write via tmpfile+rename.
 - Cable module: `src/messaging/cables.ts` — `writeCable(projectRoot, data)`, `readInbox(projectRoot, angelId)`, `parseCable(filePath)`, `parseCableContent(raw)`. Writes to `_outbox/<from>/` first (audit trail), then copies to `_inbox/<to>/`. Filename: `<sanitized-ts>-cable-from-<sender>.md`. `readInbox` sorts by timestamp ascending, skips malformed files. `ParsedCable.rawContent` provides full file text for prompt builder's `InboxEntry.content`.
 - Messaging commands: `src/commands/cable.ts` (`sendCable`), `src/commands/inbox.ts` (`showInbox`), `src/commands/newspaper.ts` (`showNewspaper`). All validate project is initialized via `loadConfig`. Cable validates sender/recipient in registry. Newspaper `--since` uses ISO string comparison for filtering.
-- Response format includes `DRIFT REPORT:` section (added US-021) — free-text, positioned after `TEST_RESULTS:` and before done-only fields. `ResponseData.driftReport` is always present (empty string when no drift). The sweep command (US-022) should extract this field and include it verbatim in the newspaper entry.
+- Response format includes `DRIFT REPORT:` section (added US-021) — free-text, positioned after `TEST_RESULTS:` and before done-only fields. `ResponseData.driftReport` is always present (empty string when no drift). The sweep command (US-022) extracts this field and includes it verbatim in the newspaper entry.
+- Sweep command: `src/commands/sweep.ts` — `sweepAngels(cwd, options)`. Iterates all angels sequentially, invokes each in sweep phase with inbox + newspaper delta. Advances per-angel cursors after each invocation. `BriefPhase` type includes `'sweep'` (not just review/execute).
+- Fake sweep backend: `tests/fixtures/fake-sweep-backend.sh` — supports `FAKE_BACKEND_DRIFT_REPORT` env var for drift report content. Defaults to `RESPONSE: done`.
 
 ---
 
@@ -367,4 +369,16 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - Drift report content is free-text, captured verbatim. The sweep command (US-022) will need to extract `driftReport` from the parsed response and include it in the newspaper entry.
   - The `DRIFT REPORT:` section is optional — missing sections parse as empty string via `extractSection(...) ?? ''`. Existing responses without the section remain backward-compatible.
   - Sweep prompt variant was fully implemented in US-014 (snapshot test existed). US-021 only needed the response format extension.
+---
+
+## 2026-04-29T03:25:00Z - US-022: Comando angels sweep
+- Implemented: Created `src/commands/sweep.ts` with `sweepAngels(cwd, options)` function. Iterates all registered angels sequentially (via `registry.listAll()`), invokes each in sweep phase with its inbox and newspaper delta since its last cursor position. For each angel: reads cursor → computes newspaper delta → reads inbox cables → writes sweep brief → invokes orchestrator → appends sweep newspaper entry (including drift report verbatim) → advances cursor. Prints per-angel results (verdict, drift report, concerns) and a final summary table. Returns exit code 0 unless any angel errors. Extended `BriefPhase` type to include `'sweep'` and updated brief parser validation. Created `tests/fixtures/fake-sweep-backend.sh` with configurable DRIFT_REPORT env var. Wired sweep into `src/cli.ts` replacing the stub. Optional `--since` flag filters newspaper delta by ISO timestamp.
+- Files changed: src/commands/sweep.ts (new), src/cli.ts (modified), src/protocol/brief.ts (modified — BriefPhase extended), tests/fixtures/fake-sweep-backend.sh (new), tests/integration/sweep.test.ts (new, 5 tests), scripts/ralph/prd.json (updated)
+- Verification: tsc=PASS  vitest=PASS (391 tests)  eslint=PASS
+- Learnings for future iterations:
+  - `BriefPhase` was initially `'review' | 'execute'` — sweep required extending it. The brief parser's validation also needed updating.
+  - Sweep passes `newspaperDelta` and `inbox` to `invoke()` — these are optional fields on `InvokeInput`. If not passed, the orchestrator defaults to empty string and empty array respectively.
+  - The sweep command reads the cursor BEFORE invoking and sets it to `getNewspaperSize()` AFTER appending the sweep's own newspaper entry. This means the next sweep for this angel will see its own prior sweep entries.
+  - The `--since` filter applies to the newspaper delta computation only — it filters the entries returned by `readNewspaperSince(cursor)` by ISO timestamp comparison. The cursor-based offset still provides the base set of entries.
+  - Fake sweep backend defaults to `RESPONSE: done` with `DRIFT REPORT: No drift detected.` for happy-path tests.
 ---
