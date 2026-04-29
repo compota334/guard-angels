@@ -15,6 +15,7 @@ function makeResponseData(overrides: Partial<ResponseData> = {}): ResponseData {
     questionsForMain: '',
     proceedIf: '',
     testResults: '',
+    driftReport: '',
     cablesSent: '',
     filesChanged: '',
     angelMdUpdated: '',
@@ -32,6 +33,7 @@ function makeDoneResponseData(overrides: Partial<ResponseData> = {}): ResponseDa
     questionsForMain: '',
     proceedIf: '',
     testResults: 'npm test: 12 passed, 0 failed',
+    driftReport: '',
     cablesSent: '.angels/_outbox/src-auth/2026-04-28T1445-cable-to-api.md',
     filesChanged: 'src/auth/session.ts, src/auth/middleware.ts',
     angelMdUpdated: 'true',
@@ -666,5 +668,162 @@ describe('parseResponse (file-based)', () => {
     const filePath = writeResponse(tmpDir, data);
     const parsed = parseResponse(filePath);
     expect(parsed.from).toBe('_root');
+  });
+
+  it('round-trips writeResponse -> parseResponse for sweep done with drift report', () => {
+    const original = makeDoneResponseData({
+      driftReport: '- Charter section mentions deprecated API endpoint /v1/users\n- Invariant #3 references removed config key',
+      angelMdUpdated: 'true',
+      filesChanged: '.angels/src/auth/angel.md',
+      cablesSent: 'none',
+    });
+    const filePath = writeResponse(tmpDir, original);
+    const parsed = parseResponse(filePath);
+
+    expect(parsed.response).toBe('done');
+    expect(parsed.driftReport).toBe(original.driftReport);
+    expect(parsed.angelMdUpdated).toBe('true');
+    expect(parsed.filesChanged).toBe('.angels/src/auth/angel.md');
+  });
+
+  it('round-trips writeResponse -> parseResponse for sweep concerns with drift report', () => {
+    const original = makeResponseData({
+      response: 'concerns',
+      concerns: '- Detected significant drift in public contract',
+      driftReport: '- Function createSession() was removed from session.ts but angel.md still lists it as exported\n- New dependency on src/api not reflected in Dependencies section',
+    });
+    const filePath = writeResponse(tmpDir, original);
+    const parsed = parseResponse(filePath);
+
+    expect(parsed.response).toBe('concerns');
+    expect(parsed.concerns).toBe(original.concerns);
+    expect(parsed.driftReport).toBe(original.driftReport);
+  });
+
+  it('round-trips empty drift report', () => {
+    const original = makeResponseData({ driftReport: '' });
+    const filePath = writeResponse(tmpDir, original);
+    const parsed = parseResponse(filePath);
+
+    expect(parsed.driftReport).toBe('');
+  });
+});
+
+describe('sweep response parsing', () => {
+  it('parses a sweep done response with drift report content', () => {
+    const content = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T16:00:00Z',
+      'RESPONSE: done',
+      '',
+      'CONCERNS:',
+      '',
+      'PROPOSED PLAN:',
+      '',
+      'QUESTIONS FOR MAIN:',
+      '',
+      'PROCEED IF:',
+      '',
+      'TEST_RESULTS:',
+      '',
+      'DRIFT REPORT:',
+      '- Charter mentions deprecated endpoint /v1/users (removed in commit abc123)',
+      '- Invariant #3 references config key that no longer exists',
+      '- New export validateToken() not documented in Public contract',
+      '',
+      'CABLES SENT: none',
+      'FILES CHANGED: .angels/src/auth/angel.md',
+      'ANGEL_MD_UPDATED: true',
+    ].join('\n');
+
+    const parsed = parseResponseContent(content);
+    expect(parsed.response).toBe('done');
+    expect(parsed.driftReport).toContain('Charter mentions deprecated endpoint');
+    expect(parsed.driftReport).toContain('Invariant #3 references config key');
+    expect(parsed.driftReport).toContain('New export validateToken()');
+    expect(parsed.angelMdUpdated).toBe('true');
+    expect(parsed.filesChanged).toBe('.angels/src/auth/angel.md');
+  });
+
+  it('parses a sweep concerns response with drift report', () => {
+    const content = [
+      'FROM: src-api',
+      'TIMESTAMP: 2026-04-28T16:05:00Z',
+      'RESPONSE: concerns',
+      '',
+      'CONCERNS:',
+      '- Significant drift detected between angel.md and actual folder state',
+      '',
+      'PROPOSED PLAN:',
+      '',
+      'QUESTIONS FOR MAIN:',
+      '- Should I update angel.md to reflect the current state?',
+      '',
+      'PROCEED IF:',
+      '',
+      'TEST_RESULTS:',
+      '',
+      'DRIFT REPORT:',
+      '- routes.ts was split into userRoutes.ts and adminRoutes.ts',
+      '- New middleware auth.ts added but not in charter',
+      '',
+    ].join('\n');
+
+    const parsed = parseResponseContent(content);
+    expect(parsed.response).toBe('concerns');
+    expect(parsed.driftReport).toContain('routes.ts was split');
+    expect(parsed.driftReport).toContain('New middleware auth.ts');
+    expect(parsed.concerns).toContain('Significant drift detected');
+  });
+
+  it('parses a sweep response with empty drift report', () => {
+    const content = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T16:10:00Z',
+      'RESPONSE: done',
+      '',
+      'CONCERNS:',
+      '',
+      'PROPOSED PLAN:',
+      '',
+      'QUESTIONS FOR MAIN:',
+      '',
+      'PROCEED IF:',
+      '',
+      'TEST_RESULTS:',
+      '',
+      'DRIFT REPORT:',
+      '',
+      'CABLES SENT: none',
+      'FILES CHANGED: none',
+      'ANGEL_MD_UPDATED: false',
+    ].join('\n');
+
+    const parsed = parseResponseContent(content);
+    expect(parsed.response).toBe('done');
+    expect(parsed.driftReport).toBe('');
+    expect(parsed.angelMdUpdated).toBe('false');
+  });
+
+  it('parses a sweep response without drift report section (backward-compatible)', () => {
+    const content = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T16:10:00Z',
+      'RESPONSE: proceed',
+      '',
+      'CONCERNS:',
+      '',
+      'PROPOSED PLAN:',
+      '',
+      'QUESTIONS FOR MAIN:',
+      '',
+      'PROCEED IF:',
+      '',
+      'TEST_RESULTS:',
+      '',
+    ].join('\n');
+
+    const parsed = parseResponseContent(content);
+    expect(parsed.driftReport).toBe('');
   });
 });

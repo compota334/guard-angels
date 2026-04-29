@@ -150,6 +150,7 @@ export async function invoke(
           questionsForMain: '',
           proceedIf: '',
           testResults: '',
+          driftReport: '',
           cablesSent: '',
           filesChanged: '',
           angelMdUpdated: '',
@@ -196,6 +197,7 @@ export async function invoke(
         questionsForMain: '',
         proceedIf: '',
         testResults: '',
+        driftReport: '',
         cablesSent: '',
         filesChanged: '',
         angelMdUpdated: '',
@@ -302,6 +304,9 @@ function writeResponseFile(filePath: string, data: ResponseData): void {
     '',
     'TEST_RESULTS:',
     data.testResults,
+    '',
+    'DRIFT REPORT:',
+    data.driftReport,
     '',
   ];
 

@@ -324,6 +324,88 @@ describe('updateMetadata', () => {
     ).toThrow(/Cannot read angel\.md/);
   });
 
+  it('round-trips sweep update (last_updated_by: sweep) without disturbing body', () => {
+    const body = `# Angel: src/auth (folder)
+
+## Charter
+Owns all authentication and session management.
+
+## Public contract
+- createSession(userId: string): Session
+- validateToken(token: string): boolean
+
+## Invariants
+- All sessions expire after 24 hours
+- Tokens are validated server-side only
+
+## Decision log
+- 2026-04-28: Initial charter created
+
+## Dependencies
+- Depends on: src-db (for session storage)
+- Depended on by: src-api (for auth middleware)
+`;
+    const p = angelPath();
+    writeAngelMd(p, {
+      frontmatter: { status: 'active', last_updated: '2026-04-28T14:32:00Z', last_updated_by: 'main' },
+      body,
+    });
+
+    // Simulate what a sweep angel does: update metadata to mark sweep as the updater
+    updateMetadata(p, {
+      last_updated: '2026-04-29T10:00:00Z',
+      last_updated_by: 'sweep',
+    });
+
+    const result = readAngelMd(p);
+    expect(result.frontmatter.status).toBe('active');
+    expect(result.frontmatter.last_updated).toBe('2026-04-29T10:00:00Z');
+    expect(result.frontmatter.last_updated_by).toBe('sweep');
+    expect(result.body).toBe(body);
+  });
+
+  it('round-trips full angel.md rewrite by sweep (body + metadata)', () => {
+    const p = angelPath();
+    // Initial write by main
+    writeAngelMd(p, {
+      frontmatter: { status: 'draft', last_updated: '2026-04-28T14:32:00Z', last_updated_by: 'main' },
+      body: '# Angel: src/auth (folder)\n\n## Charter\nOriginal charter.\n',
+    });
+
+    // Sweep rewrites the entire angel.md (body and metadata)
+    const updatedBody = `# Angel: src/auth (folder)
+
+## Charter
+Owns all authentication, session management, and token validation.
+
+## Public contract
+- createSession(userId: string): Session
+- validateToken(token: string): boolean
+- revokeSession(sessionId: string): void
+
+## Invariants
+- All sessions expire after 24 hours
+- Tokens must be validated server-side
+
+## Decision log
+- 2026-04-28: Initial charter created
+- 2026-04-29: Sweep detected new export revokeSession(), updated charter
+
+## Dependencies
+- Depends on: src-db
+`;
+    writeAngelMd(p, {
+      frontmatter: { status: 'active', last_updated: '2026-04-29T10:05:00Z', last_updated_by: 'sweep' },
+      body: updatedBody,
+    });
+
+    const result = readAngelMd(p);
+    expect(result.frontmatter.status).toBe('active');
+    expect(result.frontmatter.last_updated).toBe('2026-04-29T10:05:00Z');
+    expect(result.frontmatter.last_updated_by).toBe('sweep');
+    expect(result.body).toBe(updatedBody);
+  });
+
   it('preserves body exactly through metadata update', () => {
     const complexBody = `# Angel: complex (folder)
 

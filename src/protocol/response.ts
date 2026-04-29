@@ -23,6 +23,7 @@ export interface ResponseData {
   questionsForMain: string;
   proceedIf: string;
   testResults: string;
+  driftReport: string;
   cablesSent: string;
   filesChanged: string;
   angelMdUpdated: string;
@@ -83,6 +84,7 @@ export function parseResponseContent(raw: string): ResponseData {
   const questionsForMain = extractSection(raw, 'QUESTIONS FOR MAIN') ?? '';
   const proceedIf = extractSection(raw, 'PROCEED IF') ?? '';
   const testResults = extractSection(raw, 'TEST_RESULTS') ?? '';
+  const driftReport = extractSection(raw, 'DRIFT REPORT') ?? '';
 
   const cablesSent = extractOptionalField(raw, 'CABLES SENT') ?? '';
   const filesChanged = extractOptionalField(raw, 'FILES CHANGED') ?? '';
@@ -111,6 +113,7 @@ export function parseResponseContent(raw: string): ResponseData {
     questionsForMain,
     proceedIf,
     testResults,
+    driftReport,
     cablesSent,
     filesChanged,
     angelMdUpdated,
@@ -137,6 +140,9 @@ function formatResponse(data: ResponseData): string {
     '',
     'TEST_RESULTS:',
     data.testResults,
+    '',
+    'DRIFT REPORT:',
+    data.driftReport,
     '',
   ];
 

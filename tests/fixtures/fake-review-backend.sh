@@ -54,6 +54,9 @@ PROCEED IF:
 
 TEST_RESULTS:
 
+
+DRIFT REPORT:
+
 RESPONSE
 
 # Echo something to stdout for logging
