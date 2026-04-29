@@ -8,6 +8,7 @@ import { sendCable } from './commands/cable.js';
 import { showInbox } from './commands/inbox.js';
 import { showNewspaper } from './commands/newspaper.js';
 import { sweepAngels } from './commands/sweep.js';
+import { runDoctor } from './commands/doctor.js';
 
 const program = new Command();
 
@@ -148,9 +149,19 @@ program
   .description('Sanity check: orphaned angels, missing angels, stale locks')
   .option('--archive', 'Archive old briefs/responses/logs')
   .option('--older-than <days>', 'Archive threshold in days (default: 30)')
-  .action(() => {
-    console.error('not implemented: doctor');
-    process.exit(1);
+  .action(async (options: { archive?: boolean; olderThan?: string }) => {
+    try {
+      if (options.archive) {
+        console.error('not implemented: doctor --archive');
+        process.exit(1);
+        return;
+      }
+      const exitCode = await runDoctor(process.cwd());
+      process.exit(exitCode);
+    } catch (err: unknown) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
   });
 
 export { program };
