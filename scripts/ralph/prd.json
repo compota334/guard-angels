@@ -585,8 +585,8 @@
         "If no issues, commit docs: [BUG-013] Auditoría sin hallazgos sobre tareas US-025, US-026"
       ],
       "priority": 39,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "No issues found. All 405 tests pass (zero flakes across 3 consecutive runs). Integration tests fully migrated to consolidated fake-backend.sh + shared helpers. Legacy per-phase scripts kept for backward compat (unit tests still reference echo-backend.sh/stderr-backend.sh). README matches package.json (name, engines.node) and CLI --help output (all 10 commands). Sample fixture has 2 candidate folders with correct structure."
     },
     {
       "id": "US-027",

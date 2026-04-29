@@ -449,3 +449,12 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - package.json declares `engines.node: ">=22"` (not >=20 as in the spec). The README should match the actual package.json, not the spec.
   - The README's main-agent addendum is copied verbatim from app requeriments.md section 9 — keep them in sync if the spec changes.
 ---
+
+## 2026-04-29T04:50:00Z - BUG-013: Auditoría tras US-025 y US-026
+- Implemented: No issues found in last 2 tasks. Verified: tsc=PASS, vitest=PASS (405 tests, zero flakes across 3 consecutive runs), eslint=PASS, build=PASS. All integration tests fully migrated to consolidated `fake-backend.sh` via shared helpers (`tests/helpers/setup-project.ts`). No integration test references deleted legacy per-phase scripts. Legacy `echo-backend.sh` and `stderr-backend.sh` still used by unit tests (`backend.test.ts`). Sample fixture has correct structure: `src/auth/` (3 .ts files + AGENTS.md), `src/api/` (2 .ts files, no AGENTS.md). README install instructions match `package.json` (`@guard-angels/cli`, Node >=22). All 10 CLI commands in README table match `--help` output.
+- Files changed: scripts/ralph/prd.json, scripts/ralph/progress.txt
+- Verification: tsc=PASS  vitest=PASS  eslint=PASS
+- Learnings for future iterations:
+  - Integration tests are fully decoupled from legacy per-phase scripts. If legacy scripts are eventually removed, only `backend.test.ts` (unit) needs updating.
+  - The README's file layout diagram shows a nested `.angels/src/auth/` and `.angels/src/api/` structure — this accurately reflects how `angelDir` in `layout.ts` mirrors the project tree inside `.angels/`.
+---
