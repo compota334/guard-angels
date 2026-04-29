@@ -642,8 +642,8 @@
         "Do NOT use this slot to add scope-creep features outside app requeriments.md"
       ],
       "priority": 50,
-      "passes": false,
-      "notes": "Reserved for emergent work."
+      "passes": true,
+      "notes": "unused — no emergent work needed at this point"
     },
     {
       "id": "BUFFER-002",
