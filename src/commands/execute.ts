@@ -137,16 +137,26 @@ function walkDir(
         continue;
       }
       walkDir(fullPath, projectRoot, snapshot);
-    } else if (entry.isFile()) {
+    } else if (entry.isFile() || entry.isSymbolicLink()) {
+      // For symlinks, statSync follows the link and returns the target's
+      // metadata — that's what we want, because a write to the target
+      // changes its mtime/size, and we capture the change here.
+      // Symlinked directories are intentionally NOT recursed into to avoid
+      // infinite loops; symlinks pointing to non-files are simply skipped
+      // by the !isFile() guard below.
+      let stat: fs.Stats;
       try {
-        const stat = fs.statSync(fullPath);
-        snapshot.set(relPath, {
-          mtimeMs: stat.mtimeMs,
-          size: stat.size,
-        });
+        stat = fs.statSync(fullPath);
       } catch {
-        // File may have been deleted between readdir and stat
+        // Dangling symlink, or file deleted between readdir and stat.
+        // Either way, there's nothing to snapshot.
+        continue;
       }
+      if (!stat.isFile()) continue;
+      snapshot.set(relPath, {
+        mtimeMs: stat.mtimeMs,
+        size: stat.size,
+      });
     }
   }
 }
@@ -183,6 +193,15 @@ function detectChangedFiles(
  * Given a list of changed files (relative paths), identify which ones
  * are outside the angel's territory.
  *
+ * Each changed file is resolved through realpath so that symlinks pointing
+ * outside the territory are correctly flagged: a write through an
+ * in-territory symlink whose target lives elsewhere is an out-of-territory
+ * write, and we surface it.
+ *
+ * The in-territory check uses `path.relative` rather than string-prefix
+ * comparison: a non-empty relative path that starts with `..` (or equals
+ * `..`) means the file lies outside the territory directory.
+ *
  * For root angel (angelPath === '.'), everything is in territory.
  */
 function findOutOfTerritoryWrites(
@@ -196,14 +215,34 @@ function findOutOfTerritoryWrites(
     return [];
   }
 
+  // Resolve the territory path itself through realpath in case the territory
+  // directory is itself reached via a symlink (uncommon but possible).
+  let territoryReal: string;
+  try {
+    territoryReal = fs.realpathSync(territoryAbsPath);
+  } catch {
+    territoryReal = territoryAbsPath;
+  }
+
   const outOfTerritory: string[] = [];
   for (const relPath of changedFiles) {
     const absPath = resolve(projectRoot, relPath);
-    // A file is in-territory if its absolute path starts with the territory path + separator
-    if (
-      !absPath.startsWith(territoryAbsPath + '/') &&
-      absPath !== territoryAbsPath
-    ) {
+    let realAbsPath: string;
+    try {
+      realAbsPath = fs.realpathSync(absPath);
+    } catch {
+      // Realpath can fail for files that were moved/deleted between
+      // snapshot and check. Fall back to the unresolved path; the user
+      // can investigate via the newspaper warning.
+      realAbsPath = absPath;
+    }
+
+    // path.relative emits "" when the paths are equal, ".." or "../foo"
+    // (or backslash variants on Windows) when realAbsPath lies outside
+    // territoryReal, and a non-".." relative path when it lies inside.
+    const rel = relative(territoryReal, realAbsPath);
+    const inTerritory = rel === '' || !rel.startsWith('..');
+    if (!inTerritory) {
       outOfTerritory.push(relPath);
     }
   }
