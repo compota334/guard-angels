@@ -43,7 +43,7 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Response format includes `DRIFT REPORT:` section (added US-021) — free-text, positioned after `TEST_RESULTS:` and before done-only fields. `ResponseData.driftReport` is always present (empty string when no drift). The sweep command (US-022) extracts this field and includes it verbatim in the newspaper entry.
 - Sweep command: `src/commands/sweep.ts` — `sweepAngels(cwd, options)`. Iterates all angels sequentially, invokes each in sweep phase with inbox + newspaper delta. Advances per-angel cursors after each invocation. `BriefPhase` type includes `'sweep'` (not just review/execute).
 - Fake sweep backend: `tests/fixtures/fake-sweep-backend.sh` — supports `FAKE_BACKEND_DRIFT_REPORT` env var for drift report content. Defaults to `RESPONSE: done`.
-- Doctor command: `src/commands/doctor.ts` — `runDoctor(cwd)` entry point. Four pure check functions: `checkOrphanedAngels`, `checkMissingAngels`, `checkStaleLocks`, `checkStaleDrafts`. Reuses `readLock`+`isStale` from lock.ts, `identifyCandidates` from identify.ts, `readAngelMd` from memory.ts.
+- Doctor command: `src/commands/doctor.ts` — `runDoctor(cwd, options?)` entry point. Four pure check functions: `checkOrphanedAngels`, `checkMissingAngels`, `checkStaleLocks`, `checkStaleDrafts`. Reuses `readLock`+`isStale` from lock.ts, `identifyCandidates` from identify.ts, `readAngelMd` from memory.ts. Archive: `archiveOldFiles(projectRoot, thresholdDays)` moves old files from `_briefs/_responses/_logs` to `_archive/<YYYY-MM>/`.
 
 ---
 
@@ -403,4 +403,16 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - `checkStaleDrafts` takes a `thresholdDays` parameter (default 7 days inside `runDoctorChecks`). Reads angel.md frontmatter for each registered angel and checks if status is "draft" and `last_updated` is older than the threshold.
   - Test fixtures for doctor must avoid intermediate folders (like `src/`) that trigger the `identifyCandidates` heuristic as significant (non-generic name). Using direct folder names (`auth/` instead of `src/auth/`) avoids false "missing angel" reports in clean-project tests.
   - `angelMdFile(projectRoot, angelPath)` uses the angel's `path` field from config for folder-type angels and `_root` for the root angel. The doctor command maps `type === 'root'` to `'_root'` for the path parameter.
+---
+
+## 2026-04-29T04:00:00Z - US-024: Comando angels doctor --archive [--older-than=N]
+- Implemented: Added `archiveOldFiles(projectRoot, thresholdDays)` to `src/commands/doctor.ts`. Walks `_briefs/`, `_responses/`, `_logs/` recursively, moves files whose mtime exceeds the threshold to `_archive/<YYYY-MM>/<topName>/<relative-path>`. Files are moved via `renameSync` (same filesystem) with `copyFileSync`+`unlinkSync` fallback for cross-device. Empty directories cleaned up after archival. Protected files (newspaper, cursors, config, angel.md) never touched because they live outside the three archivable dirs. Updated `runDoctor` to accept `archive` and `olderThanDays` options. Updated CLI wiring to pass `--archive` and `--older-than` to `runDoctor` instead of blocking with "not implemented". Added `formatArchiveResult` for human-readable output.
+- Files changed: src/commands/doctor.ts (modified), src/cli.ts (modified), tests/integration/doctor.test.ts (modified, 5 new tests)
+- Verification: tsc=PASS  vitest=PASS (405 tests)  eslint=PASS
+- Learnings for future iterations:
+  - Archive function is pure (no config/registry dependency) — takes `projectRoot` and `thresholdDays`, returns structured result. This makes it easy to test in isolation.
+  - `fs.utimesSync(file, atime, mtime)` is the way to set file modification times in tests for archive threshold testing.
+  - `cleanEmptyDirs` preserves top-level archivable dirs (`_briefs`, `_responses`, `_logs`) even when empty — only removes their subdirectories.
+  - `--older-than` value is parsed as integer in CLI (from string), validated as non-negative. Default is 30 days.
+  - Archive destination format: `_archive/<YYYY-MM>/<_briefs|_responses|_logs>/<relative-path>`. Month is 1-indexed, zero-padded.
 ---

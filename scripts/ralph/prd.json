@@ -527,8 +527,8 @@
         "tsc + vitest pass"
       ],
       "priority": 35,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Archive moves files from _briefs/_responses/_logs older than threshold into _archive/<YYYY-MM>/ with preserved relative paths. Cleans empty dirs. Protected files (newspaper, cursors, config, angel.md) never touched."
     },
     {
       "id": "BUG-012",
