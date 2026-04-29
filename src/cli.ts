@@ -15,7 +15,56 @@ const program = new Command();
 program
   .name('angels')
   .description('CLI orchestrator that creates per-folder angel agents for persistent codebase context')
-  .version('0.1.0');
+  .version('0.1.0')
+  .option('--verbose', 'Enable stack traces and debug output on errors');
+
+/**
+ * Format an error for CLI output.
+ *
+ * In normal mode: prints only the message.
+ * In verbose mode: prints the full error chain with stack traces.
+ */
+function formatError(err: unknown): string {
+  const verbose = program.opts().verbose === true;
+
+  if (!(err instanceof Error)) {
+    return String(err);
+  }
+
+  if (!verbose) {
+    return err.message;
+  }
+
+  const lines: string[] = [];
+  let current: Error | undefined = err;
+  let depth = 0;
+
+  while (current) {
+    const prefix = depth === 0 ? 'Error' : `Caused by`;
+    lines.push(`${prefix}: ${current.message}`);
+    if (current.stack) {
+      // Extract just the stack frames (lines starting with "    at")
+      const frames = current.stack
+        .split('\n')
+        .filter((line) => line.trimStart().startsWith('at '));
+      if (frames.length > 0) {
+        lines.push(...frames);
+      }
+    }
+    current = current.cause instanceof Error ? current.cause : undefined;
+    depth++;
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Handle a caught error: format it and exit with the given code.
+ */
+function handleError(err: unknown, exitCode: number): never {
+  console.error(formatError(err));
+  process.exit(exitCode);
+}
 
 program
   .command('init')
@@ -26,8 +75,7 @@ program
     try {
       await initAngels(process.cwd(), options);
     } catch (err: unknown) {
-      console.error((err as Error).message);
-      process.exit(1);
+      handleError(err, 1);
     }
   });
 
@@ -38,8 +86,7 @@ program
     try {
       listAngels(process.cwd());
     } catch (err: unknown) {
-      console.error((err as Error).message);
-      process.exit(1);
+      handleError(err, 1);
     }
   });
 
@@ -51,8 +98,7 @@ program
     try {
       await createAngel(process.cwd(), folderPath);
     } catch (err: unknown) {
-      console.error((err as Error).message);
-      process.exit(1);
+      handleError(err, 1);
     }
   });
 
@@ -66,8 +112,7 @@ program
       const exitCode = await briefAngel(process.cwd(), angelId, task);
       process.exit(exitCode);
     } catch (err: unknown) {
-      console.error((err as Error).message);
-      process.exit(3);
+      handleError(err, 3);
     }
   });
 
@@ -81,8 +126,7 @@ program
       const exitCode = await executeAngel(process.cwd(), angelId, briefPath);
       process.exit(exitCode);
     } catch (err: unknown) {
-      console.error((err as Error).message);
-      process.exit(1);
+      handleError(err, 1);
     }
   });
 
@@ -99,8 +143,7 @@ program
     try {
       sendCable(process.cwd(), to, type, body, options);
     } catch (err: unknown) {
-      console.error((err as Error).message);
-      process.exit(1);
+      handleError(err, 1);
     }
   });
 
@@ -112,8 +155,7 @@ program
     try {
       showInbox(process.cwd(), angelId);
     } catch (err: unknown) {
-      console.error((err as Error).message);
-      process.exit(1);
+      handleError(err, 1);
     }
   });
 
@@ -125,8 +167,7 @@ program
     try {
       showNewspaper(process.cwd(), options);
     } catch (err: unknown) {
-      console.error((err as Error).message);
-      process.exit(1);
+      handleError(err, 1);
     }
   });
 
@@ -139,8 +180,7 @@ program
       const exitCode = await sweepAngels(process.cwd(), options);
       process.exit(exitCode);
     } catch (err: unknown) {
-      console.error((err as Error).message);
-      process.exit(1);
+      handleError(err, 1);
     }
   });
 
@@ -163,8 +203,7 @@ program
       });
       process.exit(exitCode);
     } catch (err: unknown) {
-      console.error((err as Error).message);
-      process.exit(1);
+      handleError(err, 1);
     }
   });
 

@@ -126,9 +126,46 @@ Supported backends (auto-detected from the first token of `angel_cmd`):
 
 Angel IDs mirror the folder path with `/` replaced by `-`. So `src/auth` becomes `src-auth`. The root angel is `_root`.
 
+## Global flags
+
+| Flag | Description |
+|---|---|
+| `--verbose` | Enable stack traces and full error chain on errors. Without this flag, only the top-level error message is shown. |
+
+## Exit codes
+
+Every command returns a meaningful exit code:
+
+| Command | Code | Meaning |
+|---|---|---|
+| `init` | 0 | Initialization completed |
+| | 1 | Error (already initialized, invalid flags, filesystem error) |
+| `list` | 0 | Listed successfully |
+| | 1 | Error (project not initialized) |
+| `create` | 0 | Angel created |
+| | 1 | Error (duplicate, path outside root, folder not found, not initialized) |
+| `brief` | 0 | Angel responds: proceed |
+| | 1 | Angel responds: concerns |
+| | 2 | Angel responds: refuse |
+| | 3 | Error (angel error, timeout, invocation failure) |
+| `execute` | 0 | Angel responds: done |
+| | 1 | Error or non-done response |
+| `cable` | 0 | Cable sent |
+| | 1 | Error (invalid type, urgency, unknown angel) |
+| `inbox` | 0 | Inbox displayed |
+| | 1 | Error (unknown angel, not initialized) |
+| `newspaper` | 0 | Entries displayed |
+| | 1 | Error (not initialized, invalid --since) |
+| `sweep` | 0 | All angels swept without errors |
+| | 1 | At least one angel reported an error |
+| `doctor` | 0 | No issues found |
+| | 1 | Issues found or error |
+
 ## Error handling
 
 Guard Angels follows a fail-loud philosophy: errors are descriptive and name the offending file, field, or path. There are no silent fallbacks, no swallowed exceptions, and no placeholder data. If something fails, you get a clear error message pointing at the root cause.
+
+Use `--verbose` to see full stack traces and error cause chains for debugging.
 
 ## Main-agent prompt addendum
 

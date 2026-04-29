@@ -18,6 +18,16 @@ export function showNewspaper(
   // Validate project is initialized (config must exist)
   loadConfig(cwd);
 
+  // Validate --since timestamp eagerly (before reading entries)
+  if (opts.since) {
+    const sinceDate = new Date(opts.since);
+    if (isNaN(sinceDate.getTime())) {
+      throw new Error(
+        `Invalid --since timestamp: "${opts.since}". Provide a valid ISO 8601 timestamp (e.g. 2026-04-28T14:00:00Z).`,
+      );
+    }
+  }
+
   // Read all entries from the beginning (cursor 0)
   const entries = readNewspaperSince(cwd, 0);
 
@@ -29,14 +39,6 @@ export function showNewspaper(
   // Filter by --since if provided
   let filtered = entries;
   if (opts.since) {
-    // Validate the timestamp is parseable
-    const sinceDate = new Date(opts.since);
-    if (isNaN(sinceDate.getTime())) {
-      throw new Error(
-        `Invalid --since timestamp: "${opts.since}". Provide a valid ISO 8601 timestamp (e.g. 2026-04-28T14:00:00Z).`,
-      );
-    }
-
     const sinceIso = opts.since;
     filtered = entries.filter((e) => e.timestamp >= sinceIso);
   }

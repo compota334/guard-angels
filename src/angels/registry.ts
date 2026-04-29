@@ -66,7 +66,10 @@ export class AngelRegistry {
   getById(id: string): AngelEntry {
     const entry = this.byId.get(id);
     if (entry === undefined) {
-      throw new Error(`Angel not found with id "${id}"`);
+      const available = [...this.byId.keys()].join(', ');
+      throw new Error(
+        `Angel not found with id "${id}". Registered angels: ${available || '(none)'}`,
+      );
     }
     return entry;
   }
@@ -82,7 +85,10 @@ export class AngelRegistry {
   getByPath(path: string): AngelEntry {
     const entry = this.byPath.get(path);
     if (entry === undefined) {
-      throw new Error(`Angel not found with path "${path}"`);
+      const available = [...this.byPath.keys()].join(', ');
+      throw new Error(
+        `Angel not found with path "${path}". Registered paths: ${available || '(none)'}`,
+      );
     }
     return entry;
   }

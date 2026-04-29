@@ -34,7 +34,15 @@ export async function executeAngel(
   registry.getById(angelId); // throws if not found
 
   // 2. Parse the original brief to extract the task
-  const originalBrief = parseBrief(briefPath);
+  let originalBrief;
+  try {
+    originalBrief = parseBrief(briefPath);
+  } catch (err: unknown) {
+    throw new Error(
+      `Failed to parse brief file "${briefPath}": ${(err as Error).message}`,
+      { cause: err },
+    );
+  }
 
   // 3. Compute the angel's territory (absolute path)
   const angelPath = angelIdToPath(angelId);

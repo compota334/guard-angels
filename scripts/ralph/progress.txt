@@ -44,6 +44,8 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Sweep command: `src/commands/sweep.ts` — `sweepAngels(cwd, options)`. Iterates all angels sequentially, invokes each in sweep phase with inbox + newspaper delta. Advances per-angel cursors after each invocation. `BriefPhase` type includes `'sweep'` (not just review/execute).
 - Fake sweep backend: `tests/fixtures/fake-sweep-backend.sh` — supports `FAKE_BACKEND_DRIFT_REPORT` env var for drift report content. Defaults to `RESPONSE: done`.
 - Doctor command: `src/commands/doctor.ts` — `runDoctor(cwd, options?)` entry point. Four pure check functions: `checkOrphanedAngels`, `checkMissingAngels`, `checkStaleLocks`, `checkStaleDrafts`. Reuses `readLock`+`isStale` from lock.ts, `identifyCandidates` from identify.ts, `readAngelMd` from memory.ts. Archive: `archiveOldFiles(projectRoot, thresholdDays)` moves old files from `_briefs/_responses/_logs` to `_archive/<YYYY-MM>/`.
+- CLI error handling: `cli.ts` has `formatError(err)` (verbose-aware) and `handleError(err, exitCode): never`. All commands use `handleError` instead of inline `console.error` + `process.exit`. `--verbose` global flag shows full error chains with stack traces.
+- Registry error messages: `getById` and `getByPath` list all registered IDs/paths when a lookup fails, helping identify typos in angel references.
 
 ---
 
@@ -468,4 +470,16 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - `initAngels` with `--auto` generates its own `_config.yml` using `DEFAULT_BACKEND_CMD`. To use the fake backend for subsequent commands, read the init-generated config to get the angels list, then `updateConfig` with the fake backend path while preserving the angels array.
   - The e2e test runs both test cases in ~200ms total — well under the 10s budget. The fake backend is fast enough that the full protocol flow (8 steps) completes near-instantly.
   - `updateConfig` from `setup-project.ts` overwrites the entire `_config.yml` — callers must pass the full angels list, not just the backend command. Read the existing config first if you need to preserve init-generated angels.
+---
+
+## 2026-04-29T05:30:00Z - US-028: Pulido de mensajes de error y exit codes
+- Implemented: Added global `--verbose` flag to CLI that enables full stack traces and error cause chains. Created centralized `formatError` and `handleError` utilities in `cli.ts` that replace duplicated `console.error((err as Error).message); process.exit(N)` patterns across all 10 commands. Improved `AngelRegistry.getById` and `getByPath` to list all registered IDs/paths when lookup fails. Wrapped `execute.ts` brief parsing with contextual error ("Failed to parse brief file <path>"). Fixed `newspaper.ts` to validate `--since` timestamp eagerly before early-returning on empty entries. Documented exit codes per command in README with a comprehensive table. Added 15 integration tests verifying error messages include contextual information (file paths, field names, suggestions, registered IDs).
+- Files changed: src/cli.ts, src/angels/registry.ts, src/commands/execute.ts, src/commands/newspaper.ts, README.md, tests/integration/error-messages.test.ts (new)
+- Verification: tsc=PASS  vitest=PASS (422 tests)  eslint=PASS
+- Learnings for future iterations:
+  - `--verbose` is a global commander option on the program (not per-subcommand). Access via `program.opts().verbose` in the top-level CLI module.
+  - `handleError` returns `never` — TypeScript knows the function doesn't return, eliminating unreachable code warnings.
+  - `formatError` walks the `Error.cause` chain, showing each cause with its stack frames. This surfaces the original system-level error (e.g. ENOENT) alongside the application-level message.
+  - The `newspaper --since` validation was only reached when entries existed. Moving it before `readNewspaperSince` ensures invalid timestamps are always rejected.
+  - Registry error messages listing available IDs use `[...map.keys()].join(', ')` — readable for small registries, could be noisy for very large ones (not a concern for v1).
 ---
