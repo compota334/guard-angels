@@ -570,8 +570,8 @@
         "tsc + vitest pass"
       ],
       "priority": 38,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "README covers: install, quickstart, all commands, backend config, file layout, error philosophy, main-agent addendum, and composing with Ralph."
     },
     {
       "id": "BUG-013",

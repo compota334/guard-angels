@@ -1,5 +1,174 @@
 # Guard Angels
 
-CLI orchestrator that creates per-folder "angel" agents for persistent codebase context.
+CLI orchestrator that gives each significant folder in your codebase its own persistent "angel" — a per-folder LLM agent that owns the *why* of that folder, executes changes within its territory, and coordinates with other angels via cables and a shared newspaper.
 
-> TODO: Full documentation is in `app requeriments.md`. This README will be expanded as features are implemented.
+## Install
+
+```bash
+npm install -g @guard-angels/cli
+```
+
+Requires Node.js >= 22.
+
+## How it works
+
+You keep using your normal AI coding CLI (Claude Code, Codex, etc.) as the "main agent." Guard Angels adds a delegation layer: instead of the main agent editing code directly, it *briefs* the relevant folder angel, reviews the angel's response, then tells it to *execute*. Each angel is a fresh subprocess of your configured AI CLI, given a system prompt built from the angel's persistent memory file (`angel.md`) plus the task brief.
+
+All state lives on disk inside `.angels/`, committed to git. No database, no service, no web UI.
+
+### The two-phase protocol
+
+1. **REVIEW** — `angels brief <angel-id> "<task>"` sends the task to the angel. The angel reads its charter, the code, and the brief, then responds with `proceed`, `concerns`, or `refuse`. No files are modified.
+2. **EXECUTE** — `angels execute <angel-id> <brief-path>` re-invokes the angel with approval. The angel makes the changes, updates its `angel.md`, sends cables to affected angels, and reports what it did.
+
+## Quickstart
+
+```bash
+# 1. Bootstrap angels in your project
+cd your-project
+angels init              # interactive: pick which folders get angels
+# or: angels init --auto   (accept all heuristic candidates)
+# or: angels init --manual (you name the folders explicitly)
+
+# 2. See what was created
+angels list
+
+# 3. Add an angel for a folder you missed
+angels create src/payments
+
+# 4. Delegate a change to an angel
+angels brief src-auth "Add rate limiting to the login endpoint"
+# Review the angel's response (concerns, proposed plan, questions)
+
+# 5. If the angel said "proceed", execute
+angels execute src-auth .angels/_briefs/src-auth/2026-04-28T1432-001.md
+
+# 6. After a batch of changes, let angels update their memory and flag drift
+angels sweep
+
+# 7. Read what happened
+angels newspaper --since=2026-04-28T00:00:00Z
+
+# 8. Periodic health check
+angels doctor
+angels doctor --archive --older-than=30
+```
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `angels init [--auto\|--manual]` | Bootstrap `.angels/` in current project. Walks the tree, identifies significant folders, creates angel.md drafts. |
+| `angels list` | List all registered angels with their status. |
+| `angels create <path>` | Create an angel for a specific folder. |
+| `angels brief <angel-id> "<task>"` | Phase 1: send a review brief to an angel. Does NOT execute. |
+| `angels execute <angel-id> <brief-path>` | Phase 2: re-invoke angel with approval to execute changes. |
+| `angels cable <to> <type> "<body>"` | Send a cable (inter-angel message). Types: `breaking_change`, `fyi`, `review_request`, `invariant_violation`. |
+| `angels inbox <angel-id>` | Show pending cables for an angel. |
+| `angels newspaper [--since=<iso>]` | Print newspaper entries (append-only event log). |
+| `angels sweep [--since=<iso>]` | Wake every angel in maintenance mode. Report-only in v1. |
+| `angels doctor [--archive] [--older-than=N]` | Health check: orphaned angels, missing angels, stale locks, stale drafts. `--archive` moves old files to `_archive/`. |
+
+## Backend configuration
+
+Guard Angels is backend-agnostic. Configure the AI CLI used to invoke angels in `.angels/_config.yml`:
+
+```yaml
+version: 1
+backend:
+  angel_cmd: "claude -p --dangerously-skip-permissions"  # default
+  angel_timeout_seconds: 600                              # 10 min default
+angels:
+  - id: _root
+    type: root
+    path: "."
+  - id: src-auth
+    type: folder
+    path: "src/auth"
+sweep:
+  autonomy: report-only   # v1 always report-only
+```
+
+Supported backends (auto-detected from the first token of `angel_cmd`):
+
+| Backend | Command example | Notes |
+|---|---|---|
+| Claude Code | `claude -p --dangerously-skip-permissions` | Default. Extracts session ID from stdout. |
+| Codex | `codex exec` | Extracts thread ID. |
+| Droid | `droid exec` | No session ID extraction. |
+| Generic | any command | Fallback. Pipes prompt via stdin. |
+
+## File layout
+
+```
+.angels/
+├── _config.yml          # Project configuration
+├── _newspaper.md        # Append-only event log
+├── _briefs/             # Outgoing briefs (main → angels)
+│   └── <angel-id>/
+├── _responses/          # Responses (angels → main)
+│   └── <angel-id>/
+├── _inbox/              # Cables awaiting angel processing
+│   └── <angel-id>/
+├── _outbox/             # Cables sent (audit trail)
+├── _locks/              # Active lock during execution
+├── _logs/               # Raw stdout/stderr per invocation
+├── _cursors/            # Per-angel newspaper byte-offset
+├── _archive/            # Archived old files (by month)
+├── _root/               # Root angel
+│   └── angel.md
+└── src/
+    ├── auth/
+    │   └── angel.md
+    └── api/
+        └── angel.md
+```
+
+Angel IDs mirror the folder path with `/` replaced by `-`. So `src/auth` becomes `src-auth`. The root angel is `_root`.
+
+## Error handling
+
+Guard Angels follows a fail-loud philosophy: errors are descriptive and name the offending file, field, or path. There are no silent fallbacks, no swallowed exceptions, and no placeholder data. If something fails, you get a clear error message pointing at the root cause.
+
+## Main-agent prompt addendum
+
+Add this to your project's `CLAUDE.md` (or equivalent) so the main agent knows how to use Guard Angels:
+
+```
+This project uses Guard Angels. Significant folders have angels that own
+their territory. Before editing code, check `angels list` and:
+
+1. For changes inside an angel's folder: do NOT edit directly. Use
+   `angels brief <angel-id> "<task>"` to delegate. Review the response.
+   If the angel proceeds, run `angels execute <angel-id> <brief-path>`.
+2. For changes spanning multiple folders: brief each affected angel
+   sequentially. Coordinate based on their responses.
+3. For changes to root files (package.json, configs): brief the _root angel.
+4. After a batch of changes: run `angels sweep` to let angels update their
+   memory and flag drift.
+5. Read `angels newspaper --since=<last-check>` periodically to stay current.
+
+The angel.md files in `.angels/` are authoritative documentation. If you
+need to understand why something exists, read the relevant angel.md before
+asking the user.
+```
+
+## Composing with Ralph
+
+Guard Angels is designed to work inside a [Ralph](https://github.com/compota334/ralph)-style outer loop. In a Ralph setup, each iteration spawns a fresh AI agent with no memory of prior runs — continuity comes from files on disk. Guard Angels provides exactly that: per-folder memory (`angel.md`), a shared event log (`_newspaper.md`), and an inter-angel messaging system (cables). The Ralph outer agent delegates folder-level work to angels, and each angel invocation is itself a fresh-context, file-state Ralph invocation.
+
+To use Guard Angels as the per-task delegate inside a Ralph loop, add this to your Ralph agent's prompt:
+
+```
+When implementing a task that touches code inside an angel's folder, do NOT
+edit those files directly. Instead:
+1. Run `angels brief <angel-id> "<task description>"` to get the angel's review.
+2. If the angel responds with "proceed", run `angels execute <angel-id> <brief-path>`.
+3. If the angel raises concerns, address them before proceeding.
+4. After all changes, run `angels sweep` to let angels update their memory.
+5. Check `angels newspaper` for any cross-cutting issues flagged by angels.
+```
+
+## License
+
+Private. All rights reserved.

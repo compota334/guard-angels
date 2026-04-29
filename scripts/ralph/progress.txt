@@ -440,3 +440,12 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - `tests/helpers/setup-project.ts` exports `DEFAULT_ANGELS` (standard _root + src-auth config) reused by most integration tests. Custom angels can be passed via the `angels` option.
   - Legacy scripts (`fake-review-backend.sh`, `fake-execute-backend.sh`, `fake-sweep-backend.sh`, `echo-backend.sh`, `stderr-backend.sh`) are kept for now. Future cleanup could remove them once all consumers are migrated, but the unit tests for backend adapters still reference `echo-backend.sh` and `stderr-backend.sh` directly.
 ---
+
+## 2026-04-29T04:45:00Z - US-026: README + nota de composición con Ralph
+- Implemented: Rewrote README.md from stub to full documentation. Covers: project description, install instructions (`npm i -g @guard-angels/cli`, Node >= 22), quickstart walkthrough (init → create → brief → execute → sweep → newspaper → doctor), full command reference table with all flags, backend configuration with `_config.yml` example and adapter table (claude/codex/droid/generic), `.angels/` file layout diagram, error handling philosophy, main-agent prompt addendum (copy-pasteable from app requeriments.md section 9), and a "Composing with Ralph" section with concrete explanation + copy-pasteable prompt addendum.
+- Files changed: README.md
+- Verification: tsc=PASS  vitest=PASS (405 tests)  eslint=PASS
+- Learnings for future iterations:
+  - package.json declares `engines.node: ">=22"` (not >=20 as in the spec). The README should match the actual package.json, not the spec.
+  - The README's main-agent addendum is copied verbatim from app requeriments.md section 9 — keep them in sync if the spec changes.
+---
