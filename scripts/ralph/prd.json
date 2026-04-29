@@ -469,8 +469,8 @@
         "tsc + vitest pass"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Sweep prompt variant was already implemented in US-014. This task added the DRIFT REPORT section to the response format (writer, parser, and tests) and verified angel.md frontmatter round-trip with last_updated_by: sweep."
     },
     {
       "id": "US-022",

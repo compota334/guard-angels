@@ -40,6 +40,7 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Cursor module: `src/messaging/cursors.ts` — `getCursor(projectRoot, angelId)`, `setCursor(projectRoot, angelId, offset)`. Single-line byte-offset files at `_cursors/<angel-id>`. Missing file → offset 0. Atomic write via tmpfile+rename.
 - Cable module: `src/messaging/cables.ts` — `writeCable(projectRoot, data)`, `readInbox(projectRoot, angelId)`, `parseCable(filePath)`, `parseCableContent(raw)`. Writes to `_outbox/<from>/` first (audit trail), then copies to `_inbox/<to>/`. Filename: `<sanitized-ts>-cable-from-<sender>.md`. `readInbox` sorts by timestamp ascending, skips malformed files. `ParsedCable.rawContent` provides full file text for prompt builder's `InboxEntry.content`.
 - Messaging commands: `src/commands/cable.ts` (`sendCable`), `src/commands/inbox.ts` (`showInbox`), `src/commands/newspaper.ts` (`showNewspaper`). All validate project is initialized via `loadConfig`. Cable validates sender/recipient in registry. Newspaper `--since` uses ISO string comparison for filtering.
+- Response format includes `DRIFT REPORT:` section (added US-021) — free-text, positioned after `TEST_RESULTS:` and before done-only fields. `ResponseData.driftReport` is always present (empty string when no drift). The sweep command (US-022) should extract this field and include it verbatim in the newspaper entry.
 
 ---
 
@@ -355,4 +356,15 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - Cable filenames lack sequence numbering (unlike briefs). Two cables from the same sender in the same millisecond will overwrite each other. Not a bug for v1 sequential model, but future parallel execution would need sequence numbers or UUIDs.
   - Pre-existing flake: `list.test.ts`, `init.test.ts`, `create.test.ts` each run `tsc` in `beforeAll` — when vitest runs them concurrently, the 10s default hookTimeout can be exceeded. Pre-building with `npm run build` before `npx vitest run` avoids this. Not introduced by US-019/US-020.
   - `new Date('april 28')` passes the NaN check (valid Date object) — the newspaper `--since` validator is permissive for natural language dates. This is acceptable since the string comparison filtering still works correctly.
+---
+
+## 2026-04-29T03:15:00Z - US-021: Variante de prompt SWEEP + parseo de reportes
+- Implemented: Added `driftReport` field to `ResponseData` interface and updated the response writer (`formatResponse`) and parser (`parseResponseContent`) to handle a `DRIFT REPORT:` multi-line section. The sweep prompt variant was already implemented in US-014 — this task completed the response-side support. Updated both fake backend scripts (`fake-review-backend.sh`, `fake-execute-backend.sh`) to include the `DRIFT REPORT:` section in their canned responses. Updated `orchestrate.ts` synthetic error responses to include `driftReport: ''`. Added 7 new tests in `response.test.ts` (sweep done with drift report, sweep concerns with drift report, empty drift report, backward-compatible parsing without section, round-trip tests). Added 2 new tests in `memory.test.ts` (full sweep metadata round-trip, full angel.md rewrite by sweep with body changes).
+- Files changed: src/protocol/response.ts, src/protocol/orchestrate.ts, tests/fixtures/fake-review-backend.sh, tests/fixtures/fake-execute-backend.sh, tests/unit/response.test.ts, tests/unit/memory.test.ts
+- Verification: tsc=PASS  vitest=PASS (386 tests)  eslint=PASS
+- Learnings for future iterations:
+  - The `DRIFT REPORT:` section is positioned after `TEST_RESULTS:` and before the done-only fields (`CABLES SENT`, `FILES CHANGED`, `ANGEL_MD_UPDATED`). This placement ensures the section parser's `\n(?=[A-Z][A-Z_ ]*:)` regex correctly terminates it at the next header.
+  - Drift report content is free-text, captured verbatim. The sweep command (US-022) will need to extract `driftReport` from the parsed response and include it in the newspaper entry.
+  - The `DRIFT REPORT:` section is optional — missing sections parse as empty string via `extractSection(...) ?? ''`. Existing responses without the section remain backward-compatible.
+  - Sweep prompt variant was fully implemented in US-014 (snapshot test existed). US-021 only needed the response format extension.
 ---
