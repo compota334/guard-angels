@@ -441,8 +441,8 @@
         "tsc + vitest pass"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Cable command validates sender/recipient in registry, type and urgency enums. Inbox pretty-prints with urgency tags. Newspaper --since filters by ISO timestamp string comparison."
     },
     {
       "id": "BUG-010",

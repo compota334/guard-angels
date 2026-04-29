@@ -39,6 +39,7 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
 - Newspaper module: `src/messaging/newspaper.ts` — `appendNewspaper(projectRoot, entry)`, `readNewspaperSince(projectRoot, cursor)`, `getNewspaperSize(projectRoot)`, `formatNewspaperEntry(entry)`. Byte-offset-based cursor system. Entry parsing uses `## <timestamp> [<angel-id>]` header regex.
 - Cursor module: `src/messaging/cursors.ts` — `getCursor(projectRoot, angelId)`, `setCursor(projectRoot, angelId, offset)`. Single-line byte-offset files at `_cursors/<angel-id>`. Missing file → offset 0. Atomic write via tmpfile+rename.
 - Cable module: `src/messaging/cables.ts` — `writeCable(projectRoot, data)`, `readInbox(projectRoot, angelId)`, `parseCable(filePath)`, `parseCableContent(raw)`. Writes to `_outbox/<from>/` first (audit trail), then copies to `_inbox/<to>/`. Filename: `<sanitized-ts>-cable-from-<sender>.md`. `readInbox` sorts by timestamp ascending, skips malformed files. `ParsedCable.rawContent` provides full file text for prompt builder's `InboxEntry.content`.
+- Messaging commands: `src/commands/cable.ts` (`sendCable`), `src/commands/inbox.ts` (`showInbox`), `src/commands/newspaper.ts` (`showNewspaper`). All validate project is initialized via `loadConfig`. Cable validates sender/recipient in registry. Newspaper `--since` uses ISO string comparison for filtering.
 
 ---
 
@@ -333,4 +334,15 @@ Started: Tue Apr 28 04:57:10 AM CEST 2026
   - Cable filenames use sanitized timestamps (colons → dashes) matching the log filename convention from `src/logs/log.ts`.
   - The cable parser shares the same `extractSection` / `extractRequiredField` pattern as `response.ts` and `brief.ts` (private copies, not DRY). Three modules now have this pattern — a future task could extract to `src/protocol/parser-utils.ts`.
   - `writeCable` does NOT validate that `from`/`to` angel IDs actually exist in the registry. Validation at that level is the caller's responsibility (e.g. the `cable` command in US-020 should load config and check).
+---
+
+## 2026-04-29T01:00:00Z - US-020: Comandos angels cable / inbox / newspaper
+- Implemented: Created three command modules: `src/commands/cable.ts` (`sendCable` — validates sender/recipient in registry, type/urgency enums, auto-generates subject from body if not provided, defaults sender to `_root`), `src/commands/inbox.ts` (`showInbox` — validates angel exists, pretty-prints cables with urgency tags [HIGH]/[low]), `src/commands/newspaper.ts` (`showNewspaper` — reads all entries, filters by `--since` via ISO string comparison, validates timestamp format). All three wired into `src/cli.ts` replacing stubs. Cable command adds `--urgency`, `--subject`, `--from` options.
+- Files changed: src/commands/cable.ts (new), src/commands/inbox.ts (new), src/commands/newspaper.ts (new), src/cli.ts (modified), tests/integration/messaging-commands.test.ts (new, 17 tests)
+- Verification: tsc=PASS  vitest=PASS (377 tests)  eslint=PASS
+- Learnings for future iterations:
+  - Cable command defaults sender to `_root` (the main agent's natural identity). The `--from` option allows angel-to-angel cables for testing.
+  - `sendCable` sets `requiresAck: true` automatically for high-urgency cables, false otherwise. This matches the spec's intent where high-urgency signals need acknowledgment.
+  - Newspaper `--since` uses simple ISO string comparison (`>=`) for filtering. This works correctly because ISO 8601 timestamps with timezone are lexicographically orderable.
+  - Integration tests for messaging commands use `console.log` capture (save original, replace, restore in finally). This is simpler than running the built CLI via execa for synchronous commands.
 ---

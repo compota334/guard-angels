@@ -4,6 +4,9 @@ import { listAngels } from './commands/list.js';
 import { createAngel } from './commands/create.js';
 import { briefAngel } from './commands/brief.js';
 import { executeAngel } from './commands/execute.js';
+import { sendCable } from './commands/cable.js';
+import { showInbox } from './commands/inbox.js';
+import { showNewspaper } from './commands/newspaper.js';
 
 const program = new Command();
 
@@ -84,30 +87,45 @@ program
 program
   .command('cable')
   .argument('<to>', 'Target angel identifier')
-  .argument('<type>', 'Cable type')
+  .argument('<type>', 'Cable type (breaking_change, fyi, review_request, invariant_violation)')
   .argument('<body>', 'Cable message body')
+  .option('--urgency <level>', 'Urgency level: high, normal, low (default: normal)')
+  .option('--subject <text>', 'Subject line (defaults to first 60 chars of body)')
+  .option('--from <angel-id>', 'Sender angel-id (default: _root)')
   .description('Manually send a cable to an angel')
-  .action(() => {
-    console.error('not implemented: cable');
-    process.exit(1);
+  .action((to: string, type: string, body: string, options: { urgency?: string; subject?: string; from?: string }) => {
+    try {
+      sendCable(process.cwd(), to, type, body, options);
+    } catch (err: unknown) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
   });
 
 program
   .command('inbox')
   .argument('<angel-id>', 'Angel identifier')
   .description('Show pending cables for an angel')
-  .action(() => {
-    console.error('not implemented: inbox');
-    process.exit(1);
+  .action((angelId: string) => {
+    try {
+      showInbox(process.cwd(), angelId);
+    } catch (err: unknown) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
   });
 
 program
   .command('newspaper')
   .description('Print recent newspaper entries')
   .option('--since <iso>', 'Only show entries since this ISO timestamp')
-  .action(() => {
-    console.error('not implemented: newspaper');
-    process.exit(1);
+  .action((options: { since?: string }) => {
+    try {
+      showNewspaper(process.cwd(), options);
+    } catch (err: unknown) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
   });
 
 program
