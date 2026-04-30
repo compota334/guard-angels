@@ -152,10 +152,28 @@ describe('angels init', () => {
     // available in the test environment. Since src/auth/AGENTS.md exists,
     // init MUST attempt ingestion via the backend and MUST fail loudly when
     // the backend cannot run — never silently substituting a blank template.
+    //
+    // To guarantee the backend is unavailable, we strip any user-local bin
+    // directories from PATH so that 'claude' cannot be resolved even if it's
+    // installed on the host machine. The spawn should then fail fast with
+    // ENOENT instead of hanging on a real LLM invocation.
+    const sanitizedEnv: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (key === 'PATH' && typeof value === 'string') {
+        sanitizedEnv[key] = value
+          .split(':')
+          .filter((p) => !p.includes('/.local/bin') && !p.includes('/home/'))
+          .join(':');
+      } else if (value != null) {
+        sanitizedEnv[key] = value;
+      }
+    }
+
     const result = await execaNode(CLI_PATH, ['init', '--auto'], {
       cwd: tmpDir,
       nodeOptions: [],
       reject: false,
+      env: sanitizedEnv,
     });
 
     expect(result.exitCode).not.toBe(0);
