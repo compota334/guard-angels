@@ -36,12 +36,16 @@ angels list
 # 3. Add an angel for a folder you missed
 angels create src/payments
 
-# 4. Delegate a change to an angel
+# 4a. Delegate a change to an angel (two-phase: review then execute)
 angels brief src-auth "Add rate limiting to the login endpoint"
 # Review the angel's response (concerns, proposed plan, questions)
 
 # 5. If the angel said "proceed", execute
 angels execute src-auth .angels/_briefs/src-auth/2026-04-28T1432-001.md
+
+# 4b. Or skip the two phases with a single command
+angels do src-auth "Add rate limiting to the login endpoint"
+# Runs brief then execute automatically; aborts if angel raises concerns or refuses
 
 # 6. After a batch of changes, let angels update their memory and flag drift
 angels sweep
@@ -63,10 +67,11 @@ angels doctor --archive --older-than=30
 | `angels create <path>` | Create an angel for a specific folder. |
 | `angels brief <angel-id> "<task>"` | Phase 1: send a review brief to an angel. Does NOT execute. |
 | `angels execute <angel-id> <brief-path>` | Phase 2: re-invoke angel with approval to execute changes. |
+| `angels do <angel-id> "<task>"` | Brief and execute in a single step. Aborts if angel raises concerns or refuses. |
 | `angels cable <to> <type> "<body>"` | Send a cable (inter-angel message). Types: `breaking_change`, `fyi`, `review_request`, `invariant_violation`. |
 | `angels inbox <angel-id>` | Show pending cables for an angel. |
-| `angels newspaper [--since=<iso>]` | Print newspaper entries (append-only event log). |
-| `angels sweep [--since=<iso>] [--timeout=<seconds>]` | Wake every angel in maintenance mode. Report-only in v1. |
+| `angels newspaper [--since=<iso>]` | Print newspaper entries (append-only log). Records cable, brief, execute, and sweep events. |
+| `angels sweep [--since=<iso>] [--timeout=<seconds>]` | Wake every angel in maintenance mode. `--timeout` caps each angel invocation; default from config. Report-only in v1. |
 | `angels doctor [--archive] [--older-than=N]` | Health check: orphaned angels, missing angels, stale locks, stale drafts. `--archive` moves old files to `_archive/`. |
 
 ## Backend configuration
@@ -148,6 +153,10 @@ Every command returns a meaningful exit code:
 | | 1 | Angel responds: concerns |
 | | 2 | Angel responds: refuse |
 | | 3 | Error (angel error, timeout, invocation failure) |
+| `do` | 0 | Brief succeeded (proceed) and execute succeeded (done) |
+| | 1 | Angel responded with concerns or error during brief |
+| | 2 | Angel refused during brief |
+| | 3 | Execute phase failed after a successful brief |
 | `execute` | 0 | Angel responds: done |
 | | 1 | Error or non-done response |
 | `cable` | 0 | Cable sent |
