@@ -1,6 +1,7 @@
 import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
 import { writeCable, type CableType, type CableUrgency } from '../messaging/cables.js';
+import { appendNewspaper } from '../messaging/newspaper.js';
 
 const VALID_TYPES = new Set<string>([
   'breaking_change',
@@ -71,6 +72,12 @@ export function sendCable(
     requiresAck: urgency === 'high',
     body,
     references: [],
+  });
+
+  appendNewspaper(cwd, {
+    timestamp,
+    angelId: fromId,
+    summary: `CABLE sent to ${to} [${type}/${urgency}]: ${subject}`,
   });
 
   console.log(`Cable sent: ${filename}`);

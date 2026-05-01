@@ -2,6 +2,7 @@ import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
 import { writeBrief } from '../protocol/brief.js';
 import { invoke } from '../protocol/orchestrate.js';
+import { appendNewspaper } from '../messaging/newspaper.js';
 import type { ResponseData, ResponseVerdict } from '../protocol/response.js';
 
 /**
@@ -58,11 +59,44 @@ export async function briefAngel(
     briefPath,
   });
 
-  // 4. Print human-readable summary
+  // 4. Append a newspaper entry for the review
+  appendBriefNewspaperEntry(cwd, angelId, result.response, task);
+
+  // 5. Print human-readable summary
   printResponseSummary(result.response, result.responsePath);
 
-  // 5. Return exit code based on the response verdict
+  // 6. Return exit code based on the response verdict
   return EXIT_CODES[result.response.response];
+}
+
+/**
+ * Append a newspaper entry for the brief/review result.
+ */
+function appendBriefNewspaperEntry(
+  cwd: string,
+  angelId: string,
+  response: ResponseData,
+  task: string,
+): void {
+  const timestamp = new Date().toISOString();
+  const verdict = response.response.toUpperCase();
+  const taskSnippet = task.slice(0, 60).replace(/\n/g, ' ').trim();
+  const summary = `BRIEF reviewed. RESPONSE: ${verdict}. Task: ${taskSnippet}`;
+
+  const detailLines: string[] = [];
+  if (response.concerns) {
+    detailLines.push(`Concerns: ${response.concerns}`);
+  }
+  if (response.proceedIf) {
+    detailLines.push(`Proceed if: ${response.proceedIf}`);
+  }
+
+  appendNewspaper(cwd, {
+    timestamp,
+    angelId,
+    summary,
+    details: detailLines.length > 0 ? detailLines.join('\n') : undefined,
+  });
 }
 
 /**
