@@ -175,9 +175,19 @@ program
   .command('sweep')
   .description('Wake every angel in maintenance mode (report-only in v1)')
   .option('--since <ref>', 'ISO timestamp to scope the newspaper delta')
-  .action(async (options: { since?: string }) => {
+  .option('--timeout <seconds>', 'Per-angel timeout in seconds (overrides config default)')
+  .action(async (options: { since?: string; timeout?: string }) => {
     try {
-      const exitCode = await sweepAngels(process.cwd(), options);
+      let timeoutSeconds: number | undefined;
+      if (options.timeout !== undefined) {
+        timeoutSeconds = parseInt(options.timeout, 10);
+        if (isNaN(timeoutSeconds) || timeoutSeconds <= 0) {
+          console.error(`Invalid --timeout value: "${options.timeout}". Must be a positive integer.`);
+          process.exit(1);
+          return;
+        }
+      }
+      const exitCode = await sweepAngels(process.cwd(), { since: options.since, timeoutSeconds });
       process.exit(exitCode);
     } catch (err: unknown) {
       handleError(err, 1);

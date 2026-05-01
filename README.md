@@ -66,7 +66,7 @@ angels doctor --archive --older-than=30
 | `angels cable <to> <type> "<body>"` | Send a cable (inter-angel message). Types: `breaking_change`, `fyi`, `review_request`, `invariant_violation`. |
 | `angels inbox <angel-id>` | Show pending cables for an angel. |
 | `angels newspaper [--since=<iso>]` | Print newspaper entries (append-only event log). |
-| `angels sweep [--since=<iso>]` | Wake every angel in maintenance mode. Report-only in v1. |
+| `angels sweep [--since=<iso>] [--timeout=<seconds>]` | Wake every angel in maintenance mode. Report-only in v1. |
 | `angels doctor [--archive] [--older-than=N]` | Health check: orphaned angels, missing angels, stale locks, stale drafts. `--archive` moves old files to `_archive/`. |
 
 ## Backend configuration

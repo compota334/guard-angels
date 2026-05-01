@@ -43,6 +43,7 @@ export interface InvokeInput {
   briefPath: string;
   newspaperDelta?: string;
   inbox?: InboxEntry[];
+  timeoutSeconds?: number;
 }
 
 export interface InvokeOutput {
@@ -72,7 +73,8 @@ export async function invoke(
   const angel = registry.getById(input.angelId);
   const adapter = pickAdapter(config);
 
-  const timeoutMs = config.backend.angel_timeout_seconds * 1000;
+  const resolvedTimeoutSeconds = input.timeoutSeconds ?? config.backend.angel_timeout_seconds;
+  const timeoutMs = resolvedTimeoutSeconds * 1000;
   const lockTtlMs = timeoutMs + LOCK_TTL_PADDING_MS;
 
   // 1. Acquire lock
@@ -159,7 +161,7 @@ export async function invoke(
         exitCode = 124; // conventional timeout exit code
         timeoutCause = err;
 
-        const timeoutStderr = `Angel invocation timed out after ${config.backend.angel_timeout_seconds} seconds`;
+        const timeoutStderr = `Angel invocation timed out after ${resolvedTimeoutSeconds} seconds`;
         logs.appendStderr(timeoutStderr);
       } else {
         throw err;
@@ -187,7 +189,7 @@ export async function invoke(
     // parse, and the orchestrator must not fabricate one.
     if (timedOut) {
       throw new OrchestrationError(
-        `Angel "${input.angelId}" timed out after ${config.backend.angel_timeout_seconds}s. Logs: ${logs.stderrPath}`,
+        `Angel "${input.angelId}" timed out after ${resolvedTimeoutSeconds}s. Logs: ${logs.stderrPath}`,
         'timeout',
         logs.stdoutPath,
         logs.stderrPath,

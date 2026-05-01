@@ -1,7 +1,7 @@
 import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
 import { writeBrief } from '../protocol/brief.js';
-import { invoke } from '../protocol/orchestrate.js';
+import { invoke, OrchestrationError } from '../protocol/orchestrate.js';
 import { readNewspaperSince, getNewspaperSize, appendNewspaper } from '../messaging/newspaper.js';
 import { getCursor, setCursor } from '../messaging/cursors.js';
 import { readInbox } from '../messaging/cables.js';
@@ -31,7 +31,7 @@ interface AngelSweepResult {
  */
 export async function sweepAngels(
   cwd: string,
-  options: { since?: string } = {},
+  options: { since?: string; timeoutSeconds?: number } = {},
 ): Promise<number> {
   const config = loadConfig(cwd);
   const registry = AngelRegistry.fromConfig(config);
@@ -54,7 +54,11 @@ export async function sweepAngels(
         hasError = true;
       }
     } catch (err: unknown) {
-      console.error(`  Error sweeping ${angel.id}: ${(err as Error).message}`);
+      if (err instanceof OrchestrationError && err.kind === 'timeout') {
+        console.error(`  Timeout: ${angel.id} did not respond in time. Skipping.`);
+      } else {
+        console.error(`  Error sweeping ${angel.id}: ${(err as Error).message}`);
+      }
       hasError = true;
     }
 
@@ -75,7 +79,7 @@ export async function sweepAngels(
 async function sweepSingleAngel(
   cwd: string,
   angelId: string,
-  options: { since?: string },
+  options: { since?: string; timeoutSeconds?: number },
 ): Promise<AngelSweepResult> {
   // 1. Read the angel's newspaper cursor and compute the delta
   const cursor = getCursor(cwd, angelId);
@@ -110,6 +114,7 @@ async function sweepSingleAngel(
     briefPath,
     newspaperDelta,
     inbox,
+    timeoutSeconds: options.timeoutSeconds,
   });
 
   // 5. Append a newspaper entry for this sweep
