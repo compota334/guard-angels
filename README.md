@@ -30,6 +30,14 @@ angels init              # interactive: pick which folders get angels
 # or: angels init --auto   (accept all heuristic candidates)
 # or: angels init --manual (you name the folders explicitly)
 
+# 1b. For existing codebases, bootstrap angel context from source (DISCOVERY phase)
+angels onboard                          # onboard all registered angels
+# or: angels onboard --angel src-auth   (single angel only)
+# or: angels onboard --force            (overwrite active angels without prompting)
+# Review the generated angel.md files, then activate:
+angels activate --all                   # promote all draft angels to active
+# or: angels activate src-auth          (promote a single angel)
+
 # 2. See what was created
 angels list
 
@@ -63,6 +71,8 @@ angels doctor --archive --older-than=30
 | Command | Description |
 |---|---|
 | `angels init [--auto\|--manual]` | Bootstrap `.angels/` in current project. Walks the tree, identifies significant folders, creates angel.md drafts. |
+| `angels onboard [--angel <id>] [--force] [--auto-activate]` | Bootstrap angel context from existing codebase (runs DISCOVERY phase). |
+| `angels activate [<angel-id>] [--all]` | Promote draft angels to active after reviewing. |
 | `angels list` | List all registered angels with their status. |
 | `angels create <path>` | Create an angel for a specific folder. |
 | `angels brief <angel-id> "<task>"` | Phase 1: send a review brief to an angel. Does NOT execute. |
@@ -145,6 +155,10 @@ Every command returns a meaningful exit code:
 |---|---|---|
 | `init` | 0 | Initialization completed |
 | | 1 | Error (already initialized, invalid flags, filesystem error) |
+| `onboard` | 0 | All targeted angels onboarded |
+| | 1 | Error (not initialized, backend failure, invalid flags) |
+| `activate` | 0 | Angel(s) activated |
+| | 1 | Error (not initialized, angel not found, no target specified) |
 | `list` | 0 | Listed successfully |
 | | 1 | Error (project not initialized) |
 | `create` | 0 | Angel created |
