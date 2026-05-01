@@ -1,4 +1,4 @@
-export type PromptPhase = 'init' | 'review' | 'execute' | 'sweep';
+export type PromptPhase = 'init' | 'discovery' | 'review' | 'execute' | 'sweep';
 
 export interface PromptInput {
   phase: PromptPhase;
@@ -23,7 +23,7 @@ const PROTOCOL_HEADER = `You are a Guard Angel. You are responsible for one spec
 You operate under the following protocol:
 
 1. You may READ any file in the project for context. You may only WRITE files inside your designated folder.
-2. You operate in one of these phases: INIT, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
+2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
 4. In EXECUTE, you make the requested changes, update your angel.md, send cables to affected angels, and append a newspaper entry.
 5. Your final action in either phase is to write a structured response file at the path specified.
@@ -31,6 +31,18 @@ You operate under the following protocol:
 7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.`;
 
 const PHASE_INSTRUCTIONS: Record<PromptPhase, string> = {
+  discovery: `[CURRENT PHASE: DISCOVERY]
+You are reading an existing codebase to write your angel.md for the first time.
+
+Rules:
+- Read the file listing and pre-read files provided below.
+- Write a complete angel.md body (no frontmatter — the orchestrator adds it).
+- Name real functions, types, modules you can see. No generic placeholders.
+- If you cannot determine something, leave a specific question in that section
+  ("Q: Is the retry logic in processJob() bounded or unbounded?"),
+  not a generic comment ("<!-- TODO -->").
+- Do not modify any source files.`,
+
   init: `[CURRENT PHASE: INIT]
 You are being initialized for the first time. Your task is to read the contents of your folder, understand its purpose, and write a comprehensive angel.md that captures:
 - Charter: what this folder owns and does not own
