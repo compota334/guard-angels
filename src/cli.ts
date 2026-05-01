@@ -1,5 +1,7 @@
 import { Command } from 'commander';
 import { initAngels } from './commands/init.js';
+import { onboardAngels } from './commands/onboard.js';
+import { activateAngels } from './commands/activate.js';
 import { listAngels } from './commands/list.js';
 import { createAngel } from './commands/create.js';
 import { briefAngel } from './commands/brief.js';
@@ -75,6 +77,48 @@ program
   .action(async (options: { auto?: boolean; manual?: boolean }) => {
     try {
       await initAngels(process.cwd(), options);
+    } catch (err: unknown) {
+      handleError(err, 1);
+    }
+  });
+
+program
+  .command('onboard')
+  .description('Bootstrap angel context from existing codebase')
+  .option('--angel <id>', 'Onboard only this angel')
+  .option('--force', 'Overwrite active angel.md without prompting')
+  .option('--auto-activate', 'Set status=active immediately (skip draft review)')
+  .option('--depth <n>', 'Recursion depth for file listing (default: 3)')
+  .action(async (options: { angel?: string; force?: boolean; autoActivate?: boolean; depth?: string }) => {
+    try {
+      const depth =
+        options.depth !== undefined ? parseInt(options.depth, 10) : 3;
+      if (isNaN(depth) || depth < 1) {
+        console.error(
+          `Invalid --depth value: "${options.depth}". Must be a positive integer.`,
+        );
+        process.exit(1);
+        return;
+      }
+      await onboardAngels(process.cwd(), {
+        angel: options.angel,
+        force: options.force,
+        autoActivate: options.autoActivate,
+        depth,
+      });
+    } catch (err: unknown) {
+      handleError(err, 1);
+    }
+  });
+
+program
+  .command('activate')
+  .argument('[angel-id]', 'Angel identifier')
+  .description('Promote draft angel(s) to active')
+  .option('--all', 'Activate all draft angels')
+  .action(async (angelId: string | undefined, options: { all?: boolean }) => {
+    try {
+      await activateAngels(process.cwd(), angelId, options);
     } catch (err: unknown) {
       handleError(err, 1);
     }
