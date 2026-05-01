@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as readline from 'node:readline';
+import { join } from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
 import { identifyCandidates, type FolderCandidate } from '../angels/identify.js';
 import { createAngelDraft } from '../angels/draft.js';
@@ -46,11 +47,13 @@ export async function initAngels(cwd: string, opts: InitOptions): Promise<void> 
   }
 
   let chosenPaths: string[];
+  let hasSourceFolders = false;
 
   if (opts.manual) {
     chosenPaths = await promptManualFolders(cwd);
   } else {
     const candidates = await identifyCandidates(cwd);
+    hasSourceFolders = candidates.length > 0;
 
     if (opts.auto) {
       chosenPaths = candidates.map((c) => c.path);
@@ -76,6 +79,23 @@ export async function initAngels(cwd: string, opts: InitOptions): Promise<void> 
   // Create the .angels/ directory structure
   const root = angelsRoot(cwd);
   fs.mkdirSync(root, { recursive: true });
+
+  fs.writeFileSync(
+    join(root, '.gitignore'),
+    [
+      '# Generated per-run — do not track',
+      '_briefs/',
+      '_responses/',
+      '_inbox/',
+      '_outbox/',
+      '_logs/',
+      '_cursors/',
+      '_locks/',
+      '_archive/',
+    ].join('\n') + '\n',
+    'utf-8',
+  );
+  console.log(`Created ${join(root, '.gitignore')}`);
 
   const dirsToCreate = [
     briefsDir(cwd),
@@ -113,6 +133,11 @@ export async function initAngels(cwd: string, opts: InitOptions): Promise<void> 
   const newsPath = newspaperFile(cwd);
   fs.writeFileSync(newsPath, '', 'utf-8');
   console.log(`Created ${newsPath}`);
+
+  if (hasSourceFolders) {
+    console.log('\nTip: this looks like an existing project.');
+    console.log('Run "angels onboard" to bootstrap angel context from your code.');
+  }
 
   // Create angel.md for each angel
   for (const entry of angelEntries) {

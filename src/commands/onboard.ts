@@ -1,10 +1,14 @@
 import * as fs from 'node:fs';
 import * as readline from 'node:readline';
+import { resolve as resolvePath } from 'node:path';
 import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
 import { readAngelMd, writeAngelMd } from '../angels/memory.js';
 import { angelMdFile } from '../paths/layout.js';
 import { angelIdToPath } from '../paths/resolve.js';
+import { buildDiscoveryContext } from '../protocol/discovery.js';
+import { invoke } from '../protocol/orchestrate.js';
+import { writeBrief } from '../protocol/brief.js';
 import type { Config, AngelEntry } from '../config/schema.js';
 
 export interface OnboardOptions {
@@ -33,19 +37,32 @@ export async function onboardAngels(cwd: string, opts: OnboardOptions): Promise<
 
     console.log(`Onboarding ${angel.id}...`);
 
-    // TODO: DISCOVERY phase — build recursive file listing, pre-read priority
-    // files, then invoke orchestrator with phase: 'discovery'.
-    //
-    // const context = buildDiscoveryContext(cwd, angel, opts.depth ?? 3);
-    // const result = await invoke(cwd, {
-    //   phase: 'discovery',
-    //   angelId: angel.id,
-    //   briefPath: context.briefPath,
-    // });
-    // const body = result.body;
-    //
-    // For now, write an empty body — DISCOVERY step will fill it in.
-    const body = '';
+    const absoluteAngelPath = resolvePath(cwd, angelPath);
+    const ctx = buildDiscoveryContext(absoluteAngelPath, opts.depth ?? 3);
+
+    const timestamp = new Date().toISOString();
+    const priorityContent = Object.entries(ctx.priorityFiles)
+      .map(([file, content]) => `### ${file}\n\`\`\`\n${content}\n\`\`\``)
+      .join('\n\n');
+
+    const briefPath = writeBrief(cwd, {
+      to: angel.id,
+      from: 'main',
+      timestamp,
+      phase: 'discovery',
+      type: 'change_request',
+      task: 'Read this codebase territory and write your angel.md body. Cover: charter, public contract, invariants, dependencies, and open questions. Do not include frontmatter — the orchestrator adds it.',
+      context: `${ctx.fileListing}\n\n## Priority Files\n\n${priorityContent || '(none found)'}`,
+      expectedScope: 'angel.md only — do not modify source files',
+      priorResponse: 'none',
+    });
+
+    const result = await invoke(cwd, {
+      phase: 'discovery',
+      angelId: angel.id,
+      briefPath,
+    });
+    const body = result.response.proposedPlan.trim();
 
     const status = opts.autoActivate ? 'active' : 'draft';
     writeAngelMd(mdPath, {
