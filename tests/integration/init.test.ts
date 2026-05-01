@@ -168,7 +168,7 @@ describe('angels init', () => {
         sanitizedEnv[key] = value;
       }
     }
-    sanitizedEnv['GUARD_ANGELS_ANGEL_CMD'] = '/bin/false';
+    sanitizedEnv['GUARD_ANGELS_BACKEND_CMD'] = '/bin/false';
 
     const result = await execaNode(CLI_PATH, ['init', '--auto'], {
       cwd: tmpDir,
