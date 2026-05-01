@@ -1,117 +1,67 @@
-import * as fs from "fs";
-import * as path from "path";
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { join, relative } from 'node:path';
 
-export interface DiscoveryEntry {
-  path: string;
-  type: "file" | "directory";
-  size?: number;
-  children?: DiscoveryEntry[];
+export interface DiscoveryContext {
+  fileListing: string;
+  priorityFiles: Record<string, string>;
 }
 
-export interface DiscoveryResult {
-  root: string;
-  entries: DiscoveryEntry[];
-  fileCount: number;
-  dirCount: number;
-}
+const PRIORITY_PATTERNS: RegExp[] = [
+  /^README\./i,
+  /^(index|main|mod|__init__)\./i,
+  /\.d\.ts$|^(types|interfaces|schema)\./i,
+  /\.(test|spec)\./i,
+  /^(package\.json|tsconfig\.json|pyproject\.toml)$/i,
+];
 
-const DEFAULT_IGNORE = new Set([
-  "node_modules",
-  ".git",
-  ".env",
-  "dist",
-  "build",
-  ".cache",
-]);
-
-export function discoverTerritory(
-  rootPath: string,
-  ignore: Set<string> = DEFAULT_IGNORE,
-  maxDepth = 10,
-  currentDepth = 0
-): DiscoveryEntry[] {
-  if (currentDepth >= maxDepth) return [];
-
-  type RawEntry = { name: string; fullPath: string; isDir: boolean; size: number };
-  let raw: RawEntry[];
-  try {
-    raw = fs.readdirSync(rootPath).map((name) => {
-      const fullPath = path.join(rootPath, name);
-      const stat = fs.statSync(fullPath);
-      return { name, fullPath, isDir: stat.isDirectory(), size: stat.size };
-    });
-  } catch {
-    return [];
-  }
-
-  const entries = raw;
-  const result: DiscoveryEntry[] = [];
-
-  for (const { name, fullPath, isDir, size } of entries) {
-    if (ignore.has(name)) continue;
-
-    if (isDir) {
-      const children = discoverTerritory(fullPath, ignore, maxDepth, currentDepth + 1);
-      result.push({ path: fullPath, type: "directory", children });
-    } else {
-      result.push({ path: fullPath, type: "file", size });
+export function buildRecursiveListing(
+  territoryPath: string,
+  depth: number,
+  maxLines: number = 500,
+): string {
+  if (!existsSync(territoryPath)) return '## Territory Listing\n(empty)\n';
+  const all = readdirSync(territoryPath, { recursive: true, withFileTypes: true });
+  const lines: string[] = ['## Territory Listing'];
+  for (const entry of all) {
+    const rel = relative(territoryPath, join(entry.parentPath ?? territoryPath, entry.name));
+    const slashCount = (rel.match(/\//g) ?? []).length;
+    if (slashCount >= depth) continue;
+    const line = entry.isDirectory() ? `${rel}/` : rel;
+    lines.push(line);
+    if (lines.length > maxLines) {
+      lines.push('... (truncated)');
+      break;
     }
   }
-
-  return result;
+  return lines.join('\n');
 }
 
-function countEntries(entries: DiscoveryEntry[]): { files: number; dirs: number } {
-  let files = 0;
-  let dirs = 0;
-  for (const entry of entries) {
-    if (entry.type === "file") {
-      files++;
-    } else {
-      dirs++;
-      if (entry.children) {
-        const sub = countEntries(entry.children);
-        files += sub.files;
-        dirs += sub.dirs;
+export function buildDiscoveryContext(
+  territoryPath: string,
+  depth: number = 3,
+): DiscoveryContext {
+  const fileListing = buildRecursiveListing(territoryPath, depth);
+  const priorityFiles: Record<string, string> = {};
+  const all = readdirSync(territoryPath, { recursive: true, withFileTypes: true });
+  let count = 0;
+  for (const pattern of PRIORITY_PATTERNS) {
+    for (const entry of all) {
+      if (entry.isDirectory()) continue;
+      const name = entry.name;
+      if (pattern.test(name)) {
+        const full = join(entry.parentPath ?? territoryPath, name);
+        try {
+          const content = readFileSync(full, 'utf-8');
+          const snippet = content.split('\n').slice(0, 200).join('\n');
+          priorityFiles[relative(territoryPath, full)] = snippet;
+          count++;
+          if (count >= 10) break;
+        } catch {
+          /* skip unreadable files */
+        }
       }
     }
+    if (count >= 10) break;
   }
-  return { files, dirs };
-}
-
-export function runDiscovery(
-  rootPath: string,
-  options: { ignore?: Set<string>; maxDepth?: number } = {}
-): DiscoveryResult {
-  const resolvedRoot = path.resolve(rootPath);
-  const entries = discoverTerritory(
-    resolvedRoot,
-    options.ignore ?? DEFAULT_IGNORE,
-    options.maxDepth ?? 10
-  );
-  const { files, dirs } = countEntries(entries);
-  return { root: resolvedRoot, entries, fileCount: files, dirCount: dirs };
-}
-
-export function formatDiscovery(result: DiscoveryResult, indent = 0): string {
-  const lines: string[] = [];
-  if (indent === 0) {
-    lines.push(`Territory: ${result.root}`);
-    lines.push(`Files: ${result.fileCount}  Directories: ${result.dirCount}`);
-    lines.push("");
-  }
-  for (const entry of result.entries) {
-    const prefix = "  ".repeat(indent);
-    const label = entry.type === "directory" ? "[D]" : "[F]";
-    const name = path.basename(entry.path);
-    lines.push(`${prefix}${label} ${name}`);
-    if (entry.children) {
-      const sub = formatDiscovery(
-        { root: entry.path, entries: entry.children, fileCount: 0, dirCount: 0 },
-        indent + 1
-      );
-      lines.push(sub);
-    }
-  }
-  return lines.join("\n");
+  return { fileListing, priorityFiles };
 }
