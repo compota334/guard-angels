@@ -4,6 +4,7 @@ import { listAngels } from './commands/list.js';
 import { createAngel } from './commands/create.js';
 import { briefAngel } from './commands/brief.js';
 import { executeAngel } from './commands/execute.js';
+import { doAngel } from './commands/do.js';
 import { sendCable } from './commands/cable.js';
 import { showInbox } from './commands/inbox.js';
 import { showNewspaper } from './commands/newspaper.js';
@@ -127,6 +128,20 @@ program
       process.exit(exitCode);
     } catch (err: unknown) {
       handleError(err, 1);
+    }
+  });
+
+program
+  .command('do')
+  .argument('<angel-id>', 'Angel identifier')
+  .argument('<task>', 'Task description')
+  .description('Brief angel (review) then auto-execute if approved; exit 1/2 on concerns/refuse')
+  .action(async (angelId: string, task: string) => {
+    try {
+      const exitCode = await doAngel(process.cwd(), angelId, task);
+      process.exit(exitCode);
+    } catch (err: unknown) {
+      handleError(err, 3);
     }
   });
 
