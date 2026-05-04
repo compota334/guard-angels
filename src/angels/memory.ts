@@ -14,6 +14,8 @@ export type AngelFrontmatter = z.infer<typeof AngelFrontmatterSchema>;
 export interface AngelMd {
   frontmatter: AngelFrontmatter;
   body: string;
+  /** Raw file content as read from disk. Only set by readAngelMd; absent on objects constructed for writing. */
+  raw?: string;
 }
 
 const FRONTMATTER_OPEN = '---\n';
@@ -92,6 +94,7 @@ export function readAngelMd(filePath: string): AngelMd {
   return {
     frontmatter: validated.data,
     body,
+    raw,
   };
 }
 

@@ -47,10 +47,19 @@ export async function detectExistingMemory(
   return { source: null, content: null };
 }
 
+const MAX_MEMORY_CHARS = 102400; // 100 KB
+
 async function tryReadFile(filePath: string): Promise<string | null> {
   try {
     await access(filePath);
-    return await readFile(filePath, 'utf-8');
+    const content = await readFile(filePath, 'utf-8');
+    if (content.length > MAX_MEMORY_CHARS) {
+      return (
+        content.slice(0, MAX_MEMORY_CHARS) +
+        '\n... (truncated: file exceeds 100 KB limit)'
+      );
+    }
+    return content;
   } catch {
     return null;
   }

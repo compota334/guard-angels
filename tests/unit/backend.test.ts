@@ -9,7 +9,9 @@ import type { Config } from '../../src/config/schema.js';
 
 const FIXTURES = resolve(import.meta.dirname, '..', 'fixtures');
 const ECHO_BACKEND = resolve(FIXTURES, 'echo-backend.sh');
+const ARG_ECHO_BACKEND = resolve(FIXTURES, 'arg-echo-backend.sh');
 const STDERR_BACKEND = resolve(FIXTURES, 'stderr-backend.sh');
+const ARG_STDERR_BACKEND = resolve(FIXTURES, 'arg-stderr-backend.sh');
 
 const baseOpts = {
   prompt: 'hello world',
@@ -32,8 +34,8 @@ function makeConfig(angelCmd: string): Config {
 // --- ClaudeAdapter ---
 
 describe('ClaudeAdapter', () => {
-  it('pipes prompt via stdin and captures stdout', async () => {
-    const adapter = new ClaudeAdapter(ECHO_BACKEND, []);
+  it('passes prompt as positional arg and captures stdout', async () => {
+    const adapter = new ClaudeAdapter(ARG_ECHO_BACKEND, []);
     const result = await adapter.invoke(baseOpts);
 
     expect(result.stdout).toBe('hello world');
@@ -42,8 +44,7 @@ describe('ClaudeAdapter', () => {
   });
 
   it('passes extra args to the subprocess', async () => {
-    // echo-backend.sh ignores args, but we verify args don't break invocation
-    const adapter = new ClaudeAdapter(ECHO_BACKEND, ['-p', '--dangerously-skip-permissions']);
+    const adapter = new ClaudeAdapter(ARG_ECHO_BACKEND, ['-p', '--dangerously-skip-permissions']);
     const result = await adapter.invoke({ ...baseOpts, extraArgs: ['--model', 'opus'] });
 
     expect(result.stdout).toBe('hello world');
@@ -51,7 +52,7 @@ describe('ClaudeAdapter', () => {
   });
 
   it('captures non-zero exit code', async () => {
-    const adapter = new ClaudeAdapter(STDERR_BACKEND, []);
+    const adapter = new ClaudeAdapter(ARG_STDERR_BACKEND, []);
     const result = await adapter.invoke(baseOpts);
 
     expect(result.code).toBe(1);
@@ -59,7 +60,7 @@ describe('ClaudeAdapter', () => {
   });
 
   it('extracts session ID from stdout', () => {
-    const adapter = new ClaudeAdapter(ECHO_BACKEND, []);
+    const adapter = new ClaudeAdapter(ARG_ECHO_BACKEND, []);
 
     expect(adapter.extractSessionId('session_id: abc123')).toBe('abc123');
     expect(adapter.extractSessionId('Session-ID: xyz-789')).toBe('xyz-789');
@@ -68,7 +69,7 @@ describe('ClaudeAdapter', () => {
   });
 
   it('includes sessionId in result when present in stdout', async () => {
-    const adapter = new ClaudeAdapter(ECHO_BACKEND, []);
+    const adapter = new ClaudeAdapter(ARG_ECHO_BACKEND, []);
     const result = await adapter.invoke({
       ...baseOpts,
       prompt: 'session_id: test-session-42',
@@ -78,7 +79,7 @@ describe('ClaudeAdapter', () => {
   });
 
   it('omits sessionId from result when not in stdout', async () => {
-    const adapter = new ClaudeAdapter(ECHO_BACKEND, []);
+    const adapter = new ClaudeAdapter(ARG_ECHO_BACKEND, []);
     const result = await adapter.invoke(baseOpts);
 
     expect(result.sessionId).toBeUndefined();

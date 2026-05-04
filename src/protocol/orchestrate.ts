@@ -27,7 +27,7 @@ export class OrchestrationError extends Error {
   override readonly name = 'OrchestrationError';
   constructor(
     message: string,
-    public readonly kind: 'timeout' | 'missing_response',
+    public readonly kind: 'timeout' | 'missing_response' | 'spawn_error',
     public readonly logStdoutPath: string,
     public readonly logStderrPath: string,
     public readonly logMetaPath: string,
@@ -80,17 +80,18 @@ export async function invoke(
   // 1. Acquire lock
   acquireLock(projectRoot, lockTtlMs);
 
-  const timestamp = new Date().toISOString();
-
   try {
+    // FIX 6: timestamp inside try so it's in scope for all log/response helpers
+    const timestamp = new Date().toISOString();
+
     // 2. Read angel.md if it exists
     const angelPath = angelIdToPath(input.angelId);
     const angelMdPath = angelMdFile(projectRoot, angelPath === '.' ? '_root' : angelPath);
     let angelMdContent: string | null = null;
     try {
+      // FIX 6: readAngelMd now exposes .raw — eliminates the double read
       const angelMd = readAngelMd(angelMdPath);
-      angelMdContent = fs.readFileSync(angelMdPath, 'utf-8');
-      void angelMd; // validated by readAngelMd
+      angelMdContent = angelMd.raw ?? null;
     } catch {
       // No angel.md yet — that's fine for init phase
       angelMdContent = null;
@@ -133,6 +134,7 @@ export async function invoke(
 
     let timedOut = false;
     let timeoutCause: unknown;
+    let spawnError: unknown;
     let exitCode = 1;
     let sessionId: string | undefined;
     let stdout = '';
@@ -146,8 +148,9 @@ export async function invoke(
         timeoutMs,
       });
 
-      stdout = result.stdout;
-      stderr = result.stderr;
+      // FIX 5: null-coalesce in case the adapter returns null/undefined
+      stdout = result.stdout ?? '';
+      stderr = result.stderr ?? '';
       exitCode = result.code;
       sessionId = result.sessionId;
 
@@ -155,7 +158,7 @@ export async function invoke(
       logs.appendStdout(stdout);
       logs.appendStderr(stderr);
     } catch (err: unknown) {
-      // Check if this is a timeout error from execa
+      // FIX 6: execa >=8 sets timedOut=true on the error object when --timeout expires
       if (isTimeoutError(err)) {
         timedOut = true;
         exitCode = 124; // conventional timeout exit code
@@ -164,14 +167,24 @@ export async function invoke(
         const timeoutStderr = `Angel invocation timed out after ${resolvedTimeoutSeconds} seconds`;
         logs.appendStderr(timeoutStderr);
       } else {
-        throw err;
+        // FIX 4: store non-timeout errors so meta.json is written before we throw
+        spawnError = err;
+        exitCode = 1;
+        logs.appendStderr(
+          `Angel invocation failed: ${(err as Error).message ?? String(err)}`,
+        );
       }
     } finally {
-      logs.close();
+      // FIX 3: wrap close() so it cannot shadow the original exception
+      try {
+        logs.close();
+      } catch (closeErr: unknown) {
+        console.error('Failed to close log streams:', closeErr);
+      }
     }
 
-    // 9. Write meta.json (always, even on timeout — the .meta.json carries
-    // the timedOut flag which is the source of truth for "how did this end")
+    // 9. Write meta.json (always, even on timeout or spawn error — the .meta.json
+    // carries the timedOut/spawnError flag which is the source of truth for outcome)
     const meta: LogMeta = {
       angelId: input.angelId,
       phase: input.phase,
@@ -182,8 +195,21 @@ export async function invoke(
       startedAt: timestamp,
       finishedAt: new Date().toISOString(),
       timedOut,
+      ...(spawnError != null && { spawnError: true }),
     };
     const logMetaPath = writeLogMeta(projectRoot, input.angelId, timestamp, meta);
+
+    // FIX 4: throw wrapped OrchestrationError now that meta.json has been written
+    if (spawnError != null) {
+      throw new OrchestrationError(
+        `Angel "${input.angelId}" invocation failed: ${(spawnError as Error).message ?? String(spawnError)}. Logs: ${logs.stderrPath}`,
+        'spawn_error',
+        logs.stdoutPath,
+        logs.stderrPath,
+        logMetaPath,
+        { cause: spawnError },
+      );
+    }
 
     // 10. If the invocation timed out, throw — there is no response file to
     // parse, and the orchestrator must not fabricate one.
@@ -244,6 +270,8 @@ function computeResponsePath(
   return join(dir, `${datePrefix}-${seq}.md`);
 }
 
+// execa >=8 sets .timedOut = true on the thrown error when the child process
+// hits the timeout option — this is distinct from a process that exits non-zero.
 function isTimeoutError(err: unknown): boolean {
   if (err && typeof err === 'object') {
     return (err as Record<string, unknown>).timedOut === true;

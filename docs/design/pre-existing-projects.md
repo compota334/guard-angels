@@ -1,11 +1,13 @@
 # Design: Guard Angel Support for Pre-Existing Projects
 
 **Date:** 2026-05-02
-**Status:** Proposal — open for review
+**Status:** IMPLEMENTED (2026-05-04)
+
+> **Implementation note:** This document was a proposal written 2026-05-02. All core features were implemented by 2026-05-04. Sections are marked [IMPLEMENTED], [PROPOSED], or [DEFERRED] to show current state. The "Implementation Notes" section at the bottom documents fixes applied during implementation.
 
 ---
 
-## Problem Statement
+## Problem Statement [IMPLEMENTED]
 
 Guard Angel's `init` command was designed for greenfield projects: it detects candidate folders and writes blank `angel.md` templates. Three real-world scenarios expose gaps:
 
@@ -19,7 +21,7 @@ In all three cases, angels start with zero domain knowledge. The first `sweep` p
 
 ## Perspective 1: UX Designer
 
-### Current pain point
+### Current pain point [IMPLEMENTED]
 
 The `init` flow asks the user to select folders then creates empty templates with comment placeholders. For a project with 50,000 lines of code, this produces 8–12 angel.md files that each say:
 
@@ -30,7 +32,7 @@ The `init` flow asks the user to select folders then creates empty templates wit
 
 The user stares at blank files and has to do the knowledge-extraction work by hand.
 
-### Ideal user journey
+### Ideal user journey [IMPLEMENTED]
 
 ```
 git clone github.com/org/large-api && cd large-api
@@ -50,7 +52,7 @@ angels onboard
 
 Angel.md files come out with real content — named functions, actual invariants, concrete contracts — not placeholders.
 
-### Command naming recommendation
+### Command naming recommendation [IMPLEMENTED]
 
 `angels onboard` — a separate subcommand, not a flag on `init`.
 
@@ -64,7 +66,7 @@ Angel.md files come out with real content — named functions, actual invariants
 
 `init` should detect that the project has existing code and print a one-line tip suggesting `onboard`. It does not run discovery itself.
 
-### Draft status as a review gate
+### Draft status as a review gate [IMPLEMENTED]
 
 Angels produced by `onboard` start as `status: draft`. Draft angels:
 
@@ -78,7 +80,7 @@ This gives the user a natural review moment before angels start influencing deci
 
 ## Perspective 2: Architect
 
-### Separation of concerns
+### Separation of concerns [IMPLEMENTED]
 
 Current `init` conflates two jobs:
 
@@ -89,7 +91,7 @@ For existing projects a third job is needed:
 
 3. Discover and internalize existing project knowledge
 
-Proposed clean boundary:
+Implemented clean boundary:
 
 ```
 angels init      → structure only + blank templates (fast, no AI unless seed file found)
@@ -101,11 +103,11 @@ angels create    → adds one angel to an existing project (no DISCOVERY by defa
 - Fresh, on a project with no `.angels/` yet (combines `init` and DISCOVERY)
 - On a project that already has `.angels/` (re-onboard all or specific angels after a big refactor)
 
-### DISCOVERY as a first-class protocol phase
+### DISCOVERY as a first-class protocol phase [IMPLEMENTED]
 
 The current protocol has four phases: INIT, REVIEW, EXECUTE, SWEEP.
 
-Proposal: add **DISCOVERY** as a fifth phase.
+DISCOVERY is now the fifth phase.
 
 **DISCOVERY phase contract:**
 
@@ -121,7 +123,7 @@ DISCOVERY differs from INIT:
 - **INIT** — angel is activated for the first time in a greenfield project; no pre-existing code.
 - **DISCOVERY** — angel reads an existing codebase and synthesizes its `angel.md` from it.
 
-### Context sources for bootstrapping (ranked by signal density)
+### Context sources for bootstrapping [IMPLEMENTED]
 
 | Priority | Source | Rationale |
 |----------|---------|-----------|
@@ -129,21 +131,21 @@ DISCOVERY differs from INIT:
 | 2 | Entry points (`index.*`, `mod.*`, `__init__.*`, `main.*`) | Public surface |
 | 3 | Type definitions (`*.d.ts`, `types.*`, `interfaces.*`) | Contracts |
 | 4 | Test files (`*.test.*`, `*.spec.*`) | Behavioral specification |
-| 5 | Config files (`package.json`, `pyproject.toml`) | Dependencies and scripts |
+| 5 | Config files (`package.json`, `tsconfig.json`, `pyproject.toml`) | Dependencies and scripts |
 | 6 | All other source files | Complete picture |
 
-The orchestrator pre-reads priority files and includes their content in the DISCOVERY prompt. The angel is given the full recursive file listing and the pre-read content; it synthesizes the `angel.md` body from what it has and requests more if needed (via the response format).
+The orchestrator pre-reads priority files and includes their content in the DISCOVERY prompt. The angel is given the full recursive file listing and the pre-read content; it synthesizes the `angel.md` body from what it has.
 
 **Token budget guidance in the prompt:** include a directive like "Prioritize breadth over depth; name real artifacts you can see, mark anything uncertain with a specific question rather than a generic TODO."
 
-### Idempotency and safety
+### Idempotency and safety [IMPLEMENTED]
 
 - `onboard` on an angel with `status: active` prompts: `Angel src-auth already has active context. Overwrite? (y/N)` — default no.
 - `onboard` on a `status: draft` angel overwrites silently (the user has not promoted it yet).
 - A `--force` flag skips the prompt for automation contexts.
 - Re-onboarding after a major refactor is a valid, supported workflow.
 
-### Branch context strategy
+### Branch context strategy [PROPOSED]
 
 **Recommendation: structured "Branch notes" section in angel.md.**
 
@@ -160,154 +162,50 @@ This keeps one source of truth per angel, plays well with git merges (conflicts 
 
 **Alternative considered and rejected:** per-branch angel files at `.angels/{path}/angel.{branch}.md`. Rejected because it multiplies files, breaks `sweep` (which branch does it read?), and is harder to merge.
 
+*Status: not implemented as tooling. This is a recommended practice for users, not a code change.*
+
 ---
 
 ## Perspective 3: Developer
 
-### What changes and where
+### What changes and where [IMPLEMENTED]
 
-**New file: `src/commands/onboard.ts`**
+**`src/commands/onboard.ts`** — implemented. Loads config, selects targets, prompts on active angels, calls `buildDiscoveryContext`, writes the brief, invokes the backend via `orchestrate.invoke()`, writes `angel.md` with `status: draft` (or `active` with `--auto-activate`).
 
-Pseudocode sketch:
+**`src/protocol/prompt.ts` — DISCOVERY case** — implemented. The DISCOVERY phase prompt instructs the angel to read the provided file listing and priority file contents, write a complete `angel.md` body, name real artifacts, and leave specific questions rather than generic TODOs.
 
-```typescript
-export async function onboardAngels(opts: OnboardOptions): Promise<void> {
-  const config = ensureInit(opts);          // create .angels/ if missing, else load
-  const targets = selectAngels(config, opts.angel);
+**`src/protocol/discovery.ts` — recursive listing** — implemented. `buildRecursiveListing` uses `readdirSync` with `{ recursive: true }`, respects a configurable depth limit (default 3), and caps output at 500 lines. `buildDiscoveryContext` selects priority files by pattern, caps each file at 200 lines / 5KB, and caps the total priority budget at 50KB.
 
-  for (const angel of targets) {
-    if (isActive(angel) && !opts.force) {
-      const confirmed = await promptOverwrite(angel.id);
-      if (!confirmed) continue;
-    }
-    const context = buildDiscoveryContext(angel, opts.depth ?? 3);
-    const result = await orchestrate(DISCOVERY, angel, context);
-    writeAngelMd(angel, { status: 'draft', body: result.body });
-    printSummary(angel.id, result);
-  }
-  printActivateHint();
-}
-```
+**`src/commands/init.ts`** — implemented. Auto-creates `.angels/.gitignore` during init, and prints a tip suggesting `angels onboard` when source folders are detected.
 
-**`src/protocol/prompt.ts` — add DISCOVERY case**
+**`src/commands/activate.ts`** — implemented. Promotes draft angels to active.
 
-```typescript
-case 'discovery':
-  return `[PHASE INSTRUCTIONS - DISCOVERY]
-You are reading an existing codebase to write your angel.md for the first time.
+**`src/cli.ts`** — both `onboard` and `activate` are registered.
 
-Rules:
-- Read the file listing and pre-read files provided below.
-- Write a complete angel.md body (no frontmatter — the orchestrator adds it).
-- Name real functions, types, modules you can see. No generic placeholders.
-- If you cannot determine something, leave a specific question in that section
-  ("Q: Is the retry logic in processJob() bounded or unbounded?"),
-  not a generic comment ("<!-- TODO -->").
-- Do not modify any source files.`;
-```
+### Implementation order [IMPLEMENTED]
 
-**`src/protocol/orchestrate.ts` — recursive listing for DISCOVERY**
+All steps from the proposal were completed:
 
-Current listing (line 104) uses `fs.readdirSync()` — one level only. For DISCOVERY, provide a recursive listing with depth limit:
-
-```typescript
-function buildRecursiveListing(dir: string, depth: number): string {
-  // Respects .gitignore via `git ls-files --others --cached` or a gitignore parser.
-  // Returns relative paths, directories suffixed with '/'.
-  // Truncates at configurable line limit (default: 500 lines).
-}
-```
-
-Pre-read priority files and include them inline in the prompt section `[TERRITORY FILES]`. This removes the need for the angel to "request" reads — it gets the most important content upfront.
-
-**`src/cli.ts` — register the new command**
-
-```typescript
-program
-  .command('onboard')
-  .description('bootstrap angel context from existing codebase')
-  .option('--angel <id>', 'onboard only this angel')
-  .option('--force', 'overwrite active angel.md without prompting')
-  .option('--auto-activate', 'set status=active immediately (skip draft review)')
-  .option('--depth <n>', 'recursion depth for file listing', '3')
-  .action(wrapCommand(onboardAngels));
-
-program
-  .command('activate [angel-id]')
-  .description('promote draft angel(s) to active')
-  .option('--all', 'activate all draft angels')
-  .action(wrapCommand(activateAngels));
-```
-
-**`src/commands/init.ts` — add tip for existing projects**
-
-After candidate detection, before writing templates:
-
-```typescript
-const hasSubstantialCode = candidates.length > 0 &&
-  candidates.some(c => c.reason.includes('source'));
-if (hasSubstantialCode) {
-  console.log('Tip: this looks like an existing project.');
-  console.log('After init, run "angels onboard" to bootstrap context from your code.');
-}
-```
-
-**`src/commands/init.ts` — auto-create `.angels/.gitignore`**
-
-Add to the init flow alongside directory creation:
-
-```typescript
-fs.writeFileSync(
-  path.join(angelsDir, '.gitignore'),
-  [
-    '# Generated per-run — do not track',
-    '_briefs/',
-    '_responses/',
-    '_inbox/',
-    '_outbox/',
-    '_logs/',
-    '_cursors/',
-    '_locks/',
-    '_archive/',
-  ].join('\n') + '\n'
-);
-```
-
-This ensures that angel.md files and `_config.yml` are tracked (persistent knowledge) while ephemeral data is ignored — correct default for both solo and team use.
-
-### Implementation order
-
-1. `src/commands/onboard.ts` — the new command shell
+1. `src/commands/onboard.ts` — command shell
 2. DISCOVERY phase in `src/protocol/prompt.ts`
-3. Recursive listing in `src/protocol/orchestrate.ts`
+3. Recursive listing in `src/protocol/discovery.ts`
 4. `src/commands/init.ts` — `.gitignore` auto-creation and tip
 5. `src/commands/activate.ts` — promote draft angels
-6. `src/cli.ts` — register both new commands
-7. Update `angels list` to show draft status
-8. Tests: onboard on a fixture project with existing files
+6. `src/cli.ts` — both new commands registered
+7. `angels list` shows draft status
+8. Integration tests: `tests/integration/onboard.test.ts`, `tests/integration/activate.test.ts`
 
 ---
 
 ## Perspective 4: Project Maintainer
 
-### Keeping angels accurate after the initial onboard
+### Keeping angels accurate after the initial onboard [DEFERRED]
 
 Onboarding is a one-time bootstrap. The harder problem is drift: code changes, angel.md does not.
 
 **Current mechanism:** angels self-update their `angel.md` during EXECUTE. This works only if briefs flow regularly. Dormant angels drift.
 
-**Proposal: drift detection in SWEEP.**
-
-During sweep, the orchestrator compares `angel.md`'s `last_updated` timestamp against the newest `git log` modification date within that angel's folder. If the folder has commits newer than the last angel.md update by more than N days (configurable), the sweep prompt includes a `[DRIFT WARNING]` section:
-
-```
-[DRIFT WARNING]
-Your territory has 47 commits since your last angel.md update (2026-03-10).
-Recent changes: src/auth/jwt.ts, src/auth/session.ts (3 new files added).
-Consider whether your Charter, Public contract, and Invariants are still accurate.
-```
-
-The angel can then update its `angel.md` as part of the sweep response — same mechanism as EXECUTE.
+**Proposed: drift detection in SWEEP.** Not yet implemented. During sweep, the orchestrator would compare `angel.md`'s `last_updated` against the newest `git log` modification date within that angel's folder. If the folder has commits newer than the last update by more than N days, the sweep prompt includes a `[DRIFT WARNING]` section.
 
 **Re-onboarding after major refactor:**
 
@@ -317,9 +215,9 @@ angels onboard --angel src-auth --force
 
 This re-runs DISCOVERY on a single angel, overwriting its `angel.md` draft. The user promotes it after review.
 
-### angel.md in version control
+### angel.md in version control [IMPLEMENTED]
 
-For team projects, angel.md files should be committed. The `.angels/.gitignore` described in the Developer section achieves the right split:
+The `.angels/.gitignore` is auto-created during `init`:
 
 - **Tracked:** `_config.yml`, `*/angel.md`, `_newspaper.md`
 - **Ignored:** `_briefs/`, `_responses/`, `_logs/`, `_cursors/`, `_locks/`, `_archive/`
@@ -329,20 +227,13 @@ This means:
 - Merging branches merges angel context, making divergence visible as git conflicts
 - The newspaper and briefs are ephemeral (machine-generated per session) and should not be in history
 
-### Long-term: `ONBOARD_REQUEST` cable type
+### Long-term: `ONBOARD_REQUEST` cable type [DEFERRED]
 
-An angel that detects substantial drift in its sweep could self-report with a structured cable to `_root`:
-
-```
-SUBJECT: onboard-request
-BODY: Territory has changed significantly since last angel.md update. Requesting re-onboarding.
-```
-
-The `_root` angel (or a future `angels doctor` enhancement) could surface a list of pending onboard requests. This closes the loop: angels can signal when they need refreshed context, without requiring the user to track it manually.
+An angel that detects substantial drift in its sweep could self-report with a structured cable to `_root`. The `_root` angel (or a future `angels doctor` enhancement) could surface a list of pending onboard requests. Not implemented.
 
 ---
 
-## Proposed Command Surface (Summary)
+## Proposed Command Surface [IMPLEMENTED]
 
 | Command | Use case |
 |---------|----------|
@@ -358,12 +249,59 @@ The `_root` angel (or a future `angels doctor` enhancement) could surface a list
 
 ## Open Questions
 
-1. **Token budget for DISCOVERY.** How many priority files should the orchestrator pre-read? A flat limit (e.g., 10 files × 200 lines) or a token budget managed by the orchestrator?
+1. **Token budget for DISCOVERY.** RESOLVED: 50KB total across all priority files, 5KB per individual file, 200-line snippet per file, max 10 files. A truncation notice is injected when the budget is exceeded.
 
-2. **gitignore parsing.** Should the recursive listing respect `.gitignore`? Shell out to `git ls-files` (requires git) or bundle a parser (adds dependency)?
+2. **gitignore parsing.** RESOLVED (pragmatic): The recursive listing uses `fs.readdirSync` with `{ recursive: true }`. It does not shell out to `git ls-files` and does not parse `.gitignore`. This means ignored build artifacts may appear in the listing. Acceptable for v1: the angel is given a listing, not file contents, so the token impact is small.
 
-3. **Activate gate.** Should draft angels participate in sweep at a reduced level (e.g., read-only sweep, no cable sending) rather than being fully excluded? This would let them produce reports before the user formally activates them.
+3. **Activate gate.** DEFERRED: Draft angels are fully excluded from `sweep` in v1. A reduced-participation mode (read-only sweep, no cable sending) is a possible v2 enhancement.
 
-4. **`angels onboard` on a greenfield project.** If `.angels/` does not exist yet, should `onboard` call `init` internally (combined flow) or require `init` first? Combined is better UX; separate is simpler code.
+4. **`angels onboard` on a greenfield project.** RESOLVED: `onboard` calls `loadConfig` which throws `ERR_NOT_INITIALIZED` if `.angels/` does not exist. The user must run `angels init` first. Combined flow (onboard calling init internally) was deferred in favor of the simpler two-step UX.
 
-5. **Re-onboard diff.** For `--force` re-onboard on an active angel, should the command show a diff of what changed in `angel.md` before writing? Useful for large angel.md files where spotting what the AI changed matters.
+5. **Re-onboard diff.** DEFERRED: `--force` re-onboard overwrites without showing a diff. A before/after diff of `angel.md` would be useful for large angel files; not yet implemented.
+
+---
+
+## Implementation Notes
+
+### DISCOVERY bug: prompt passed via stdin instead of CLI arg
+
+The `ClaudeAdapter` initially passed the prompt via stdin (piped input). This broke DISCOVERY because `claude -p` reads the task from the first non-flag CLI argument, not from stdin. The adapter was rewritten to append the prompt as the last positional argument:
+
+```typescript
+const args = [...this.baseArgs, ...(opts.extraArgs ?? []), opts.prompt];
+```
+
+This fix is in `src/backend/claude.ts`. The generic fallback adapter still uses stdin for backends that expect it.
+
+### Security fixes applied during implementation
+
+**Path traversal in `angelIdToPath` (`src/paths/resolve.ts`)**
+
+Angel IDs are user-supplied strings decoded to folder paths. A crafted ID such as `..--..--etc` could decode to a path escaping the project root. Two defenses were added:
+
+1. After decoding, reject any path whose segments include `..`.
+2. Resolve the decoded path against a sentinel absolute root (`/safe_root_sentinel`) and verify the result starts with that sentinel — a belt-and-suspenders check that catches any traversal that slipped through the segment check.
+
+**Lock race in `acquireLock` (`src/locks/lock.ts`)**
+
+The original implementation used `writeFileSync` without an exclusive flag, creating a TOCTOU race when checking for stale locks. Fixed by using `flag: 'wx'` (exclusive create), which fails atomically with `EEXIST` if the lock file already exists. A retry loop handles the stale-lock case: if the existing lock belongs to a dead PID or has exceeded its TTL, it is removed and the atomic write is retried (up to 10 attempts).
+
+**Size limits to prevent context exhaustion**
+
+Unbounded file reads could exhaust the angel's context window. Limits applied:
+
+| Source | Limit | File |
+|--------|-------|------|
+| `AGENTS.md` / `CLAUDE.md` seed | 100KB, truncated with notice | `src/angels/ingest.ts` |
+| DISCOVERY priority files (total) | 50KB across all files | `src/protocol/discovery.ts` |
+| DISCOVERY priority file (per file) | 5KB snippet, 200 lines | `src/protocol/discovery.ts` |
+| DISCOVERY priority files (count) | 10 files max | `src/protocol/discovery.ts` |
+| DISCOVERY file listing | 500 lines, then `... (truncated)` | `src/protocol/discovery.ts` |
+
+### Current DEFAULT_BACKEND_CMD
+
+```
+claude -p --dangerously-skip-permissions
+```
+
+Set in `_config.yml` under `backend.angel_cmd`. Override via the `GUARD_ANGELS_BACKEND_CMD` environment variable.

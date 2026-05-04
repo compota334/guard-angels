@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { locksDir } from '../paths/layout.js';
 
 const LOCK_FILENAME = 'orchestrator.lock';
+const MAX_LOCK_RETRIES = 10;
 
 export interface LockInfo {
   pid: number;
@@ -22,25 +23,42 @@ export function acquireLock(projectRoot: string, ttlMs: number): string {
   fs.mkdirSync(dir, { recursive: true });
   const lockPath = path.join(dir, LOCK_FILENAME);
 
-  const existing = readLock(lockPath);
-  if (existing) {
-    if (!isStale(existing)) {
-      throw new Error(
-        `Orchestrator lock is held by PID ${existing.pid} (started ${existing.startedAt}). ` +
-          `If the process is not running, delete ${lockPath} manually or wait for TTL expiry.`,
-      );
-    }
-    // Stale lock — reclaim it
-  }
-
   const info: LockInfo = {
     pid: process.pid,
     startedAt: new Date().toISOString(),
     ttlMs,
   };
+  const content = serializeLock(info);
 
-  fs.writeFileSync(lockPath, serializeLock(info), 'utf-8');
-  return lockPath;
+  for (let attempt = 0; attempt < MAX_LOCK_RETRIES; attempt++) {
+    try {
+      // wx flag: exclusive create — fails atomically with EEXIST if file exists
+      fs.writeFileSync(lockPath, content, { encoding: 'utf-8', flag: 'wx' });
+      return lockPath;
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'EEXIST') throw err;
+
+      // Lock file exists — re-read and check staleness
+      const existing = readLock(lockPath);
+      if (existing && !isStale(existing)) {
+        throw new Error(
+          `Orchestrator lock is held by PID ${existing.pid} (started ${existing.startedAt}). ` +
+            `If the process is not running, delete ${lockPath} manually or wait for TTL expiry.`,
+        );
+      }
+      // Stale or unreadable — remove and retry the atomic write
+      try {
+        fs.unlinkSync(lockPath);
+      } catch {
+        // Another process may have already removed it — proceed to retry
+      }
+    }
+  }
+
+  throw new Error(
+    `Failed to acquire orchestrator lock at ${lockPath} after ${MAX_LOCK_RETRIES} attempts.`,
+  );
 }
 
 /**

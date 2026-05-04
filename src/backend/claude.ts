@@ -15,10 +15,9 @@ export class ClaudeAdapter implements BackendAdapter {
   }
 
   async invoke(opts: InvokeOptions): Promise<InvokeResult> {
-    const args = [...this.baseArgs, ...(opts.extraArgs ?? [])];
+    const args = [...this.baseArgs, ...(opts.extraArgs ?? []), opts.prompt];
 
     const result = await execa(this.baseCmd, args, {
-      input: opts.prompt,
       cwd: opts.cwd,
       timeout: opts.timeoutMs,
       reject: false,

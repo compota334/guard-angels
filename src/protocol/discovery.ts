@@ -6,6 +6,9 @@ export interface DiscoveryContext {
   priorityFiles: Record<string, string>;
 }
 
+const MAX_PRIORITY_CHARS = 51200; // 50 KB total across all priority files
+const MAX_FILE_SNIPPET_CHARS = 5120; // 5 KB per individual file
+
 const PRIORITY_PATTERNS: RegExp[] = [
   /^README\./i,
   /^(index|main|mod|__init__)\./i,
@@ -44,7 +47,8 @@ export function buildDiscoveryContext(
   const priorityFiles: Record<string, string> = {};
   const all = readdirSync(territoryPath, { recursive: true, withFileTypes: true });
   let count = 0;
-  for (const pattern of PRIORITY_PATTERNS) {
+  let totalChars = 0;
+  outer: for (const pattern of PRIORITY_PATTERNS) {
     for (const entry of all) {
       if (entry.isDirectory()) continue;
       const name = entry.name;
@@ -52,16 +56,25 @@ export function buildDiscoveryContext(
         const full = join(entry.parentPath ?? territoryPath, name);
         try {
           const content = readFileSync(full, 'utf-8');
-          const snippet = content.split('\n').slice(0, 200).join('\n');
+          const raw = content.split('\n').slice(0, 200).join('\n');
+          const snippet =
+            raw.length > MAX_FILE_SNIPPET_CHARS
+              ? raw.slice(0, MAX_FILE_SNIPPET_CHARS) + '\n... (truncated)'
+              : raw;
+          if (totalChars + snippet.length > MAX_PRIORITY_CHARS) {
+            priorityFiles['_notice'] =
+              '(priority file budget exceeded; remaining files omitted)';
+            break outer;
+          }
           priorityFiles[relative(territoryPath, full)] = snippet;
+          totalChars += snippet.length;
           count++;
-          if (count >= 10) break;
+          if (count >= 10) break outer;
         } catch {
           /* skip unreadable files */
         }
       }
     }
-    if (count >= 10) break;
   }
   return { fileListing, priorityFiles };
 }

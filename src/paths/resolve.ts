@@ -1,5 +1,12 @@
+import { resolve as resolvePath } from 'node:path';
+
 const ROOT_ANGEL_ID = '_root';
 const ROOT_ANGEL_PATH = '.';
+
+// Sentinel used to verify decoded paths cannot escape the project root.
+// We resolve decoded IDs relative to this absolute path and confirm the
+// result still lives under it — catching any .. traversal attempts.
+const SAFE_ROOT = '/safe_root_sentinel';
 
 /**
  * Convert an angel ID to the folder path it represents.
@@ -33,6 +40,19 @@ export function angelIdToPath(id: string): string {
       result += id[i];
       i += 1;
     }
+  }
+  // Reject any decoded path that contains ".." segments
+  if (result.split('/').some((seg) => seg === '..')) {
+    throw new Error(
+      `Angel ID "${id}" decodes to a path with ".." segments: "${result}"`,
+    );
+  }
+  // Resolve against a sentinel root and verify the result stays within it
+  const resolved = resolvePath(SAFE_ROOT, result);
+  if (resolved !== SAFE_ROOT && !resolved.startsWith(SAFE_ROOT + '/')) {
+    throw new Error(
+      `Angel ID "${id}" decodes to a path that escapes the project root: "${result}"`,
+    );
   }
   return result;
 }

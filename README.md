@@ -16,52 +16,72 @@ You keep using your normal AI coding CLI (Claude Code, Codex, etc.) as the "main
 
 All state lives on disk inside `.angels/`, committed to git. No database, no service, no web UI.
 
-### The two-phase protocol
+### Protocol phases
 
-1. **REVIEW** — `angels brief <angel-id> "<task>"` sends the task to the angel. The angel reads its charter, the code, and the brief, then responds with `proceed`, `concerns`, or `refuse`. No files are modified.
-2. **EXECUTE** — `angels execute <angel-id> <brief-path>` re-invokes the angel with approval. The angel makes the changes, updates its `angel.md`, sends cables to affected angels, and reports what it did.
+Angels operate in five phases:
+
+1. **INIT** — `angels init` bootstraps `.angels/` and writes blank `angel.md` templates. For greenfield projects with no existing code.
+2. **DISCOVERY** — `angels onboard` reads an existing codebase and synthesizes a real `angel.md` per angel. AI-heavy; priority files (READMEs, entry points, type definitions, tests) are pre-read and passed inline.
+3. **REVIEW** — `angels brief <angel-id> "<task>"` sends the task to the angel. The angel reads its charter, the code, and the brief, then responds with `proceed`, `concerns`, or `refuse`. No files are modified.
+4. **EXECUTE** — `angels execute <angel-id> <brief-path>` re-invokes the angel with approval. The angel makes the changes, updates its `angel.md`, sends cables to affected angels, and reports what it did.
+5. **SWEEP** — `angels sweep` wakes every active angel in maintenance mode. Angels review their territory for drift and may send cables. Report-only in v1.
 
 ## Quickstart
 
+### New project
+
 ```bash
-# 1. Bootstrap angels in your project
 cd your-project
 angels init              # interactive: pick which folders get angels
 # or: angels init --auto   (accept all heuristic candidates)
 # or: angels init --manual (you name the folders explicitly)
+```
 
-# 1b. For existing codebases, bootstrap angel context from source (DISCOVERY phase)
-angels onboard                          # onboard all registered angels
+### Existing project (recommended for most users)
+
+If your project already has code, run DISCOVERY to bootstrap angel context from the source:
+
+```bash
+cd your-project
+angels init                             # create .angels/ structure
+angels onboard                          # run DISCOVERY on all angels
 # or: angels onboard --angel src-auth   (single angel only)
 # or: angels onboard --force            (overwrite active angels without prompting)
-# Review the generated angel.md files, then activate:
-angels activate --all                   # promote all draft angels to active
-# or: angels activate src-auth          (promote a single angel)
 
-# 2. See what was created
+# Review the generated angel.md files, then promote to active:
+angels activate --all
+# or: angels activate src-auth          (promote a single angel)
+```
+
+`init` detects substantial existing code and prints a reminder to run `onboard`. The two steps are kept separate so you can review which folders get angels before committing to DISCOVERY.
+
+### Day-to-day workflow
+
+```bash
+# See what was created
 angels list
 
-# 3. Add an angel for a folder you missed
+# Add an angel for a folder you missed
 angels create src/payments
 
-# 4a. Delegate a change to an angel (two-phase: review then execute)
+# Delegate a change to an angel (REVIEW then EXECUTE)
 angels brief src-auth "Add rate limiting to the login endpoint"
 # Review the angel's response (concerns, proposed plan, questions)
 
-# 5. If the angel said "proceed", execute
+# If the angel said "proceed", execute
 angels execute src-auth .angels/_briefs/src-auth/2026-04-28T1432-001.md
 
-# 4b. Or skip the two phases with a single command
+# Or skip the two phases with a single command
 angels do src-auth "Add rate limiting to the login endpoint"
 # Runs brief then execute automatically; aborts if angel raises concerns or refuses
 
-# 6. After a batch of changes, let angels update their memory and flag drift
+# After a batch of changes, let angels update their memory and flag drift
 angels sweep
 
-# 7. Read what happened
+# Read what happened
 angels newspaper --since=2026-04-28T00:00:00Z
 
-# 8. Periodic health check
+# Periodic health check
 angels doctor
 angels doctor --archive --older-than=30
 ```
@@ -117,6 +137,7 @@ Supported backends (auto-detected from the first token of `angel_cmd`):
 
 ```
 .angels/
+├── .gitignore           # Auto-created by init; excludes ephemeral dirs
 ├── _config.yml          # Project configuration
 ├── _newspaper.md        # Append-only event log
 ├── _briefs/             # Outgoing briefs (main → angels)
@@ -139,7 +160,7 @@ Supported backends (auto-detected from the first token of `angel_cmd`):
         └── angel.md
 ```
 
-Angel IDs mirror the folder path with `/` replaced by `-`. So `src/auth` becomes `src-auth`. The root angel is `_root`.
+Angel IDs mirror the folder path: `/` → `-`, literal `-` in a segment name → `--`. So `src/auth` → `src-auth`, `src/my-component` → `src-my--component`. The root angel is `_root`.
 
 ## Global flags
 

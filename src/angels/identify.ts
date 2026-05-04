@@ -1,5 +1,8 @@
-import { readdir } from 'node:fs/promises';
+import { readdir, realpath } from 'node:fs/promises';
 import { join, basename, relative } from 'node:path';
+
+const MAX_DEPTH = 10;
+const MAX_RESULTS = 200;
 
 /**
  * Folders to skip during candidate identification.
@@ -129,7 +132,13 @@ export async function identifyCandidates(
   }
 
   const candidates: FolderCandidate[] = [];
-  await walkDir(projectRoot, projectRoot, skipSet, candidates);
+  const visited = new Set<string>();
+  await walkDir(projectRoot, projectRoot, skipSet, candidates, 0, visited);
+  if (candidates.length >= MAX_RESULTS) {
+    console.warn(
+      `[guard-angel] identifyCandidates: result cap of ${MAX_RESULTS} reached; some folders may be omitted`,
+    );
+  }
   return candidates;
 }
 
@@ -138,7 +147,21 @@ async function walkDir(
   projectRoot: string,
   skipSet: Set<string>,
   candidates: FolderCandidate[],
+  depth: number,
+  visited: Set<string>,
 ): Promise<void> {
+  if (depth > MAX_DEPTH) return;
+  if (candidates.length >= MAX_RESULTS) return;
+
+  let real: string;
+  try {
+    real = await realpath(currentDir);
+  } catch {
+    return;
+  }
+  if (visited.has(real)) return;
+  visited.add(real);
+
   let entries;
   try {
     entries = await readdir(currentDir, { withFileTypes: true });
@@ -197,7 +220,8 @@ async function walkDir(
 
   // Recurse into subdirectories
   for (const subdir of subdirs) {
-    await walkDir(subdir, projectRoot, skipSet, candidates);
+    if (candidates.length >= MAX_RESULTS) break;
+    await walkDir(subdir, projectRoot, skipSet, candidates, depth + 1, visited);
   }
 }
 

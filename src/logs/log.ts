@@ -90,6 +90,7 @@ export interface LogMeta {
   startedAt: string;
   finishedAt: string;
   timedOut: boolean;
+  spawnError?: boolean;
 }
 
 /**
