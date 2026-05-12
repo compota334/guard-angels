@@ -5,6 +5,7 @@ import { stringify as stringifyYaml } from 'yaml';
 import { identifyCandidates, type FolderCandidate } from '../angels/identify.js';
 import { createAngelDraft } from '../angels/draft.js';
 import { DEFAULT_BACKEND_CMD, DEFAULT_TIMEOUT_SECONDS, DEFAULT_SWEEP_AUTONOMY } from '../config/defaults.js';
+import { loadConfig } from '../config/load.js';
 import type { Config, AngelEntry } from '../config/schema.js';
 import {
   angelsRoot,
@@ -18,6 +19,7 @@ import {
   logsDir,
   cursorsDir,
   archiveDir,
+  angelMdFile,
 } from '../paths/layout.js';
 import { pathToAngelId } from '../paths/resolve.js';
 
@@ -34,12 +36,28 @@ export interface InitOptions {
  * --manual: skips heuristics entirely; user manually enters folder paths.
  */
 export async function initAngels(cwd: string, opts: InitOptions): Promise<void> {
-  // Guard against re-initialization
+  // Guard against re-initialization, with recovery mode for missing angel.md files
   const cfgPath = configFile(cwd);
   if (fs.existsSync(cfgPath)) {
-    throw new Error(
-      `.angels/_config.yml already exists at ${cfgPath}\nProject is already initialized. Use "angels create <path>" to add new angels.`,
-    );
+    const existingConfig = loadConfig(cwd);
+    const missingEntries: AngelEntry[] = [];
+    for (const entry of existingConfig.angels) {
+      const angelPath = entry.type === 'root' ? '_root' : entry.path;
+      if (!fs.existsSync(angelMdFile(cwd, angelPath))) {
+        missingEntries.push(entry);
+      }
+    }
+    if (missingEntries.length === 0) {
+      throw new Error(
+        `.angels/_config.yml already exists at ${cfgPath}\nProject is already initialized. Use "angels create <path>" to add new angels.`,
+      );
+    }
+    console.log(`Recovery mode: ${missingEntries.length} angel(s) missing angel.md. Recreating drafts...`);
+    for (const entry of missingEntries) {
+      await createAngelDraft(existingConfig, entry, cwd);
+    }
+    console.log('\nRecovery complete.');
+    return;
   }
 
   if (opts.auto && opts.manual) {

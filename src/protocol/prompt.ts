@@ -146,7 +146,9 @@ You are being invoked in maintenance/sweep mode. Your tasks:
 6. Send cables to other angels if you detect issues that affect them.
 
 This is a report-only pass. You should NOT make changes to source code.
-You may update your own angel.md and send cables, but do not modify other code.`,
+You may update your own angel.md and send cables, but do not modify other code.
+
+SWEEP is read-only. Do NOT run rm, mv, or write files outside angel.md. The orchestrator already verified the state before invoking you. Your job is to REPORT drift, not fix it or verify it destructively.`,
 };
 
 export function buildPrompt(input: PromptInput): string {

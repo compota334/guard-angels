@@ -12,6 +12,7 @@ import { showInbox } from './commands/inbox.js';
 import { showNewspaper } from './commands/newspaper.js';
 import { sweepAngels } from './commands/sweep.js';
 import { runDoctor } from './commands/doctor.js';
+import { retireAngel } from './commands/retire.js';
 
 const program = new Command();
 
@@ -235,7 +236,8 @@ program
   .description('Wake every angel in maintenance mode (report-only in v1)')
   .option('--since <ref>', 'ISO timestamp to scope the newspaper delta')
   .option('--timeout <seconds>', 'Per-angel timeout in seconds (overrides config default)')
-  .action(async (options: { since?: string; timeout?: string }) => {
+  .option('--angel <id>', 'Sweep only this angel (by ID)')
+  .action(async (options: { since?: string; timeout?: string; angel?: string }) => {
     try {
       let timeoutSeconds: number | undefined;
       if (options.timeout !== undefined) {
@@ -246,7 +248,20 @@ program
           return;
         }
       }
-      const exitCode = await sweepAngels(process.cwd(), { since: options.since, timeoutSeconds });
+      const exitCode = await sweepAngels(process.cwd(), { since: options.since, timeoutSeconds, angel: options.angel });
+      process.exit(exitCode);
+    } catch (err: unknown) {
+      handleError(err, 1);
+    }
+  });
+
+program
+  .command('retire')
+  .argument('<angel-id>', 'Angel identifier to retire')
+  .description('Archive and remove an angel from the project')
+  .action(async (angelId: string) => {
+    try {
+      const exitCode = await retireAngel(process.cwd(), angelId);
       process.exit(exitCode);
     } catch (err: unknown) {
       handleError(err, 1);
