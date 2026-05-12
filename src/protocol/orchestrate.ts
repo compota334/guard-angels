@@ -78,7 +78,7 @@ export async function invoke(
   const lockTtlMs = timeoutMs + LOCK_TTL_PADDING_MS;
 
   // 1. Acquire lock
-  acquireLock(projectRoot, lockTtlMs);
+  acquireLock(projectRoot, lockTtlMs, input.angelId);
 
   try {
     // FIX 6: timestamp inside try so it's in scope for all log/response helpers
@@ -259,7 +259,7 @@ export async function invoke(
     };
   } finally {
     // 12. Always release the lock
-    releaseLock(projectRoot);
+    releaseLock(projectRoot, input.angelId);
   }
 }
 

@@ -18,10 +18,11 @@ export interface LockInfo {
  *
  * Returns the lock file path on success.
  */
-export function acquireLock(projectRoot: string, ttlMs: number): string {
+export function acquireLock(projectRoot: string, ttlMs: number, scope?: string): string {
   const dir = locksDir(projectRoot);
   fs.mkdirSync(dir, { recursive: true });
-  const lockPath = path.join(dir, LOCK_FILENAME);
+  const lockFileName = scope ? `orchestrator-${scope}.lock` : LOCK_FILENAME;
+  const lockPath = path.join(dir, lockFileName);
 
   const info: LockInfo = {
     pid: process.pid,
@@ -65,8 +66,9 @@ export function acquireLock(projectRoot: string, ttlMs: number): string {
  * Release the orchestrator lock.
  * Only removes the lock file if it is still owned by the current process.
  */
-export function releaseLock(projectRoot: string): void {
-  const lockPath = path.join(locksDir(projectRoot), LOCK_FILENAME);
+export function releaseLock(projectRoot: string, scope?: string): void {
+  const lockFileName = scope ? `orchestrator-${scope}.lock` : LOCK_FILENAME;
+  const lockPath = path.join(locksDir(projectRoot), lockFileName);
   const existing = readLock(lockPath);
   if (!existing) return;
 

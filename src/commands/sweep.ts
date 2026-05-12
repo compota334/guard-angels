@@ -43,13 +43,13 @@ export async function sweepAngels(
   const results: AngelSweepResult[] = [];
   let hasError = false;
 
-  for (const angel of allAngels) {
-    console.log(`--- Sweeping: ${angel.id} ---`);
+  const SWEEP_CONCURRENCY = 5;
 
+  const sweepOne = async (angel: { id: string }): Promise<void> => {
+    console.log(`--- Sweeping: ${angel.id} ---`);
     try {
       const result = await sweepSingleAngel(cwd, angel.id, options);
       results.push(result);
-
       if (result.response.response === 'error') {
         hasError = true;
       }
@@ -61,8 +61,11 @@ export async function sweepAngels(
       }
       hasError = true;
     }
-
     console.log('');
+  };
+
+  for (let i = 0; i < allAngels.length; i += SWEEP_CONCURRENCY) {
+    await Promise.allSettled(allAngels.slice(i, i + SWEEP_CONCURRENCY).map(sweepOne));
   }
 
   // Print summary
