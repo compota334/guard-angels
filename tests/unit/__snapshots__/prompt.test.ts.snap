@@ -116,6 +116,23 @@ Format rules:
 - CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
 - RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or any other string will fail the parser.
 - Phase guide: discovery / init / execute / sweep → RESPONSE: done. review → RESPONSE: proceed | concerns | refuse.
+
+When sending cables to other angels, write .md files directly to .angels/_inbox/<receiver-angel-id>/. Do NOT use markdown headers (# ##). Use EXACTLY this format — deviations will break the receiver's inbox:
+
+FROM: <your-angel-id>
+TO: <receiver-angel-id>
+TIMESTAMP: <ISO-8601>
+TYPE: <one of: breaking_change | fyi | review_request | invariant_violation>
+URGENCY: <one of: high | normal | low>
+SUBJECT: <one-line summary - NEVER put body content here>
+REQUIRES_ACK: <true | false>
+
+BODY:
+<multi-line body>
+
+REFERENCES:
+- <optional ref 1>
+- <optional ref 2>
 When done, exit. Do not loop or wait for input."
 `;
 
@@ -235,6 +252,23 @@ Format rules:
 - CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
 - RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or any other string will fail the parser.
 - Phase guide: discovery / init / execute / sweep → RESPONSE: done. review → RESPONSE: proceed | concerns | refuse.
+
+When sending cables to other angels, write .md files directly to .angels/_inbox/<receiver-angel-id>/. Do NOT use markdown headers (# ##). Use EXACTLY this format — deviations will break the receiver's inbox:
+
+FROM: <your-angel-id>
+TO: <receiver-angel-id>
+TIMESTAMP: <ISO-8601>
+TYPE: <one of: breaking_change | fyi | review_request | invariant_violation>
+URGENCY: <one of: high | normal | low>
+SUBJECT: <one-line summary - NEVER put body content here>
+REQUIRES_ACK: <true | false>
+
+BODY:
+<multi-line body>
+
+REFERENCES:
+- <optional ref 1>
+- <optional ref 2>
 When done, exit. Do not loop or wait for input."
 `;
 
@@ -344,6 +378,23 @@ Format rules:
 - CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
 - RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or any other string will fail the parser.
 - Phase guide: discovery / init / execute / sweep → RESPONSE: done. review → RESPONSE: proceed | concerns | refuse.
+
+When sending cables to other angels, write .md files directly to .angels/_inbox/<receiver-angel-id>/. Do NOT use markdown headers (# ##). Use EXACTLY this format — deviations will break the receiver's inbox:
+
+FROM: <your-angel-id>
+TO: <receiver-angel-id>
+TIMESTAMP: <ISO-8601>
+TYPE: <one of: breaking_change | fyi | review_request | invariant_violation>
+URGENCY: <one of: high | normal | low>
+SUBJECT: <one-line summary - NEVER put body content here>
+REQUIRES_ACK: <true | false>
+
+BODY:
+<multi-line body>
+
+REFERENCES:
+- <optional ref 1>
+- <optional ref 2>
 When done, exit. Do not loop or wait for input."
 `;
 
@@ -442,6 +493,23 @@ Format rules:
 - CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
 - RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or any other string will fail the parser.
 - Phase guide: discovery / init / execute / sweep → RESPONSE: done. review → RESPONSE: proceed | concerns | refuse.
+
+When sending cables to other angels, write .md files directly to .angels/_inbox/<receiver-angel-id>/. Do NOT use markdown headers (# ##). Use EXACTLY this format — deviations will break the receiver's inbox:
+
+FROM: <your-angel-id>
+TO: <receiver-angel-id>
+TIMESTAMP: <ISO-8601>
+TYPE: <one of: breaking_change | fyi | review_request | invariant_violation>
+URGENCY: <one of: high | normal | low>
+SUBJECT: <one-line summary - NEVER put body content here>
+REQUIRES_ACK: <true | false>
+
+BODY:
+<multi-line body>
+
+REFERENCES:
+- <optional ref 1>
+- <optional ref 2>
 When done, exit. Do not loop or wait for input."
 `;
 
@@ -550,6 +618,23 @@ Format rules:
 - CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
 - RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or any other string will fail the parser.
 - Phase guide: discovery / init / execute / sweep → RESPONSE: done. review → RESPONSE: proceed | concerns | refuse.
+
+When sending cables to other angels, write .md files directly to .angels/_inbox/<receiver-angel-id>/. Do NOT use markdown headers (# ##). Use EXACTLY this format — deviations will break the receiver's inbox:
+
+FROM: <your-angel-id>
+TO: <receiver-angel-id>
+TIMESTAMP: <ISO-8601>
+TYPE: <one of: breaking_change | fyi | review_request | invariant_violation>
+URGENCY: <one of: high | normal | low>
+SUBJECT: <one-line summary - NEVER put body content here>
+REQUIRES_ACK: <true | false>
+
+BODY:
+<multi-line body>
+
+REFERENCES:
+- <optional ref 1>
+- <optional ref 2>
 When done, exit. Do not loop or wait for input."
 `;
 
@@ -661,5 +746,22 @@ Format rules:
 - CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
 - RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or any other string will fail the parser.
 - Phase guide: discovery / init / execute / sweep → RESPONSE: done. review → RESPONSE: proceed | concerns | refuse.
+
+When sending cables to other angels, write .md files directly to .angels/_inbox/<receiver-angel-id>/. Do NOT use markdown headers (# ##). Use EXACTLY this format — deviations will break the receiver's inbox:
+
+FROM: <your-angel-id>
+TO: <receiver-angel-id>
+TIMESTAMP: <ISO-8601>
+TYPE: <one of: breaking_change | fyi | review_request | invariant_violation>
+URGENCY: <one of: high | normal | low>
+SUBJECT: <one-line summary - NEVER put body content here>
+REQUIRES_ACK: <true | false>
+
+BODY:
+<multi-line body>
+
+REFERENCES:
+- <optional ref 1>
+- <optional ref 2>
 When done, exit. Do not loop or wait for input."
 `;

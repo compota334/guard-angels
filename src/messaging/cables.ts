@@ -2,6 +2,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -10,6 +11,7 @@ import {
   extractRequiredField,
   extractSection,
 } from '../protocol/parser-utils.js';
+import { appendNewspaper } from './newspaper.js';
 
 export type CableType =
   | 'breaking_change'
@@ -113,10 +115,15 @@ export function readInbox(
     try {
       cables.push(parseCableContent(raw, filePath));
     } catch (err: unknown) {
-      throw new Error(
-        `Failed to parse cable file at ${filePath}. Fix or remove the file before reading the inbox again.`,
-        { cause: err },
-      );
+      const quarantineDir = join(dir, '_quarantine');
+      mkdirSync(quarantineDir, { recursive: true });
+      renameSync(filePath, join(quarantineDir, entry));
+      appendNewspaper(projectRoot, {
+        timestamp: new Date().toISOString(),
+        angelId,
+        summary: `Malformed cable quarantined: ${entry}`,
+        details: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 

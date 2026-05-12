@@ -1,5 +1,25 @@
 export type PromptPhase = 'init' | 'discovery' | 'review' | 'execute' | 'sweep';
 
+const CABLE_FORMAT_TEMPLATE = `\
+When sending cables to other angels, write .md files directly to \
+.angels/_inbox/<receiver-angel-id>/. Do NOT use markdown headers (# ##). \
+Use EXACTLY this format — deviations will break the receiver's inbox:
+
+FROM: <your-angel-id>
+TO: <receiver-angel-id>
+TIMESTAMP: <ISO-8601>
+TYPE: <one of: breaking_change | fyi | review_request | invariant_violation>
+URGENCY: <one of: high | normal | low>
+SUBJECT: <one-line summary - NEVER put body content here>
+REQUIRES_ACK: <true | false>
+
+BODY:
+<multi-line body>
+
+REFERENCES:
+- <optional ref 1>
+- <optional ref 2>`;
+
 const RESPONSE_FORMAT = `\
 Write your response file at the path above. Use EXACTLY this format — no markdown headers \
 (no #, ##, **), no invented fields. Parser is strict; any deviation causes parse failure.
@@ -200,6 +220,8 @@ export function buildPrompt(input: PromptInput): string {
   sections.push('[OUTPUT INSTRUCTIONS]');
   sections.push(`Write your response to: ${input.responsePath}`);
   sections.push(RESPONSE_FORMAT);
+  sections.push('');
+  sections.push(CABLE_FORMAT_TEMPLATE);
   sections.push('When done, exit. Do not loop or wait for input.');
 
   return sections.join('\n');

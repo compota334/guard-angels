@@ -354,16 +354,22 @@ describe('readInbox', () => {
     expect(cables).toHaveLength(1);
   });
 
-  it('throws on a malformed cable file (no silent skip)', () => {
+  it('quarantines malformed cable files instead of throwing', () => {
     writeCable(tmpDir, makeCable());
     // Add a malformed .md file
     const inDir = path.join(tmpDir, '.angels', '_inbox', 'src-auth');
     const badPath = path.join(inDir, 'bad-cable.md');
     fs.writeFileSync(badPath, 'this is not a valid cable', 'utf-8');
 
-    expect(() => readInbox(tmpDir, 'src-auth')).toThrowError(
-      /Failed to parse cable file at .*bad-cable\.md/,
-    );
+    // Should not throw; malformed file gets quarantined
+    const cables = readInbox(tmpDir, 'src-auth');
+    // Only the valid cable is returned
+    expect(cables).toHaveLength(1);
+    // Malformed file moved to quarantine, no longer in inbox
+    expect(fs.existsSync(badPath)).toBe(false);
+    expect(
+      fs.existsSync(path.join(inDir, '_quarantine', 'bad-cable.md')),
+    ).toBe(true);
   });
 
   it('reads multiple cables from different senders', () => {
