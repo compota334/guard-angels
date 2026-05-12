@@ -4,8 +4,13 @@ CLI orchestrator that gives each significant folder in your codebase its own per
 
 ## Install
 
+Guard Angels is not published to npm. Build from source:
+
 ```bash
-npm install -g @guard-angels/cli
+cd /path/to/guard-angel   # wherever you placed the source
+npm install
+npm run build
+npm install -g .
 ```
 
 Requires Node.js >= 22.
@@ -66,10 +71,10 @@ angels create src/payments
 
 # Delegate a change to an angel (REVIEW then EXECUTE)
 angels brief src-auth "Add rate limiting to the login endpoint"
-# Review the angel's response (concerns, proposed plan, questions)
+# Prints the brief path and the angel's response (verdict, concerns, proposed plan)
 
-# If the angel said "proceed", execute
-angels execute src-auth .angels/_briefs/src-auth/2026-04-28T1432-001.md
+# If the angel said "proceed", execute — pass the brief path printed above
+angels execute src-auth .angels/_briefs/src-auth/2026-05-12T1432-001.md
 
 # Or skip the two phases with a single command
 angels do src-auth "Add rate limiting to the login endpoint"
@@ -103,6 +108,48 @@ angels doctor --archive --older-than=30
 | `angels newspaper [--since=<iso>]` | Print newspaper entries (append-only log). Records cable, brief, execute, and sweep events. |
 | `angels sweep [--since=<iso>] [--timeout=<seconds>]` | Wake every angel in maintenance mode. `--timeout` caps each angel invocation; default from config. Report-only in v1. |
 | `angels doctor [--archive] [--older-than=N]` | Health check: orphaned angels, missing angels, stale locks, stale drafts. `--archive` moves old files to `_archive/`. |
+
+## Response format
+
+`angels brief` prints the brief path, then the angel's structured response:
+
+```
+Brief written to: .angels/_briefs/src-auth/2026-05-12T1432-001.md
+
+=== Angel Response: PROCEED ===
+
+PROPOSED PLAN:
+  1. Add a token-bucket middleware in src/auth/rateLimit.ts
+  2. Wire it into the login route
+  ...
+
+QUESTIONS FOR MAIN:
+  Should the limit be configurable per tenant?
+
+Response file: .angels/_responses/src-auth/2026-05-12T1432-001.md
+```
+
+Possible verdicts: `PROCEED` (exit 0), `CONCERNS` (exit 1), `REFUSE` (exit 2). When the angel raises concerns the response includes a `CONCERNS` block; when it refuses it explains why in `CONCERNS`.
+
+`angels execute` prints the execution result:
+
+```
+Execute brief written to: .angels/_briefs/src-auth/2026-05-12T1433-001.md
+
+=== Execute Result: DONE ===
+
+FILES CHANGED:
+  src/auth/rateLimit.ts, src/auth/login.ts
+
+angel.md was updated.
+
+CABLES SENT:
+  src-api: fyi
+
+Response file: .angels/_responses/src-auth/2026-05-12T1433-001.md
+```
+
+If the angel wrote files outside its territory, a `WARNING: Out-of-territory writes detected` block appears and is also logged to the newspaper.
 
 ## Backend configuration
 
