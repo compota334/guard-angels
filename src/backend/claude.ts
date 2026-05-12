@@ -21,6 +21,13 @@ export class ClaudeAdapter implements BackendAdapter {
       cwd: opts.cwd,
       timeout: opts.timeoutMs,
       reject: false,
+      stdin: 'ignore',
+      env: {
+        ...process.env,
+        CLAUDECODE: '',
+        CLAUDE_CODE_ENTRYPOINT: '',
+        CLAUDE_CODE_EXECPATH: '',
+      },
     });
 
     const sessionId = this.extractSessionId(result.stdout);

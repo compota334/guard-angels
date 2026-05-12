@@ -157,6 +157,15 @@ export async function invoke(
       // Write to log files
       logs.appendStdout(stdout);
       logs.appendStderr(stderr);
+
+      // When execa runs with reject:false, a timeout delivers SIGTERM and returns
+      // exitCode 143 rather than throwing. Detect by exit code + wall-clock duration.
+      const durationMs = Date.now() - new Date(timestamp).getTime();
+      if ((exitCode === 143 || exitCode === 124) && durationMs >= timeoutMs - 1_000) {
+        timedOut = true;
+        exitCode = 124;
+        logs.appendStderr(`Angel invocation timed out after ${resolvedTimeoutSeconds} seconds`);
+      }
     } catch (err: unknown) {
       // FIX 6: execa >=8 sets timedOut=true on the error object when --timeout expires
       if (isTimeoutError(err)) {

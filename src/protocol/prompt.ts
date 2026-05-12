@@ -1,5 +1,46 @@
 export type PromptPhase = 'init' | 'discovery' | 'review' | 'execute' | 'sweep';
 
+const RESPONSE_FORMAT = `\
+Write your response file at the path above. Use EXACTLY this format — no markdown headers \
+(no #, ##, **), no invented fields. Parser is strict; any deviation causes parse failure.
+
+FROM: <your angel ID>
+TIMESTAMP: <ISO-8601, e.g. 2026-05-12T14:32:00.000Z>
+RESPONSE: <exactly one of: proceed | concerns | refuse | done | error>
+
+CONCERNS:
+<body — leave blank if none>
+
+PROPOSED PLAN:
+<body — leave blank if none>
+
+QUESTIONS FOR MAIN:
+<body — leave blank if none>
+
+PROCEED IF:
+<body — leave blank if none>
+
+TEST_RESULTS:
+<body — leave blank if none>
+
+DRIFT REPORT:
+<body — leave blank if none>
+
+Include the following three lines ONLY when RESPONSE is "done":
+CABLES SENT: <none | comma-separated angel IDs>
+FILES CHANGED: <none | comma-separated relative paths>
+ANGEL_MD_UPDATED: <yes | no>
+
+Format rules:
+- FROM / TIMESTAMP / RESPONSE / CABLES SENT / FILES CHANGED / ANGEL_MD_UPDATED: single-line \
+"FIELD: value" — value on the same line as the field name.
+- CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: \
+header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
+- RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or \
+any other string will fail the parser.
+- Phase guide: discovery / init / execute / sweep → RESPONSE: done. \
+review → RESPONSE: proceed | concerns | refuse.`;
+
 export interface PromptInput {
   phase: PromptPhase;
   angelId: string;
@@ -158,7 +199,7 @@ export function buildPrompt(input: PromptInput): string {
   sections.push('');
   sections.push('[OUTPUT INSTRUCTIONS]');
   sections.push(`Write your response to: ${input.responsePath}`);
-  sections.push('Use the standard response format (FROM, TIMESTAMP, RESPONSE, sections for CONCERNS/PROPOSED PLAN/QUESTIONS FOR MAIN/PROCEED IF/TEST_RESULTS, and done-only fields CABLES SENT/FILES CHANGED/ANGEL_MD_UPDATED).');
+  sections.push(RESPONSE_FORMAT);
   sections.push('When done, exit. Do not loop or wait for input.');
 
   return sections.join('\n');
