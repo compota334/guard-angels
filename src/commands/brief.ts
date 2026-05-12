@@ -65,6 +65,15 @@ export async function briefAngel(
   // 5. Print human-readable summary
   printResponseSummary(result.response, result.responsePath);
 
+  console.log('');
+  console.log('----------------------------------------');
+  console.log('NEXT STEP: angels execute ' + angelId + ' ' + briefPath);
+  console.log('');
+  console.log('DO NOT make these changes manually.');
+  console.log('angel.md will not be updated and the audit trail');
+  console.log('(cables, newspaper, FILES CHANGED) will be lost.');
+  console.log('----------------------------------------');
+
   // 6. Return exit code based on the response verdict
   return EXIT_CODES[result.response.response];
 }

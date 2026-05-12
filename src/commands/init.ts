@@ -144,6 +144,50 @@ export async function initAngels(cwd: string, opts: InitOptions): Promise<void> 
     await createAngelDraft(config, entry, cwd);
   }
 
+  // Write AGENTS.md to project root if not already present
+  const agentsMdPath = join(cwd, 'AGENTS.md');
+  if (fs.existsSync(agentsMdPath)) {
+    const existing = fs.readFileSync(agentsMdPath, 'utf-8');
+    if (!existing.includes('Guard Angels') && !existing.includes('angels brief')) {
+      console.log(
+        'AGENTS.md already exists. Add Guard Angels orchestrator rules manually from README Main-agent prompt addendum.',
+      );
+    }
+  } else {
+    fs.writeFileSync(
+      agentsMdPath,
+      [
+        '# Guard Angels - orchestrator rules',
+        '',
+        'This project uses Guard Angels. Significant folders have angels that own',
+        'their territory. Manual edits inside an angel\'s territory are FORBIDDEN.',
+        'They will leave angel.md stale, skip cable emission, and break the audit',
+        'trail (newspaper, FILES CHANGED record).',
+        '',
+        'Before editing any code:',
+        '',
+        '1. Check angels list to see which folders have angels.',
+        '2. For changes inside an angel\'s folder: do NOT edit directly. Use',
+        '   angels brief <angel-id> "<task>" to delegate. Review the response.',
+        '   If the angel proceeds, run angels execute <angel-id> <brief-path>.',
+        '   If the angel raises concerns, address them before executing.',
+        '3. Even if the plan seems deterministic or mechanical, you MUST use',
+        '   angels execute. The angel\'s role is not just review - it also writes',
+        '   its own memory updates. Bypassing execute corrupts the project\'s',
+        '   institutional knowledge.',
+        '4. For changes spanning multiple folders: brief each affected angel',
+        '   sequentially.',
+        '5. After a batch of changes: run angels sweep.',
+        '6. Read angels newspaper regularly.',
+        '',
+        'The angel.md files are authoritative documentation - read them before',
+        'asking the user about folder-level decisions.',
+      ].join('\n') + '\n',
+      'utf-8',
+    );
+    console.log(`Created ${agentsMdPath}`);
+  }
+
   console.log(`\nInitialized ${angelEntries.length} angel(s). Run "angels list" to see them.`);
 }
 

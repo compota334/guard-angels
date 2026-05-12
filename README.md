@@ -264,21 +264,28 @@ Add this to your project's `CLAUDE.md` (or equivalent) so the main agent knows h
 
 ```
 This project uses Guard Angels. Significant folders have angels that own
-their territory. Before editing code, check `angels list` and:
+their territory. Manual edits inside an angel's territory are FORBIDDEN.
+They leave angel.md stale, skip cable emission, and break the audit trail
+(newspaper, FILES CHANGED record).
 
-1. For changes inside an angel's folder: do NOT edit directly. Use
+Before editing any code:
+
+1. Check `angels list` to see which folders have angels.
+2. For changes inside an angel's folder: do NOT edit directly. Use
    `angels brief <angel-id> "<task>"` to delegate. Review the response.
    If the angel proceeds, run `angels execute <angel-id> <brief-path>`.
-2. For changes spanning multiple folders: brief each affected angel
-   sequentially. Coordinate based on their responses.
-3. For changes to root files (package.json, configs): brief the _root angel.
-4. After a batch of changes: run `angels sweep` to let angels update their
-   memory and flag drift.
-5. Read `angels newspaper --since=<last-check>` periodically to stay current.
+   If the angel raises concerns, address them before executing.
+3. Even if the plan seems deterministic or mechanical, you MUST use
+   `angels execute`. The angel's role is not just review - it also writes
+   its own memory updates. Bypassing execute corrupts the project's
+   institutional knowledge.
+4. For changes spanning multiple folders: brief each affected angel
+   sequentially.
+5. After a batch of changes: run `angels sweep`.
+6. Read `angels newspaper` regularly.
 
-The angel.md files in `.angels/` are authoritative documentation. If you
-need to understand why something exists, read the relevant angel.md before
-asking the user.
+The angel.md files in `.angels/` are authoritative documentation. Read them
+before asking the user about folder-level decisions.
 ```
 
 ## Composing with Ralph
@@ -288,11 +295,14 @@ Guard Angels is designed to work inside a [Ralph](https://github.com/compota334/
 To use Guard Angels as the per-task delegate inside a Ralph loop, add this to your Ralph agent's prompt:
 
 ```
-When implementing a task that touches code inside an angel's folder, do NOT
-edit those files directly. Instead:
+When implementing a task that touches code inside an angel's folder, manual
+edits are FORBIDDEN. They leave angel.md stale, skip cable emission, and
+break the audit trail (newspaper, FILES CHANGED record). Instead:
 1. Run `angels brief <angel-id> "<task description>"` to get the angel's review.
-2. If the angel responds with "proceed", run `angels execute <angel-id> <brief-path>`.
-3. If the angel raises concerns, address them before proceeding.
+2. If the angel responds with "proceed", you MUST run
+   `angels execute <angel-id> <brief-path>`. Even if the plan looks mechanical,
+   bypass is FORBIDDEN - the angel also writes its own memory updates.
+3. If the angel raises concerns, address them before executing.
 4. After all changes, run `angels sweep` to let angels update their memory.
 5. Check `angels newspaper` for any cross-cutting issues flagged by angels.
 ```
