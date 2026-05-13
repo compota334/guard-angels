@@ -20,46 +20,65 @@ REFERENCES:
 - <optional ref 1>
 - <optional ref 2>`;
 
-const RESPONSE_FORMAT = `\
-Write your response file at the path above. Use EXACTLY this format — no markdown headers \
-(no #, ##, **), no invented fields. Parser is strict; any deviation causes parse failure.
+function getProposedPlanGuidance(phase: PromptPhase): string {
+  if (phase === 'discovery' || phase === 'init') {
+    return (
+      '<THE COMPLETE angel.md BODY — Charter, Public contract, Invariants, ' +
+      'Decision log, Open questions, Dependencies. No YAML frontmatter. No ' +
+      'surrounding code fences. This entire field is COPIED VERBATIM into ' +
+      'your angel.md by the orchestrator. Do NOT write angel.md directly — ' +
+      'put it here.>'
+    );
+  }
+  if (phase === 'review') return '<the plan you propose for executing the brief>';
+  if (phase === 'execute') return '<summary of what was actually done>';
+  return '<body — leave blank if none>';
+}
 
-FROM: <your angel ID>
-TIMESTAMP: <ISO-8601, e.g. 2026-05-12T14:32:00.000Z>
-RESPONSE: <exactly one of: proceed | concerns | refuse | done | error>
-
-CONCERNS:
-<body — leave blank if none>
-
-PROPOSED PLAN:
-<body — leave blank if none>
-
-QUESTIONS FOR MAIN:
-<body — leave blank if none>
-
-PROCEED IF:
-<body — leave blank if none>
-
-TEST_RESULTS:
-<body — leave blank if none>
-
-DRIFT REPORT:
-<body — leave blank if none>
-
-Include the following three lines ONLY when RESPONSE is "done":
-CABLES SENT: <none | comma-separated angel IDs>
-FILES CHANGED: <none | comma-separated relative paths>
-ANGEL_MD_UPDATED: <yes | no>
-
-Format rules:
-- FROM / TIMESTAMP / RESPONSE / CABLES SENT / FILES CHANGED / ANGEL_MD_UPDATED: single-line \
-"FIELD: value" — value on the same line as the field name.
-- CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: \
-header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
-- RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or \
-any other string will fail the parser.
-- Phase guide: discovery / init / execute / sweep → RESPONSE: done. \
-review → RESPONSE: proceed | concerns | refuse.`;
+function buildResponseFormat(phase: PromptPhase): string {
+  return (
+    'Write your response file at the path above. Use EXACTLY this format — no markdown headers ' +
+    '(no #, ##, **), no invented fields. Parser is strict; any deviation causes parse failure.\n' +
+    '\n' +
+    'FROM: <your angel ID>\n' +
+    'TIMESTAMP: <ISO-8601, e.g. 2026-05-12T14:32:00.000Z>\n' +
+    'RESPONSE: <exactly one of: proceed | concerns | refuse | done | error>\n' +
+    '\n' +
+    'CONCERNS:\n' +
+    '<body — leave blank if none>\n' +
+    '\n' +
+    'PROPOSED PLAN:\n' +
+    getProposedPlanGuidance(phase) +
+    '\n' +
+    '\n' +
+    'QUESTIONS FOR MAIN:\n' +
+    '<body — leave blank if none>\n' +
+    '\n' +
+    'PROCEED IF:\n' +
+    '<body — leave blank if none>\n' +
+    '\n' +
+    'TEST_RESULTS:\n' +
+    '<body — leave blank if none>\n' +
+    '\n' +
+    'DRIFT REPORT:\n' +
+    '<body — leave blank if none>\n' +
+    '\n' +
+    'Include the following three lines ONLY when RESPONSE is "done":\n' +
+    'CABLES SENT: <none | comma-separated angel IDs>\n' +
+    'FILES CHANGED: <none | comma-separated relative paths>\n' +
+    'ANGEL_MD_UPDATED: <yes | no>\n' +
+    '\n' +
+    'Format rules:\n' +
+    '- FROM / TIMESTAMP / RESPONSE / CABLES SENT / FILES CHANGED / ANGEL_MD_UPDATED: single-line ' +
+    '"FIELD: value" — value on the same line as the field name.\n' +
+    '- CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: ' +
+    'header alone on its own line (nothing after the colon), multi-line body on subsequent lines.\n' +
+    '- RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or ' +
+    'any other string will fail the parser.\n' +
+    '- Phase guide: discovery / init / execute / sweep → RESPONSE: done. ' +
+    'review → RESPONSE: proceed | concerns | refuse.'
+  );
+}
 
 export interface PromptInput {
   phase: PromptPhase;
@@ -221,7 +240,7 @@ export function buildPrompt(input: PromptInput): string {
   sections.push('');
   sections.push('[OUTPUT INSTRUCTIONS]');
   sections.push(`Write your response to: ${input.responsePath}`);
-  sections.push(RESPONSE_FORMAT);
+  sections.push(buildResponseFormat(input.phase));
   sections.push('');
   sections.push(CABLE_FORMAT_TEMPLATE);
   sections.push('When done, exit. Do not loop or wait for input.');

@@ -92,7 +92,7 @@ CONCERNS:
 <body — leave blank if none>
 
 PROPOSED PLAN:
-<body — leave blank if none>
+<the plan you propose for executing the brief>
 
 QUESTIONS FOR MAIN:
 <body — leave blank if none>
@@ -228,7 +228,7 @@ CONCERNS:
 <body — leave blank if none>
 
 PROPOSED PLAN:
-<body — leave blank if none>
+<the plan you propose for executing the brief>
 
 QUESTIONS FOR MAIN:
 <body — leave blank if none>
@@ -354,7 +354,7 @@ CONCERNS:
 <body — leave blank if none>
 
 PROPOSED PLAN:
-<body — leave blank if none>
+<summary of what was actually done>
 
 QUESTIONS FOR MAIN:
 <body — leave blank if none>
@@ -469,7 +469,7 @@ CONCERNS:
 <body — leave blank if none>
 
 PROPOSED PLAN:
-<body — leave blank if none>
+<THE COMPLETE angel.md BODY — Charter, Public contract, Invariants, Decision log, Open questions, Dependencies. No YAML frontmatter. No surrounding code fences. This entire field is COPIED VERBATIM into your angel.md by the orchestrator. Do NOT write angel.md directly — put it here.>
 
 QUESTIONS FOR MAIN:
 <body — leave blank if none>
@@ -594,7 +594,7 @@ CONCERNS:
 <body — leave blank if none>
 
 PROPOSED PLAN:
-<body — leave blank if none>
+<the plan you propose for executing the brief>
 
 QUESTIONS FOR MAIN:
 <body — leave blank if none>

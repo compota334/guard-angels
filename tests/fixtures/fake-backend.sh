@@ -225,7 +225,56 @@ RESPONSE
 
   echo "Fake sweep backend invoked. Verdict: ${VERDICT}"
 
-# --- REVIEW phase (default) and INIT phase ---
+# --- DISCOVERY / INIT phase ---
+elif [ "$PHASE" = "discovery" ] || [ "$PHASE" = "init" ]; then
+  VERDICT="${FAKE_BACKEND_VERDICT:-done}"
+
+  cat > "$RESPONSE_PATH" <<RESPONSE
+FROM: test-angel
+TIMESTAMP: ${TIMESTAMP}
+RESPONSE: ${VERDICT}
+
+CONCERNS:
+${CONCERNS}
+
+PROPOSED PLAN:
+## Charter
+Owns authentication and session management utilities for the project.
+
+## Public contract
+Exports session middleware and auth helpers consumed by the application layer.
+
+## Invariants
+- Session tokens must never be logged in plaintext.
+- Auth state is managed exclusively within this folder.
+
+## Decision log
+Initial discovery by fake backend.
+
+## Open questions
+
+## Dependencies
+None identified during fake discovery.
+
+QUESTIONS FOR MAIN:
+
+
+PROCEED IF:
+
+
+TEST_RESULTS:
+
+
+DRIFT REPORT:
+
+CABLES SENT: none
+FILES CHANGED: none
+ANGEL_MD_UPDATED: yes
+RESPONSE
+
+  echo "Fake discovery/init backend invoked. Verdict: ${VERDICT}"
+
+# --- REVIEW phase (default) ---
 else
   VERDICT="${FAKE_BACKEND_VERDICT:-proceed}"
 

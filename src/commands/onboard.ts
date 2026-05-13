@@ -64,6 +64,15 @@ export async function onboardAngels(cwd: string, opts: OnboardOptions): Promise<
     });
     const body = result.response.proposedPlan.trim();
 
+    if (!body || !/^##\s+(Charter|Public contract|Invariants)/m.test(body)) {
+      throw new Error(
+        `Angel ${angel.id} returned an empty or malformed angel.md body in PROPOSED PLAN. ` +
+          `Response file: ${result.responsePath}. The angel likely wrote angel.md to the ` +
+          `wrong path or misunderstood the PROPOSED PLAN field. Re-onboard once the prompt ` +
+          `is fixed.`,
+      );
+    }
+
     const status = opts.autoActivate ? 'active' : 'draft';
     writeAngelMd(mdPath, {
       frontmatter: {
