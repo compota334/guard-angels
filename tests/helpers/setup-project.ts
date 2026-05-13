@@ -107,7 +107,7 @@ export function setupProject(
   }
 
   // Write _config.yml
-  writeConfig(projectRoot, opts.backendScript, angels, timeoutSeconds);
+  writeConfig(projectRoot, `bash ${opts.backendScript}`, angels, timeoutSeconds);
 
   // Create _newspaper.md
   fs.writeFileSync(join(angelsDir, '_newspaper.md'), '', 'utf-8');
@@ -138,11 +138,11 @@ export function setupProject(
  */
 export function updateConfig(
   projectRoot: string,
-  angelCmd: string,
+  backendScript: string,
   angels?: AngelEntry[],
   timeoutSeconds?: number,
 ): void {
-  writeConfig(projectRoot, angelCmd, angels ?? DEFAULT_ANGELS, timeoutSeconds ?? 30);
+  writeConfig(projectRoot, `bash ${backendScript}`, angels ?? DEFAULT_ANGELS, timeoutSeconds ?? 30);
 }
 
 function writeConfig(
@@ -191,7 +191,7 @@ export function createBackendWrapper(
   for (const [key, value] of Object.entries(envVars)) {
     lines.push(`export ${key}="${value}"`);
   }
-  lines.push(`exec ${backendPath} "$@"`);
+  lines.push(`exec bash ${backendPath} "$@"`);
   lines.push('');
   fs.writeFileSync(wrapperPath, lines.join('\n'), { mode: 0o755 });
   return wrapperPath;

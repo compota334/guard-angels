@@ -37,7 +37,7 @@ describe('angels onboard', () => {
       nodeOptions: [],
       env: {
         ...process.env,
-        GUARD_ANGELS_BACKEND_CMD: fakeBackendPath,
+        GUARD_ANGELS_BACKEND_CMD: "bash " + fakeBackendPath,
       },
     });
   }

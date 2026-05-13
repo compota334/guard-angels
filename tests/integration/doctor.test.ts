@@ -414,9 +414,10 @@ function setupProjectWithMissingAngel(projectRoot: string): void {
   setupCleanProject(projectRoot);
 
   // Create a significant folder that is NOT registered as an angel.
-  // "payments" is a non-generic name → flagged by heuristic.
+  // "payments" is a non-generic name and has >= 3 source files (both required now).
   const paymentsDir = join(projectRoot, 'payments');
   fs.mkdirSync(paymentsDir, { recursive: true });
-  // Add an index file to make it significant by heuristics
   fs.writeFileSync(join(paymentsDir, 'index.ts'), 'export {};');
+  fs.writeFileSync(join(paymentsDir, 'stripe.ts'), 'export {};');
+  fs.writeFileSync(join(paymentsDir, 'paypal.ts'), 'export {};');
 }

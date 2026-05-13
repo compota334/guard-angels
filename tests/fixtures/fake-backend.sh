@@ -59,7 +59,7 @@ fi
 PROMPT=$(cat)
 
 # Extract response path from the prompt
-RESPONSE_PATH=$(echo "$PROMPT" | grep -oP 'Write your response to: \K.+' || true)
+RESPONSE_PATH=$(echo "$PROMPT" | sed -n 's/^Write your response to: //p' | head -1)
 
 if [ -z "$RESPONSE_PATH" ]; then
   echo "ERROR: Could not find response path in prompt" >&2
@@ -67,7 +67,7 @@ if [ -z "$RESPONSE_PATH" ]; then
 fi
 
 # Detect phase from the prompt (look for PHASE: line in the brief section)
-PHASE=$(echo "$PROMPT" | grep -oP '^PHASE: \K\w+' | head -1 || true)
+PHASE=$(echo "$PROMPT" | sed -n 's/^PHASE: //p' | head -1)
 if [ -z "$PHASE" ]; then
   PHASE="review"
 fi

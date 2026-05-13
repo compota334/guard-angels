@@ -72,14 +72,24 @@ export function checkOrphanedAngels(
 
 /**
  * Find project folders that look significant (per heuristics) but have no registered angel.
+ * Skips folders: inside an existing angel's territory, matched by .gitignore, or with < 3 source files.
  */
 export async function checkMissingAngels(
   projectRoot: string,
   registry: AngelRegistry,
 ): Promise<MissingAngel[]> {
   const candidates = await identifyCandidates(projectRoot);
+  const gitignorePatterns = readGitignorePatterns(projectRoot);
+  const registeredPaths = registry.listAll()
+    .map(a => a.path)
+    .filter(p => p !== '.');
+
   const missing: MissingAngel[] = [];
   for (const candidate of candidates) {
+    if (candidate.sourceFileCount < 3) continue;
+    if (matchesGitignore(candidate.path, gitignorePatterns)) continue;
+    if (registeredPaths.some(p => candidate.path.startsWith(p + '/'))) continue;
+
     try {
       registry.getByPath(candidate.path);
     } catch {
@@ -87,6 +97,44 @@ export async function checkMissingAngels(
     }
   }
   return missing;
+}
+
+function readGitignorePatterns(projectRoot: string): string[] {
+  const gitignorePath = join(projectRoot, '.gitignore');
+  if (!fs.existsSync(gitignorePath)) return [];
+  const content = fs.readFileSync(gitignorePath, 'utf-8');
+  return content
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0 && !line.startsWith('#') && !line.startsWith('!'));
+}
+
+function matchesGitignore(relPath: string, patterns: string[]): boolean {
+  for (const raw of patterns) {
+    const pattern = raw.endsWith('/') ? raw.slice(0, -1) : raw;
+    if (pattern.startsWith('/')) {
+      const anchored = pattern.slice(1);
+      if (relPath === anchored || relPath.startsWith(anchored + '/')) return true;
+    } else if (!pattern.includes('/')) {
+      const components = relPath.split('/');
+      if (components.some(c => globMatch(c, pattern))) return true;
+    } else {
+      if (relPath === pattern || relPath.startsWith(pattern + '/')) return true;
+    }
+  }
+  return false;
+}
+
+function globMatch(str: string, pattern: string): boolean {
+  const regexStr = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '[^/]*')
+    .replace(/\?/g, '[^/]');
+  try {
+    return new RegExp(`^${regexStr}$`).test(str);
+  } catch {
+    return false;
+  }
 }
 
 /**
