@@ -6,6 +6,7 @@ import { writeBrief, parseBrief } from '../protocol/brief.js';
 import { invoke } from '../protocol/orchestrate.js';
 import { angelIdToPath } from '../paths/resolve.js';
 import { appendNewspaper } from '../messaging/newspaper.js';
+import { archiveProcessedInbox } from '../messaging/cables.js';
 import type { ResponseData } from '../protocol/response.js';
 
 /**
@@ -86,13 +87,18 @@ export async function executeAngel(
     angelPath,
   );
 
-  // 9. Append newspaper entry
+  // 9. Archive inbox cables the angel saw during execution
+  if (result.response.response === 'done') {
+    archiveProcessedInbox(cwd, angelId);
+  }
+
+  // 10. Append newspaper entry
   appendNewspaperEntry(cwd, angelId, result.response, outOfTerritory);
 
-  // 10. Print summary
+  // 11. Print summary
   printExecuteSummary(result.response, result.responsePath, outOfTerritory);
 
-  // 11. Return exit code
+  // 12. Return exit code
   if (result.response.response === 'done') {
     return 0;
   }

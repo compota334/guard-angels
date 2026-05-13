@@ -1,13 +1,10 @@
-import * as fs from 'node:fs';
-import { join } from 'node:path';
 import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
 import { writeBrief } from '../protocol/brief.js';
 import { invoke, OrchestrationError } from '../protocol/orchestrate.js';
 import { readNewspaperSince, getNewspaperSize, appendNewspaper } from '../messaging/newspaper.js';
 import { getCursor, setCursor } from '../messaging/cursors.js';
-import { readInbox } from '../messaging/cables.js';
-import { angelInboxDir, angelOutboxDir } from '../paths/layout.js';
+import { readInbox, archiveProcessedInbox } from '../messaging/cables.js';
 import type { InboxEntry } from '../protocol/prompt.js';
 import type { ResponseData } from '../protocol/response.js';
 
@@ -272,31 +269,6 @@ function printAngelSweepResult(
     response.cablesSent !== 'none'
   ) {
     console.log(`  Cables sent: ${response.cablesSent}`);
-  }
-}
-
-/**
- * Move all processed cable files from an angel's inbox to its outbox.
- * Called after readInbox so cables won't be re-processed on the next sweep.
- * Quarantined cables (already moved by readInbox) are not touched.
- */
-function archiveProcessedInbox(cwd: string, angelId: string): void {
-  const inboxPath = angelInboxDir(cwd, angelId);
-  const outboxPath = angelOutboxDir(cwd, angelId);
-
-  let entries: string[];
-  try {
-    entries = fs.readdirSync(inboxPath);
-  } catch {
-    return;
-  }
-
-  const cableFiles = entries.filter((e) => e.endsWith('.md'));
-  if (cableFiles.length === 0) return;
-
-  fs.mkdirSync(outboxPath, { recursive: true });
-  for (const filename of cableFiles) {
-    fs.renameSync(join(inboxPath, filename), join(outboxPath, filename));
   }
 }
 

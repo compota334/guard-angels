@@ -71,7 +71,7 @@ const GENERIC_NAMES = new Set([
 /**
  * Source file extensions considered when counting files.
  */
-const SOURCE_EXTENSIONS = new Set([
+export const SOURCE_EXTENSIONS = new Set([
   '.ts',
   '.tsx',
   '.js',
@@ -110,6 +110,8 @@ export interface FolderCandidate {
   path: string;
   /** Human-readable reason this folder was selected */
   reason: string;
+  /** Number of direct source files (by SOURCE_EXTENSIONS) in this folder */
+  sourceFileCount: number;
 }
 
 export interface IdentifyOptions {
@@ -221,6 +223,7 @@ async function walkDir(
       candidates.push({
         path: relPath,
         reason: reasons.join('; '),
+        sourceFileCount,
       });
     }
   }

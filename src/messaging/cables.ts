@@ -215,6 +215,32 @@ export function parseCableContent(
   };
 }
 
+/**
+ * Move all processed cable files from an angel's inbox to its outbox.
+ * Called after the angel has seen the cables (via sweep or execute) so they
+ * won't be re-delivered on the next invocation.
+ * Quarantined cables (already moved by readInbox) are not touched.
+ */
+export function archiveProcessedInbox(projectRoot: string, angelId: string): void {
+  const inboxPath = angelInboxDir(projectRoot, angelId);
+  const outboxPath = angelOutboxDir(projectRoot, angelId);
+
+  let entries: string[];
+  try {
+    entries = readdirSync(inboxPath);
+  } catch {
+    return;
+  }
+
+  const cableFiles = entries.filter((e) => e.endsWith('.md'));
+  if (cableFiles.length === 0) return;
+
+  mkdirSync(outboxPath, { recursive: true });
+  for (const filename of cableFiles) {
+    renameSync(join(inboxPath, filename), join(outboxPath, filename));
+  }
+}
+
 // ── Internal helpers ──────────────────────────────────────────────────
 
 function validateCableData(data: CableData): void {
