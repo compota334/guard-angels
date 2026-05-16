@@ -13,6 +13,7 @@ import { showNewspaper } from './commands/newspaper.js';
 import { sweepAngels } from './commands/sweep.js';
 import { runDoctor } from './commands/doctor.js';
 import { retireAngel } from './commands/retire.js';
+import { showAngel } from './commands/show.js';
 
 const program = new Command();
 
@@ -263,6 +264,18 @@ program
     try {
       const exitCode = await retireAngel(process.cwd(), angelId);
       process.exit(exitCode);
+    } catch (err: unknown) {
+      handleError(err, 1);
+    }
+  });
+
+program
+  .command('show')
+  .argument('<angel-id>', 'Angel identifier')
+  .description('Show the current angel.md for an angel')
+  .action((angelId: string) => {
+    try {
+      showAngel(process.cwd(), angelId);
     } catch (err: unknown) {
       handleError(err, 1);
     }
