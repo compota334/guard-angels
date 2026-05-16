@@ -434,6 +434,7 @@ describe('parseResponseContent', () => {
       '- Something',
       '',
       'PROPOSED PLAN:',
+      '- Proposed fix here',
       '',
       'QUESTIONS FOR MAIN:',
       '',
@@ -625,6 +626,7 @@ describe('parseResponse (file-based)', () => {
     const original = makeResponseData({
       response: 'concerns',
       concerns: '- Performance may degrade\n- Missing migration plan',
+      proposedPlan: '- Add caching layer\n- Benchmark before and after',
       questionsForMain: '- What is the acceptable latency?',
       proceedIf: 'Latency threshold is defined',
     });
@@ -633,8 +635,33 @@ describe('parseResponse (file-based)', () => {
 
     expect(parsed.response).toBe('concerns');
     expect(parsed.concerns).toBe(original.concerns);
+    expect(parsed.proposedPlan).toBe(original.proposedPlan);
     expect(parsed.questionsForMain).toBe(original.questionsForMain);
     expect(parsed.proceedIf).toBe(original.proceedIf);
+  });
+
+  it('throws when RESPONSE is concerns but PROPOSED PLAN is empty', () => {
+    const content = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T14:32:00Z',
+      'RESPONSE: concerns',
+      '',
+      'CONCERNS:',
+      '- Something looks wrong',
+      '',
+      'PROPOSED PLAN:',
+      '',
+      'QUESTIONS FOR MAIN:',
+      '',
+      'PROCEED IF:',
+      '',
+      'TEST_RESULTS:',
+      '',
+    ].join('\n');
+
+    expect(() => parseResponseContent(content)).toThrow(
+      /RESPONSE is "concerns" but PROPOSED PLAN is empty/,
+    );
   });
 
   it('round-trips writeResponse -> parseResponse for error', () => {
@@ -690,6 +717,7 @@ describe('parseResponse (file-based)', () => {
     const original = makeResponseData({
       response: 'concerns',
       concerns: '- Detected significant drift in public contract',
+      proposedPlan: '- Update angel.md charter and dependencies sections',
       driftReport: '- Function createSession() was removed from session.ts but angel.md still lists it as exported\n- New dependency on src/api not reflected in Dependencies section',
     });
     const filePath = writeResponse(tmpDir, original);
@@ -697,6 +725,7 @@ describe('parseResponse (file-based)', () => {
 
     expect(parsed.response).toBe('concerns');
     expect(parsed.concerns).toBe(original.concerns);
+    expect(parsed.proposedPlan).toBe(original.proposedPlan);
     expect(parsed.driftReport).toBe(original.driftReport);
   });
 
@@ -755,6 +784,7 @@ describe('sweep response parsing', () => {
       '- Significant drift detected between angel.md and actual folder state',
       '',
       'PROPOSED PLAN:',
+      '- Update angel.md charter to reflect routes.ts split and new auth.ts middleware',
       '',
       'QUESTIONS FOR MAIN:',
       '- Should I update angel.md to reflect the current state?',

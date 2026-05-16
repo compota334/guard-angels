@@ -8,10 +8,10 @@ import type { ResponseData, ResponseVerdict } from '../protocol/response.js';
 
 const REVIEW_EXIT_CODES: Record<ResponseVerdict, number> = {
   proceed: 0,
-  concerns: 1,
-  refuse: 2,
+  error: 1,
+  concerns: 2,
+  refuse: 3,
   done: 0,
-  error: 3,
 };
 
 /**
@@ -23,9 +23,9 @@ const REVIEW_EXIT_CODES: Record<ResponseVerdict, number> = {
  *
  * Exit codes:
  * 0 = execute completed (done)
- * 1 = angel raised concerns — no execute performed
- * 2 = angel refused — no execute performed
- * 3 = angel error during review
+ * 1 = error during review or execute
+ * 2 = angel raised concerns — no execute performed
+ * 3 = angel refused — no execute performed
  */
 export async function doAngel(
   cwd: string,

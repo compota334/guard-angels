@@ -8,23 +8,26 @@ import type { ResponseData, ResponseVerdict } from '../protocol/response.js';
 /**
  * Exit codes for the brief command:
  * 0 = proceed (angel has no concerns)
- * 1 = concerns (angel raised concerns but may proceed conditionally)
- * 2 = refuse (angel refuses the change — violates invariants)
- * 3 = error (angel encountered an error or produced no response)
+ * 1 = error (angel encountered an error or produced no response)
+ * 2 = concerns (angel raised concerns but may proceed conditionally)
+ * 3 = refuse (angel refuses the change — violates invariants)
+ *
+ * error uses 1 (not 2/3) so that `set -e` and shell monitors catch real failures
+ * without treating a legitimate "concerns" verdict as a hard error.
  */
 const EXIT_CODES: Record<ResponseVerdict, number> = {
   proceed: 0,
-  concerns: 1,
-  refuse: 2,
+  error: 1,
+  concerns: 2,
+  refuse: 3,
   done: 0, // should not happen in review, but don't crash
-  error: 3,
 };
 
 /**
  * Run phase 1 (REVIEW) for an angel: write a brief, invoke the angel,
  * print a summary of the response.
  *
- * Returns the exit code (0 = proceed, 1 = concerns, 2 = refuse, 3 = error).
+ * Returns the exit code (0 = proceed, 1 = error, 2 = concerns, 3 = refuse).
  */
 export async function briefAngel(
   cwd: string,

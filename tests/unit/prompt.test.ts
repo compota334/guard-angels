@@ -13,6 +13,7 @@ function makeInput(overrides: Partial<PromptInput> = {}): PromptInput {
     angelId: 'src-auth',
     angelPath: 'src/auth',
     angelType: 'folder',
+    angelMdPath: '/project/.angels/src/auth/angel.md',
     folderListing: 'session.ts\nmiddleware.ts\nindex.ts',
     angelMd: `---\nstatus: active\nlast_updated: 2026-04-28T14:32:00Z\nlast_updated_by: main\n---\n\n# Angel: src/auth (folder)\n\n## Charter\nOwns all authentication logic.\n`,
     newspaperDelta: '',

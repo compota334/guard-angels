@@ -232,13 +232,13 @@ Every command returns a meaningful exit code:
 | `create` | 0 | Angel created |
 | | 1 | Error (duplicate, path outside root, folder not found, not initialized) |
 | `brief` | 0 | Angel responds: proceed |
-| | 1 | Angel responds: concerns |
-| | 2 | Angel responds: refuse |
-| | 3 | Error (angel error, timeout, invocation failure) |
+| | 1 | Error (angel error, timeout, invocation failure) |
+| | 2 | Angel responds: concerns |
+| | 3 | Angel responds: refuse |
 | `do` | 0 | Brief succeeded (proceed) and execute succeeded (done) |
-| | 1 | Angel responded with concerns or error during brief |
-| | 2 | Angel refused during brief |
-| | 3 | Execute phase failed after a successful brief |
+| | 1 | Error during review or execute |
+| | 2 | Angel responded with concerns |
+| | 3 | Angel refused |
 | `execute` | 0 | Angel responds: done |
 | | 1 | Error or non-done response |
 | `cable` | 0 | Cable sent |

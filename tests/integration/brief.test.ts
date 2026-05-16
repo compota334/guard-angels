@@ -56,7 +56,7 @@ describe('briefAngel', () => {
     expect(fs.existsSync(lockFilePath(tmpDir))).toBe(false);
   });
 
-  it('returns exit code 1 for RESPONSE: concerns', async () => {
+  it('returns exit code 2 for RESPONSE: concerns', async () => {
     const wrapperPath = createBackendWrapper(
       tmpDir,
       fakeBackendPath,
@@ -74,10 +74,10 @@ describe('briefAngel', () => {
       'Refactor session handling',
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
   });
 
-  it('returns exit code 2 for RESPONSE: refuse', async () => {
+  it('returns exit code 3 for RESPONSE: refuse', async () => {
     const wrapperPath = createBackendWrapper(
       tmpDir,
       fakeBackendPath,
@@ -95,10 +95,10 @@ describe('briefAngel', () => {
       'Delete all session handling',
     );
 
-    expect(exitCode).toBe(2);
+    expect(exitCode).toBe(3);
   });
 
-  it('returns exit code 3 for RESPONSE: error', async () => {
+  it('returns exit code 1 for RESPONSE: error', async () => {
     const wrapperPath = createBackendWrapper(
       tmpDir,
       fakeBackendPath,
@@ -116,7 +116,7 @@ describe('briefAngel', () => {
       'Test error handling',
     );
 
-    expect(exitCode).toBe(3);
+    expect(exitCode).toBe(1);
   });
 
   it('throws for non-existent angel id', async () => {

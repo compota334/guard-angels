@@ -59,7 +59,7 @@ describe('doAngel', () => {
     expect(newspaper).toContain('EXECUTE completed successfully');
   });
 
-  it('returns 1 and does not execute when angel responds concerns', async () => {
+  it('returns 2 and does not execute when angel responds concerns', async () => {
     const wrapperPath = createBackendWrapper(
       tmpDir,
       fakeBackendPath,
@@ -73,7 +73,7 @@ describe('doAngel', () => {
 
     const exitCode = await doAngel(tmpDir, 'src-auth', 'Refactor session handling');
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
 
     const newspaper = fs.readFileSync(
       join(tmpDir, '.angels', '_newspaper.md'),
@@ -83,7 +83,7 @@ describe('doAngel', () => {
     expect(newspaper).not.toContain('EXECUTE');
   });
 
-  it('returns 2 and does not execute when angel responds refuse', async () => {
+  it('returns 3 and does not execute when angel responds refuse', async () => {
     const wrapperPath = createBackendWrapper(
       tmpDir,
       fakeBackendPath,
@@ -97,7 +97,7 @@ describe('doAngel', () => {
 
     const exitCode = await doAngel(tmpDir, 'src-auth', 'Delete session handling');
 
-    expect(exitCode).toBe(2);
+    expect(exitCode).toBe(3);
 
     const newspaper = fs.readFileSync(
       join(tmpDir, '.angels', '_newspaper.md'),
@@ -107,7 +107,7 @@ describe('doAngel', () => {
     expect(newspaper).not.toContain('EXECUTE');
   });
 
-  it('returns 3 when angel errors during review', async () => {
+  it('returns 1 when angel errors during review', async () => {
     const wrapperPath = createBackendWrapper(
       tmpDir,
       fakeBackendPath,
@@ -121,7 +121,7 @@ describe('doAngel', () => {
 
     const exitCode = await doAngel(tmpDir, 'src-auth', 'Test error handling');
 
-    expect(exitCode).toBe(3);
+    expect(exitCode).toBe(1);
 
     const newspaper = fs.readFileSync(
       join(tmpDir, '.angels', '_newspaper.md'),

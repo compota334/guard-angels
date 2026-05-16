@@ -121,6 +121,7 @@ export async function invoke(
       angelId: input.angelId,
       angelPath,
       angelType: angel.type,
+      angelMdPath,
       folderListing,
       angelMd: angelMdContent,
       newspaperDelta: input.newspaperDelta ?? '',

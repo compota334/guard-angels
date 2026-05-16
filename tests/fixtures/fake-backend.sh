@@ -143,7 +143,7 @@ CONCERNS:
 ${CONCERNS}
 
 PROPOSED PLAN:
-
+Document findings and notify main agent.
 
 QUESTIONS FOR MAIN:
 
@@ -207,6 +207,7 @@ CONCERNS:
 ${CONCERNS}
 
 PROPOSED PLAN:
+Document findings and notify main agent.
 
 QUESTIONS FOR MAIN:
 

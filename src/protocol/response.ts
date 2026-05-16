@@ -97,6 +97,15 @@ export function parseResponseContent(raw: string): ResponseData {
   const filesChanged = extractOptionalField(raw, 'FILES CHANGED') ?? '';
   const angelMdUpdated = extractOptionalField(raw, 'ANGEL_MD_UPDATED') ?? '';
 
+  // Validate contextual invariants
+  if (verdict === 'concerns' && proposedPlan.trim() === '') {
+    throw new Error(
+      'RESPONSE is "concerns" but PROPOSED PLAN is empty. ' +
+      'An angel that raises concerns must include a proposed plan. ' +
+      'This is almost certainly a bug in the angel response.',
+    );
+  }
+
   // Validate done-only fields: they must not appear on non-done responses
   if (verdict !== 'done') {
     for (const field of DONE_ONLY_FIELDS) {

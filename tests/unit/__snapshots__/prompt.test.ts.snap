@@ -5,7 +5,7 @@ exports[`buildPrompt > inbox with cables (snapshot) > snapshot with high-urgency
 You are a Guard Angel. You are responsible for one specific folder of a codebase.
 You operate under the following protocol:
 
-1. You may READ any file in the project for context. You may only WRITE files inside your designated folder.
+1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
 4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
@@ -27,6 +27,7 @@ Do NOT modify any code or files during REVIEW. Only write the response file.
 You are the angel for: src/auth
 Your angel ID is: src-auth
 Your type is: folder
+Your angel.md path: /project/.angels/src/auth/angel.md
 Your folder contents:
 session.ts
 middleware.ts
@@ -141,7 +142,7 @@ exports[`buildPrompt > inbox with cables (snapshot) > snapshot with mixed urgenc
 You are a Guard Angel. You are responsible for one specific folder of a codebase.
 You operate under the following protocol:
 
-1. You may READ any file in the project for context. You may only WRITE files inside your designated folder.
+1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
 4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
@@ -163,6 +164,7 @@ Do NOT modify any code or files during REVIEW. Only write the response file.
 You are the angel for: src/auth
 Your angel ID is: src-auth
 Your type is: folder
+Your angel.md path: /project/.angels/src/auth/angel.md
 Your folder contents:
 session.ts
 middleware.ts
@@ -277,7 +279,7 @@ exports[`buildPrompt > phase: execute > snapshot matches 1`] = `
 You are a Guard Angel. You are responsible for one specific folder of a codebase.
 You operate under the following protocol:
 
-1. You may READ any file in the project for context. You may only WRITE files inside your designated folder.
+1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
 4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
@@ -289,17 +291,18 @@ You operate under the following protocol:
 The change has been approved. Implement the task described in the brief.
 
 After making changes:
-1. Update your angel.md if the change affects your charter, contracts, invariants, or dependencies.
+1. Update your angel.md (path listed in your identity section) if the change affects your charter, contracts, invariants, or dependencies. This is the one write exception outside your designated folder — see rule 1.
 2. If the change impacts other angels, send cables to notify them.
 3. If you run tests, report the results.
 4. Write the response file with RESPONSE: done and list all files changed.
 
-You may only write files inside your designated folder.
+You may only write files inside your designated folder, plus your angel.md at the path in your identity section.
 
 [ANGEL IDENTITY]
 You are the angel for: src/auth
 Your angel ID is: src-auth
 Your type is: folder
+Your angel.md path: /project/.angels/src/auth/angel.md
 Your folder contents:
 session.ts
 middleware.ts
@@ -403,7 +406,7 @@ exports[`buildPrompt > phase: init > snapshot matches 1`] = `
 You are a Guard Angel. You are responsible for one specific folder of a codebase.
 You operate under the following protocol:
 
-1. You may READ any file in the project for context. You may only WRITE files inside your designated folder.
+1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
 4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
@@ -425,6 +428,7 @@ Do not modify any source code during INIT. Only create/update the angel.md.
 You are the angel for: src/auth
 Your angel ID is: src-auth
 Your type is: folder
+Your angel.md path: /project/.angels/src/auth/angel.md
 Your folder contents:
 session.ts
 middleware.ts
@@ -518,7 +522,7 @@ exports[`buildPrompt > phase: review > snapshot matches 1`] = `
 You are a Guard Angel. You are responsible for one specific folder of a codebase.
 You operate under the following protocol:
 
-1. You may READ any file in the project for context. You may only WRITE files inside your designated folder.
+1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
 4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
@@ -540,6 +544,7 @@ Do NOT modify any code or files during REVIEW. Only write the response file.
 You are the angel for: src/auth
 Your angel ID is: src-auth
 Your type is: folder
+Your angel.md path: /project/.angels/src/auth/angel.md
 Your folder contents:
 session.ts
 middleware.ts
@@ -643,7 +648,7 @@ exports[`buildPrompt > phase: sweep > snapshot matches 1`] = `
 You are a Guard Angel. You are responsible for one specific folder of a codebase.
 You operate under the following protocol:
 
-1. You may READ any file in the project for context. You may only WRITE files inside your designated folder.
+1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
 4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
@@ -670,6 +675,7 @@ SWEEP is read-only. Do NOT run rm, mv, or write files outside angel.md. The orch
 You are the angel for: src/auth
 Your angel ID is: src-auth
 Your type is: folder
+Your angel.md path: /project/.angels/src/auth/angel.md
 Your folder contents:
 session.ts
 middleware.ts

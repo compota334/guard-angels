@@ -85,6 +85,7 @@ export interface PromptInput {
   angelId: string;
   angelPath: string;
   angelType: 'root' | 'folder';
+  angelMdPath: string;
   folderListing: string;
   angelMd: string | null;
   newspaperDelta: string;
@@ -102,7 +103,7 @@ export interface InboxEntry {
 const PROTOCOL_HEADER = `You are a Guard Angel. You are responsible for one specific folder of a codebase.
 You operate under the following protocol:
 
-1. You may READ any file in the project for context. You may only WRITE files inside your designated folder.
+1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
 4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
@@ -147,12 +148,12 @@ Do NOT modify any code or files during REVIEW. Only write the response file.`,
 The change has been approved. Implement the task described in the brief.
 
 After making changes:
-1. Update your angel.md if the change affects your charter, contracts, invariants, or dependencies.
+1. Update your angel.md (path listed in your identity section) if the change affects your charter, contracts, invariants, or dependencies. This is the one write exception outside your designated folder — see rule 1.
 2. If the change impacts other angels, send cables to notify them.
 3. If you run tests, report the results.
 4. Write the response file with RESPONSE: done and list all files changed.
 
-You may only write files inside your designated folder.`,
+You may only write files inside your designated folder, plus your angel.md at the path in your identity section.`,
 
   sweep: `[CURRENT PHASE: SWEEP]
 You are being invoked in maintenance/sweep mode. Your tasks:
@@ -187,6 +188,7 @@ export function buildPrompt(input: PromptInput): string {
   sections.push(`You are the angel for: ${input.angelPath}`);
   sections.push(`Your angel ID is: ${input.angelId}`);
   sections.push(`Your type is: ${input.angelType}`);
+  sections.push(`Your angel.md path: ${input.angelMdPath}`);
   sections.push(`Your folder contents:`);
   sections.push(input.folderListing || '(empty or not yet created)');
 
