@@ -168,9 +168,12 @@ program
   .argument('<angel-id>', 'Angel identifier')
   .argument('<brief>', 'Path to brief file')
   .description('Phase 2: Re-invoke angel with approval in execute mode')
-  .action(async (angelId: string, briefPath: string) => {
+  .option('--strict-territory', 'Block and rollback out-of-territory writes instead of warning')
+  .action(async (angelId: string, briefPath: string, options: { strictTerritory?: boolean }) => {
     try {
-      const exitCode = await executeAngel(process.cwd(), angelId, briefPath);
+      const exitCode = await executeAngel(process.cwd(), angelId, briefPath, {
+        strictTerritory: options.strictTerritory,
+      });
       process.exit(exitCode);
     } catch (err: unknown) {
       handleError(err, 1);

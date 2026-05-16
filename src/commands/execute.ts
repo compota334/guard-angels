@@ -17,17 +17,24 @@ interface FileSnapshot {
   size: number;
 }
 
+export interface ExecuteOptions {
+  strictTerritory?: boolean;
+}
+
 /**
  * Run phase 2 (EXECUTE) for an angel: re-invoke the angel with the
  * original brief + approval flag, detect territory violations, and
  * append a newspaper entry.
  *
  * Returns the exit code (0 = done, 1 = error).
+ * With strictTerritory=true, out-of-territory writes are blocking: new files
+ * outside territory are deleted (rollback) and the command exits with code 1.
  */
 export async function executeAngel(
   cwd: string,
   angelId: string,
   briefPath: string,
+  options: ExecuteOptions = {},
 ): Promise<number> {
   // 1. Load config and validate angel exists
   const config = loadConfig(cwd);
@@ -80,12 +87,33 @@ export async function executeAngel(
 
   // 8. Detect territory violations
   const changedFiles = detectChangedFiles(beforeSnapshot, afterSnapshot);
-  const outOfTerritory = findOutOfTerritoryWrites(
-    changedFiles,
+  const allChanged = [...changedFiles.added, ...changedFiles.modified];
+  const outOfTerritoryAdded = findOutOfTerritoryWrites(
+    changedFiles.added,
     cwd,
     territoryAbsPath,
     angelPath,
   );
+  const outOfTerritoryModified = findOutOfTerritoryWrites(
+    changedFiles.modified,
+    cwd,
+    territoryAbsPath,
+    angelPath,
+  );
+  const outOfTerritory = [...outOfTerritoryAdded, ...outOfTerritoryModified];
+
+  // 8a. Strict territory: rollback new files and fail
+  if (options.strictTerritory && outOfTerritory.length > 0) {
+    const rolledBack = rollbackAddedFiles(cwd, outOfTerritoryAdded);
+    appendNewspaperEntry(cwd, angelId, result.response, outOfTerritory, true);
+    printStrictTerritoryViolation(
+      outOfTerritoryAdded,
+      outOfTerritoryModified,
+      rolledBack,
+      result.responsePath,
+    );
+    return 1;
+  }
 
   // 9. Archive inbox cables the angel saw during execution
   if (result.response.response === 'done') {
@@ -93,7 +121,7 @@ export async function executeAngel(
   }
 
   // 10. Append newspaper entry
-  appendNewspaperEntry(cwd, angelId, result.response, outOfTerritory);
+  appendNewspaperEntry(cwd, angelId, result.response, outOfTerritory, false);
 
   // 11. Print summary
   printExecuteSummary(result.response, result.responsePath, outOfTerritory);
@@ -103,6 +131,58 @@ export async function executeAngel(
     return 0;
   }
   return 1;
+}
+
+/**
+ * Delete newly-created files that are outside the angel's territory.
+ * Returns the list of files that were successfully deleted.
+ * Files that cannot be deleted (permissions, etc.) are skipped but still listed.
+ */
+function rollbackAddedFiles(projectRoot: string, files: string[]): string[] {
+  const rolledBack: string[] = [];
+  for (const relPath of files) {
+    const absPath = resolve(projectRoot, relPath);
+    try {
+      fs.unlinkSync(absPath);
+      rolledBack.push(relPath);
+    } catch {
+      // Best-effort: log failure but keep going
+    }
+  }
+  return rolledBack;
+}
+
+/**
+ * Print a blocking territory violation message (--strict-territory mode).
+ */
+function printStrictTerritoryViolation(
+  addedViolations: string[],
+  modifiedViolations: string[],
+  rolledBack: string[],
+  responsePath: string,
+): void {
+  console.error('');
+  console.error('ERROR: Out-of-territory writes detected (--strict-territory is active).');
+  console.error('');
+
+  if (addedViolations.length > 0) {
+    console.error('New files written outside territory:');
+    for (const f of addedViolations) {
+      const status = rolledBack.includes(f) ? '(deleted - rolled back)' : '(could not delete)';
+      console.error(`  - ${f} ${status}`);
+    }
+    console.error('');
+  }
+
+  if (modifiedViolations.length > 0) {
+    console.error('Modified files outside territory (cannot auto-restore):');
+    for (const f of modifiedViolations) {
+      console.error(`  - ${f}`);
+    }
+    console.error('');
+  }
+
+  console.error(`Response file: ${responsePath}`);
 }
 
 /**
@@ -167,32 +247,35 @@ function walkDir(
   }
 }
 
+interface ChangedFiles {
+  added: string[];
+  modified: string[];
+}
+
 /**
  * Compare before and after snapshots to find files that were added or modified.
- * Returns an array of relative paths.
+ * Returns separate lists for newly created files and modified existing files.
  */
 function detectChangedFiles(
   before: Map<string, FileSnapshot>,
   after: Map<string, FileSnapshot>,
-): string[] {
-  const changed: string[] = [];
+): ChangedFiles {
+  const added: string[] = [];
+  const modified: string[] = [];
 
-  // Check for new files or modified files
   for (const [path, afterEntry] of after) {
     const beforeEntry = before.get(path);
     if (!beforeEntry) {
-      // New file
-      changed.push(path);
+      added.push(path);
     } else if (
       beforeEntry.mtimeMs !== afterEntry.mtimeMs ||
       beforeEntry.size !== afterEntry.size
     ) {
-      // Modified file
-      changed.push(path);
+      modified.push(path);
     }
   }
 
-  return changed;
+  return { added, modified };
 }
 
 /**
@@ -259,12 +342,14 @@ function findOutOfTerritoryWrites(
 /**
  * Append a newspaper entry for the execute action.
  * If there are out-of-territory writes, add a warning.
+ * strictViolation=true means the execute was blocked by --strict-territory.
  */
 function appendNewspaperEntry(
   projectRoot: string,
   angelId: string,
   response: ResponseData,
   outOfTerritory: string[],
+  strictViolation: boolean,
 ): void {
   const timestamp = new Date().toISOString();
 
@@ -287,10 +372,17 @@ function appendNewspaperEntry(
   }
 
   if (outOfTerritory.length > 0) {
-    detailLines.push('WARNING: Out-of-territory writes detected:');
+    const label = strictViolation
+      ? 'ERROR: Out-of-territory writes blocked (--strict-territory):'
+      : 'WARNING: Out-of-territory writes detected:';
+    detailLines.push(label);
     for (const file of outOfTerritory) {
       detailLines.push(`  - ${file}`);
     }
+  }
+
+  if (strictViolation) {
+    summary = `EXECUTE blocked by --strict-territory: out-of-territory writes detected.`;
   }
 
   appendNewspaper(projectRoot, {

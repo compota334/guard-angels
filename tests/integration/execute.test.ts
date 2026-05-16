@@ -318,4 +318,82 @@ describe('executeAngel', () => {
     expect(newspaper).toContain('[_root]');
     expect(newspaper).not.toContain('WARNING');
   });
+
+  it('--strict-territory: blocks and rolls back new out-of-territory files', async () => {
+    const briefPath = writeBrief(tmpDir, {
+      to: 'src-auth',
+      from: 'main',
+      timestamp: new Date().toISOString(),
+      phase: 'review',
+      type: 'change_request',
+      task: 'Add shared utility',
+      context: '',
+      expectedScope: '',
+      priorResponse: 'none',
+    });
+
+    const outOfTerritoryFile = join(tmpDir, 'src', 'utils', 'shared.ts');
+    const wrapperPath = createBackendWrapper(
+      tmpDir,
+      fakeBackendPath,
+      {
+        FAKE_BACKEND_VERDICT: 'done',
+        FAKE_BACKEND_FILES_CHANGED: 'src/utils/shared.ts',
+        FAKE_BACKEND_WRITE_FILES: outOfTerritoryFile,
+        FAKE_BACKEND_ANGEL_MD_UPDATED: 'false',
+      },
+      'execute-strict-wrapper.sh',
+    );
+    updateConfig(tmpDir, wrapperPath);
+
+    const exitCode = await executeAngel(tmpDir, 'src-auth', briefPath, { strictTerritory: true });
+
+    // Must fail with exit 1
+    expect(exitCode).toBe(1);
+
+    // New file should have been deleted (rollback)
+    expect(fs.existsSync(outOfTerritoryFile)).toBe(false);
+
+    // Newspaper entry records the blocking
+    const newspaper = fs.readFileSync(
+      join(tmpDir, '.angels', '_newspaper.md'),
+      'utf-8',
+    );
+    expect(newspaper).toContain('--strict-territory');
+    expect(newspaper).toContain('src/utils/shared.ts');
+  });
+
+  it('--strict-territory: in-territory writes succeed even with strict flag', async () => {
+    const briefPath = writeBrief(tmpDir, {
+      to: 'src-auth',
+      from: 'main',
+      timestamp: new Date().toISOString(),
+      phase: 'review',
+      type: 'change_request',
+      task: 'Add logout endpoint',
+      context: '',
+      expectedScope: '',
+      priorResponse: 'none',
+    });
+
+    const inTerritoryFile = join(tmpDir, 'src', 'auth', 'logout.ts');
+    const wrapperPath = createBackendWrapper(
+      tmpDir,
+      fakeBackendPath,
+      {
+        FAKE_BACKEND_VERDICT: 'done',
+        FAKE_BACKEND_FILES_CHANGED: 'src/auth/logout.ts',
+        FAKE_BACKEND_WRITE_FILES: inTerritoryFile,
+        FAKE_BACKEND_ANGEL_MD_UPDATED: 'false',
+      },
+      'execute-strict-clean-wrapper.sh',
+    );
+    updateConfig(tmpDir, wrapperPath);
+
+    const exitCode = await executeAngel(tmpDir, 'src-auth', briefPath, { strictTerritory: true });
+
+    // In-territory — should still exit 0
+    expect(exitCode).toBe(0);
+    expect(fs.existsSync(inTerritoryFile)).toBe(true);
+  });
 });
