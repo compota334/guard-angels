@@ -1,4 +1,4 @@
-export type PromptPhase = 'init' | 'discovery' | 'review' | 'execute' | 'sweep';
+export type PromptPhase = 'init' | 'discovery' | 'review' | 'execute' | 'sweep' | 'ask';
 
 const CABLE_FORMAT_TEMPLATE = `\
 When sending cables to other angels, write .md files directly to \
@@ -21,6 +21,7 @@ REFERENCES:
 - <optional ref 2>`;
 
 function getProposedPlanGuidance(phase: PromptPhase): string {
+  if (phase === 'ask') return '<your full answer to the question — be specific, cite file paths and function names where relevant>';
   if (phase === 'discovery' || phase === 'init') {
     return (
       '<THE COMPLETE angel.md BODY — Charter, Public contract, Invariants, ' +
@@ -75,7 +76,7 @@ function buildResponseFormat(phase: PromptPhase): string {
     'header alone on its own line (nothing after the colon), multi-line body on subsequent lines.\n' +
     '- RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or ' +
     'any other string will fail the parser.\n' +
-    '- Phase guide: discovery / init / execute / sweep → RESPONSE: done. ' +
+    '- Phase guide: discovery / init / execute / sweep / ask → RESPONSE: done. ' +
     'review → RESPONSE: proceed | concerns | refuse.'
   );
 }
@@ -154,6 +155,17 @@ After making changes:
 4. Write the response file with RESPONSE: done and list all files changed.
 
 You may only write files inside your designated folder, plus your angel.md at the path in your identity section.`,
+
+  ask: `[CURRENT PHASE: ASK]
+This is a read-only consultation. The user has a question for you.
+
+Rules:
+- Read your angel.md and any relevant files in your folder to answer accurately.
+- Do NOT modify any files.
+- Do NOT send cables.
+- Write RESPONSE: done and put your complete answer in PROPOSED PLAN.
+- Be specific: cite file paths, function names, line ranges where helpful.
+- If you cannot answer with confidence, say so explicitly — do not guess.`,
 
   sweep: `[CURRENT PHASE: SWEEP]
 You are being invoked in maintenance/sweep mode. Your tasks:

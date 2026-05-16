@@ -14,6 +14,7 @@ import { sweepAngels } from './commands/sweep.js';
 import { runDoctor } from './commands/doctor.js';
 import { retireAngel } from './commands/retire.js';
 import { showAngel } from './commands/show.js';
+import { askAngel } from './commands/ask.js';
 
 const program = new Command();
 
@@ -266,6 +267,20 @@ program
   .action(async (angelId: string) => {
     try {
       const exitCode = await retireAngel(process.cwd(), angelId);
+      process.exit(exitCode);
+    } catch (err: unknown) {
+      handleError(err, 1);
+    }
+  });
+
+program
+  .command('ask')
+  .argument('<angel-id>', 'Angel identifier')
+  .argument('<question>', 'Question to ask the angel')
+  .description('Ask an angel a read-only question (no brief file, no execute path)')
+  .action(async (angelId: string, question: string) => {
+    try {
+      const exitCode = await askAngel(process.cwd(), angelId, question);
       process.exit(exitCode);
     } catch (err: unknown) {
       handleError(err, 1);

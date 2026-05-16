@@ -275,6 +275,39 @@ RESPONSE
 
   echo "Fake discovery/init backend invoked. Verdict: ${VERDICT}"
 
+# --- ASK phase ---
+elif [ "$PHASE" = "ask" ]; then
+  ANSWER="${FAKE_BACKEND_ANSWER:-The answer to your question is: this is a fake backend response.}"
+
+  cat > "$RESPONSE_PATH" <<RESPONSE
+FROM: test-angel
+TIMESTAMP: ${TIMESTAMP}
+RESPONSE: done
+
+CONCERNS:
+
+
+PROPOSED PLAN:
+${ANSWER}
+
+QUESTIONS FOR MAIN:
+
+
+PROCEED IF:
+
+
+TEST_RESULTS:
+
+
+DRIFT REPORT:
+
+CABLES SENT: none
+FILES CHANGED: none
+ANGEL_MD_UPDATED: no
+RESPONSE
+
+  echo "Fake ask backend invoked."
+
 # --- REVIEW phase (default) ---
 else
   VERDICT="${FAKE_BACKEND_VERDICT:-proceed}"

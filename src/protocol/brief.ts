@@ -8,7 +8,7 @@ import {
   computeNextSeq,
 } from './parser-utils.js';
 
-export type BriefPhase = 'review' | 'execute' | 'sweep' | 'discovery';
+export type BriefPhase = 'review' | 'execute' | 'sweep' | 'discovery' | 'ask';
 export type BriefType = 'change_request' | 'consultation' | 'sweep';
 
 export interface BriefData {
@@ -68,8 +68,8 @@ export function parseBriefContent(raw: string): BriefData {
   const type = extractRequiredField(raw, 'TYPE');
   const priorResponse = extractRequiredField(raw, 'PRIOR RESPONSE');
 
-  if (phase !== 'review' && phase !== 'execute' && phase !== 'sweep' && phase !== 'discovery') {
-    throw new Error(`Invalid PHASE value: "${phase}". Must be "review", "execute", "sweep", or "discovery"`);
+  if (phase !== 'review' && phase !== 'execute' && phase !== 'sweep' && phase !== 'discovery' && phase !== 'ask') {
+    throw new Error(`Invalid PHASE value: "${phase}". Must be "review", "execute", "sweep", "discovery", or "ask"`);
   }
 
   if (type !== 'change_request' && type !== 'consultation' && type !== 'sweep') {
