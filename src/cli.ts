@@ -155,9 +155,12 @@ program
   .argument('<angel-id>', 'Angel identifier')
   .argument('<task>', 'Task description')
   .description('Phase 1: Write a brief, invoke angel in review mode')
-  .action(async (angelId: string, task: string) => {
+  .option('--consume-cables', 'Inject pending inbox cables as context and archive them after')
+  .action(async (angelId: string, task: string, options: { consumeCables?: boolean }) => {
     try {
-      const exitCode = await briefAngel(process.cwd(), angelId, task);
+      const exitCode = await briefAngel(process.cwd(), angelId, task, {
+        consumeCables: options.consumeCables,
+      });
       process.exit(exitCode);
     } catch (err: unknown) {
       handleError(err, 3);

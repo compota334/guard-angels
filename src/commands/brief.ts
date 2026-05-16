@@ -3,7 +3,9 @@ import { AngelRegistry } from '../angels/registry.js';
 import { writeBrief } from '../protocol/brief.js';
 import { invoke } from '../protocol/orchestrate.js';
 import { appendNewspaper } from '../messaging/newspaper.js';
+import { readInbox, archiveProcessedInbox } from '../messaging/cables.js';
 import type { ResponseData, ResponseVerdict } from '../protocol/response.js';
+import type { ParsedCable } from '../messaging/cables.js';
 
 /**
  * Exit codes for the brief command:
@@ -23,9 +25,16 @@ const EXIT_CODES: Record<ResponseVerdict, number> = {
   done: 0, // should not happen in review, but don't crash
 };
 
+export interface BriefOptions {
+  consumeCables?: boolean;
+}
+
 /**
  * Run phase 1 (REVIEW) for an angel: write a brief, invoke the angel,
  * print a summary of the response.
+ *
+ * With consumeCables=true, pending inbox cables are injected as context in
+ * the brief and archived after the angel has seen them.
  *
  * Returns the exit code (0 = proceed, 1 = error, 2 = concerns, 3 = refuse).
  */
@@ -33,13 +42,27 @@ export async function briefAngel(
   cwd: string,
   angelId: string,
   task: string,
+  options: BriefOptions = {},
 ): Promise<number> {
   // 1. Load config and validate angel exists
   const config = loadConfig(cwd);
   const registry = AngelRegistry.fromConfig(config);
   registry.getById(angelId); // throws if not found
 
-  // 2. Write the brief
+  // 2. Optionally read inbox cables to inject as context
+  let cableContext = '';
+  let pendingCables: ParsedCable[] = [];
+  if (options.consumeCables) {
+    pendingCables = readInbox(cwd, angelId);
+    if (pendingCables.length > 0) {
+      cableContext = buildCableContext(pendingCables);
+      console.log(`Injecting ${pendingCables.length} pending cable(s) into brief context.`);
+    } else {
+      console.log('No pending cables found in inbox.');
+    }
+  }
+
+  // 3. Write the brief
   const timestamp = new Date().toISOString();
   const briefPath = writeBrief(cwd, {
     to: angelId,
@@ -48,24 +71,29 @@ export async function briefAngel(
     phase: 'review',
     type: 'change_request',
     task,
-    context: '',
+    context: cableContext,
     expectedScope: '',
     priorResponse: 'none',
   });
 
   console.log(`Brief written to: ${briefPath}`);
 
-  // 3. Invoke the orchestrator in review mode
+  // 4. Invoke the orchestrator in review mode
   const result = await invoke(cwd, {
     phase: 'review',
     angelId,
     briefPath,
   });
 
-  // 4. Append a newspaper entry for the review
+  // 5. Archive cables now that the angel has seen them via the brief context
+  if (options.consumeCables && pendingCables.length > 0) {
+    archiveProcessedInbox(cwd, angelId);
+  }
+
+  // 6. Append a newspaper entry for the review
   appendBriefNewspaperEntry(cwd, angelId, result.response, task);
 
-  // 5. Print human-readable summary
+  // 7. Print human-readable summary
   printResponseSummary(result.response, result.responsePath);
 
   console.log('');
@@ -77,8 +105,42 @@ export async function briefAngel(
   console.log('(cables, newspaper, FILES CHANGED) will be lost.');
   console.log('----------------------------------------');
 
-  // 6. Return exit code based on the response verdict
+  // 8. Return exit code based on the response verdict
   return EXIT_CODES[result.response.response];
+}
+
+/**
+ * Format pending cables as a context block to inject into the brief.
+ * Each cable is included in full so the angel sees the complete content.
+ */
+function buildCableContext(cables: ParsedCable[]): string {
+  const lines: string[] = [
+    `PENDING CABLES IN INBOX (${cables.length}):`,
+    '',
+  ];
+
+  for (const cable of cables) {
+    lines.push(`--- CABLE from ${cable.from} [${cable.urgency.toUpperCase()}] ---`);
+    lines.push(`Subject: ${cable.subject}`);
+    lines.push(`Type: ${cable.type}`);
+    lines.push(`Timestamp: ${cable.timestamp}`);
+    if (cable.requiresAck) {
+      lines.push('Requires acknowledgment: yes');
+    }
+    lines.push('');
+    lines.push(cable.body.trim());
+    if (cable.references.length > 0) {
+      lines.push('');
+      lines.push('References:');
+      for (const ref of cable.references) {
+        lines.push(`  - ${ref}`);
+      }
+    }
+    lines.push(`--- END CABLE ---`);
+    lines.push('');
+  }
+
+  return lines.join('\n');
 }
 
 /**
