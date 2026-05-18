@@ -15,6 +15,7 @@ import { runDoctor } from './commands/doctor.js';
 import { retireAngel } from './commands/retire.js';
 import { showAngel } from './commands/show.js';
 import { askAngel } from './commands/ask.js';
+import { chatWithAngel } from './commands/chat.js';
 
 const program = new Command();
 
@@ -219,9 +220,10 @@ program
   .command('inbox')
   .argument('<angel-id>', 'Angel identifier')
   .description('Show pending cables for an angel')
-  .action((angelId: string) => {
+  .option('--ack', 'Archive displayed cables after showing them')
+  .action((angelId: string, options: { ack?: boolean }) => {
     try {
-      showInbox(process.cwd(), angelId);
+      showInbox(process.cwd(), angelId, { ack: options.ack });
     } catch (err: unknown) {
       handleError(err, 1);
     }
@@ -285,6 +287,19 @@ program
     try {
       const exitCode = await askAngel(process.cwd(), angelId, question);
       process.exit(exitCode);
+    } catch (err: unknown) {
+      handleError(err, 1);
+    }
+  });
+
+program
+  .command('chat')
+  .argument('<angel-id>', 'Angel identifier')
+  .argument('<message>', 'Note to append to angel chat history')
+  .description('Append a note to angel chat history (no invocation)')
+  .action((angelId: string, message: string) => {
+    try {
+      chatWithAngel(process.cwd(), angelId, message);
     } catch (err: unknown) {
       handleError(err, 1);
     }

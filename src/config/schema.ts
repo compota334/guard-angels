@@ -21,6 +21,7 @@ export const ConfigSchema = z.object({
   backend: BackendSchema,
   angels: z.array(AngelEntrySchema).min(1),
   sweep: SweepSchema,
+  global_notes: z.string().optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

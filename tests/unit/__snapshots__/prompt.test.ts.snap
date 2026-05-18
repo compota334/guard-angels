@@ -12,6 +12,7 @@ You operate under the following protocol:
 5. Your final action in either phase is to write a structured response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
 7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
 [CURRENT PHASE: REVIEW]
 Read the brief below and evaluate the proposed change against your charter, invariants, and the current state of your folder.
@@ -45,6 +46,9 @@ last_updated_by: main
 ## Charter
 Owns all authentication logic.
 
+
+[CHAT HISTORY]
+(no chat history)
 
 [NEWSPAPER DELTA SINCE YOUR LAST ACTIVATION]
 (no new entries)
@@ -149,6 +153,7 @@ You operate under the following protocol:
 5. Your final action in either phase is to write a structured response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
 7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
 [CURRENT PHASE: REVIEW]
 Read the brief below and evaluate the proposed change against your charter, invariants, and the current state of your folder.
@@ -182,6 +187,9 @@ last_updated_by: main
 ## Charter
 Owns all authentication logic.
 
+
+[CHAT HISTORY]
+(no chat history)
 
 [NEWSPAPER DELTA SINCE YOUR LAST ACTIVATION]
 (no new entries)
@@ -286,6 +294,7 @@ You operate under the following protocol:
 5. Your final action in either phase is to write a structured response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
 7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
 [CURRENT PHASE: EXECUTE]
 The change has been approved. Implement the task described in the brief.
@@ -320,6 +329,9 @@ last_updated_by: main
 ## Charter
 Owns all authentication logic.
 
+
+[CHAT HISTORY]
+(no chat history)
 
 [NEWSPAPER DELTA SINCE YOUR LAST ACTIVATION]
 (no new entries)
@@ -413,6 +425,7 @@ You operate under the following protocol:
 5. Your final action in either phase is to write a structured response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
 7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
 [CURRENT PHASE: INIT]
 You are being initialized for the first time. Your task is to read the contents of your folder, understand its purpose, and write a comprehensive angel.md that captures:
@@ -436,6 +449,9 @@ index.ts
 
 [YOUR MEMORY]
 (no angel.md exists yet — you are being initialized for the first time)
+
+[CHAT HISTORY]
+(no chat history)
 
 [NEWSPAPER DELTA SINCE YOUR LAST ACTIVATION]
 (no new entries)
@@ -529,6 +545,7 @@ You operate under the following protocol:
 5. Your final action in either phase is to write a structured response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
 7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
 [CURRENT PHASE: REVIEW]
 Read the brief below and evaluate the proposed change against your charter, invariants, and the current state of your folder.
@@ -562,6 +579,9 @@ last_updated_by: main
 ## Charter
 Owns all authentication logic.
 
+
+[CHAT HISTORY]
+(no chat history)
 
 [NEWSPAPER DELTA SINCE YOUR LAST ACTIVATION]
 (no new entries)
@@ -655,6 +675,7 @@ You operate under the following protocol:
 5. Your final action in either phase is to write a structured response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
 7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
 [CURRENT PHASE: SWEEP]
 You are being invoked in maintenance/sweep mode. Your tasks:
@@ -693,6 +714,9 @@ last_updated_by: main
 ## Charter
 Owns all authentication logic.
 
+
+[CHAT HISTORY]
+(no chat history)
 
 [NEWSPAPER DELTA SINCE YOUR LAST ACTIVATION]
 (no new entries)

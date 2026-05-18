@@ -81,3 +81,11 @@ export function angelLogsDir(projectRoot: string, angelId: string): string {
 export function angelCursorFile(projectRoot: string, angelId: string): string {
   return join(projectRoot, ANGELS_DIR, '_cursors', angelId);
 }
+
+export function chatDir(projectRoot: string): string {
+  return join(projectRoot, ANGELS_DIR, '_chat');
+}
+
+export function angelChatFile(projectRoot: string, angelId: string): string {
+  return join(projectRoot, ANGELS_DIR, '_chat', `${angelId}.md`);
+}

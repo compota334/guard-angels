@@ -93,6 +93,9 @@ export interface PromptInput {
   inbox: InboxEntry[];
   brief: string;
   responsePath: string;
+  angelNotes?: string;
+  globalNotes?: string;
+  chatHistory?: string;
 }
 
 export interface InboxEntry {
@@ -110,7 +113,8 @@ You operate under the following protocol:
 4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
 5. Your final action in either phase is to write a structured response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
-7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.`;
+7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.`;
 
 const PHASE_INSTRUCTIONS: Record<PromptPhase, string> = {
   discovery: `[CURRENT PHASE: DISCOVERY]
@@ -213,7 +217,16 @@ export function buildPrompt(input: PromptInput): string {
     sections.push('(no angel.md exists yet — you are being initialized for the first time)');
   }
 
-  // 5. Newspaper delta
+  // 5. Chat history
+  sections.push('');
+  sections.push('[CHAT HISTORY]');
+  if (input.chatHistory && input.chatHistory.trim()) {
+    sections.push(input.chatHistory.trim());
+  } else {
+    sections.push('(no chat history)');
+  }
+
+  // 6. Newspaper delta
   sections.push('');
   sections.push('[NEWSPAPER DELTA SINCE YOUR LAST ACTIVATION]');
   if (input.newspaperDelta.trim()) {
@@ -241,7 +254,22 @@ export function buildPrompt(input: PromptInput): string {
     }
   }
 
-  // 7. Brief
+  // 7. Known issues / global notes (omitted entirely when both are absent)
+  const hasGlobalNotes = input.globalNotes && input.globalNotes.trim();
+  const hasAngelNotes = input.angelNotes && input.angelNotes.trim();
+  if (hasGlobalNotes || hasAngelNotes) {
+    sections.push('');
+    sections.push('[KNOWN ISSUES / GLOBAL NOTES]');
+    if (hasGlobalNotes) {
+      sections.push(input.globalNotes!.trim());
+    }
+    if (hasAngelNotes) {
+      sections.push('--- Angel-specific notes ---');
+      sections.push(input.angelNotes!.trim());
+    }
+  }
+
+  // 8. Brief
   sections.push('');
   sections.push('[BRIEF]');
   if (input.brief.trim()) {
@@ -250,7 +278,7 @@ export function buildPrompt(input: PromptInput): string {
     sections.push('(no brief provided)');
   }
 
-  // 8. Output instructions
+  // 9. Output instructions
   sections.push('');
   sections.push('[OUTPUT INSTRUCTIONS]');
   sections.push(`Write your response to: ${input.responsePath}`);

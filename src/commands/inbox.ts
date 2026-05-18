@@ -1,21 +1,24 @@
 import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
-import { readInbox } from '../messaging/cables.js';
+import { readInbox, archiveProcessedInbox } from '../messaging/cables.js';
+
+export interface ShowInboxOptions {
+  ack?: boolean;
+}
 
 /**
  * Pretty-print pending cables for an angel.
  *
- * Validates the angel exists in the registry before reading.
- * Prints each cable with timestamp, sender, type, urgency, subject,
- * and body. If no cables are pending, prints a clean "no pending cables"
- * message.
+ * For angelId 'main', skips registry validation (main is the orchestrator,
+ * not a registered angel). For all other angels, validates existence first.
+ * With ack=true, archives all displayed cables after printing.
  */
-export function showInbox(cwd: string, angelId: string): void {
-  const config = loadConfig(cwd);
-  const registry = AngelRegistry.fromConfig(config);
-
-  // Validate angel exists
-  registry.getById(angelId); // throws if not found
+export function showInbox(cwd: string, angelId: string, options: ShowInboxOptions = {}): void {
+  if (angelId !== 'main') {
+    const config = loadConfig(cwd);
+    const registry = AngelRegistry.fromConfig(config);
+    registry.getById(angelId); // throws if not found
+  }
 
   const cables = readInbox(cwd, angelId);
 
@@ -44,5 +47,10 @@ export function showInbox(cwd: string, angelId: string): void {
       console.log(`    References: ${cable.references.join(', ')}`);
     }
     console.log('');
+  }
+
+  if (options.ack) {
+    archiveProcessedInbox(cwd, angelId);
+    console.log(`${cables.length} cable(s) archived.`);
   }
 }

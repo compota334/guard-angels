@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
 import { invoke } from '../protocol/orchestrate.js';
+import { handleQuestionsForMain } from '../messaging/questions.js';
 import type { ResponseData } from '../protocol/response.js';
 
 /**
@@ -45,6 +46,9 @@ export async function askAngel(
       briefPath: tmpBriefPath,
     });
 
+    if (result.response.questionsForMain.trim()) {
+      handleQuestionsForMain(cwd, angelId, result.response.questionsForMain);
+    }
     printAnswer(result.response, angelId);
     return 0;
   } finally {

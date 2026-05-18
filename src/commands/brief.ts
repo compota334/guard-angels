@@ -4,6 +4,7 @@ import { writeBrief } from '../protocol/brief.js';
 import { invoke } from '../protocol/orchestrate.js';
 import { appendNewspaper } from '../messaging/newspaper.js';
 import { readInbox, archiveProcessedInbox } from '../messaging/cables.js';
+import { handleQuestionsForMain } from '../messaging/questions.js';
 import type { ResponseData, ResponseVerdict } from '../protocol/response.js';
 import type { ParsedCable } from '../messaging/cables.js';
 
@@ -88,6 +89,11 @@ export async function briefAngel(
   // 5. Archive cables now that the angel has seen them via the brief context
   if (options.consumeCables && pendingCables.length > 0) {
     archiveProcessedInbox(cwd, angelId);
+  }
+
+  // 5b. Route questions back to main's inbox if the angel raised any
+  if (result.response.questionsForMain.trim()) {
+    handleQuestionsForMain(cwd, angelId, result.response.questionsForMain);
   }
 
   // 6. Append a newspaper entry for the review

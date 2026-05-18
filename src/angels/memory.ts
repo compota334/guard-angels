@@ -7,6 +7,7 @@ export const AngelFrontmatterSchema = z.object({
   status: z.enum(['draft', 'active']),
   last_updated: z.string().min(1),
   last_updated_by: z.enum(['main', 'sweep', 'self']),
+  notes: z.string().optional(),
 });
 
 export type AngelFrontmatter = z.infer<typeof AngelFrontmatterSchema>;
@@ -50,6 +51,9 @@ function serializeFrontmatter(fm: AngelFrontmatter): string {
     `last_updated: ${fm.last_updated}`,
     `last_updated_by: ${fm.last_updated_by}`,
   ];
+  if (fm.notes !== undefined) {
+    lines.push(`notes: ${fm.notes}`);
+  }
   return lines.join('\n');
 }
 

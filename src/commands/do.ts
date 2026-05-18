@@ -3,6 +3,7 @@ import { AngelRegistry } from '../angels/registry.js';
 import { writeBrief } from '../protocol/brief.js';
 import { invoke } from '../protocol/orchestrate.js';
 import { appendNewspaper } from '../messaging/newspaper.js';
+import { handleQuestionsForMain } from '../messaging/questions.js';
 import { executeAngel } from './execute.js';
 import type { ResponseData, ResponseVerdict } from '../protocol/response.js';
 
@@ -59,6 +60,12 @@ export async function doAngel(
 
   appendReviewNewspaperEntry(cwd, angelId, result.response, task);
   printReviewSummary(result.response, result.responsePath);
+
+  // Handle questions raised during the review phase (execute phase questions
+  // are handled inside executeAngel via execute.ts)
+  if (result.response.questionsForMain.trim()) {
+    handleQuestionsForMain(cwd, angelId, result.response.questionsForMain);
+  }
 
   const verdict = result.response.response;
 

@@ -7,6 +7,7 @@ import { invoke } from '../protocol/orchestrate.js';
 import { angelIdToPath } from '../paths/resolve.js';
 import { appendNewspaper } from '../messaging/newspaper.js';
 import { archiveProcessedInbox } from '../messaging/cables.js';
+import { handleQuestionsForMain } from '../messaging/questions.js';
 import type { ResponseData } from '../protocol/response.js';
 
 /**
@@ -118,6 +119,11 @@ export async function executeAngel(
   // 9. Archive inbox cables the angel saw during execution
   if (result.response.response === 'done') {
     archiveProcessedInbox(cwd, angelId);
+  }
+
+  // 9b. Route questions back to main's inbox if the angel raised any
+  if (result.response.questionsForMain.trim()) {
+    handleQuestionsForMain(cwd, angelId, result.response.questionsForMain);
   }
 
   // 10. Append newspaper entry

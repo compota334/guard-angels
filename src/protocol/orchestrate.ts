@@ -9,7 +9,7 @@ import { createLogStreams, writeLogMeta } from '../logs/log.js';
 import { buildPrompt } from './prompt.js';
 import { parseResponse } from './response.js';
 import { parseBrief } from './brief.js';
-import { angelMdFile, angelResponsesDir } from '../paths/layout.js';
+import { angelMdFile, angelResponsesDir, angelChatFile } from '../paths/layout.js';
 import { angelIdToPath } from '../paths/resolve.js';
 import { extractDatePrefix, computeNextSeq } from './parser-utils.js';
 import type { PromptPhase, InboxEntry } from './prompt.js';
@@ -88,10 +88,12 @@ export async function invoke(
     const angelPath = angelIdToPath(input.angelId);
     const angelMdPath = angelMdFile(projectRoot, angelPath === '.' ? '_root' : angelPath);
     let angelMdContent: string | null = null;
+    let angelNotes: string | undefined = undefined;
     try {
       // FIX 6: readAngelMd now exposes .raw — eliminates the double read
       const angelMd = readAngelMd(angelMdPath);
       angelMdContent = angelMd.raw ?? null;
+      angelNotes = angelMd.frontmatter.notes ?? undefined;
     } catch {
       // No angel.md yet — that's fine for init phase
       angelMdContent = null;
@@ -115,7 +117,18 @@ export async function invoke(
     // 5. Compute response file path
     const responsePath = computeResponsePath(projectRoot, input.angelId, timestamp);
 
-    // 6. Build prompt
+    // 6. Read chat history (last 50 lines, silences ENOENT)
+    let chatHistory: string | undefined;
+    try {
+      const chatRaw = fs.readFileSync(angelChatFile(projectRoot, input.angelId), 'utf-8');
+      const lines = chatRaw.split('\n');
+      chatHistory = lines.slice(-50).join('\n');
+    } catch {
+      // No chat file yet — that's fine
+    }
+
+    // 7. Build prompt
+    const globalNotes = config.global_notes ?? undefined;
     const prompt = buildPrompt({
       phase: input.phase,
       angelId: input.angelId,
@@ -128,6 +141,9 @@ export async function invoke(
       inbox: input.inbox ?? [],
       brief: briefContent,
       responsePath,
+      angelNotes,
+      globalNotes,
+      chatHistory,
     });
 
     // 7. Create log streams
