@@ -141,6 +141,7 @@ export async function initAngels(cwd: string, opts: InitOptions): Promise<void> 
     sweep: {
       autonomy: DEFAULT_SWEEP_AUTONOMY,
     },
+    memory: { target_pct: 25 },
   };
 
   const yamlContent = stringifyYaml(config, { lineWidth: 0 });

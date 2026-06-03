@@ -8,6 +8,11 @@ export const AngelFrontmatterSchema = z.object({
   last_updated: z.string().min(1),
   last_updated_by: z.enum(['main', 'sweep', 'self']),
   notes: z.string().optional(),
+  // NEW: memory metadata
+  memory_target_pct: z.coerce.number().optional(),
+  memory_max_tokens: z.coerce.number().optional(),
+  territory_size: z.coerce.number().optional(),
+  code_coverage_pct: z.coerce.number().optional(),
 });
 
 export type AngelFrontmatter = z.infer<typeof AngelFrontmatterSchema>;
@@ -53,6 +58,18 @@ function serializeFrontmatter(fm: AngelFrontmatter): string {
   ];
   if (fm.notes !== undefined) {
     lines.push(`notes: ${fm.notes}`);
+  }
+  if (fm.memory_target_pct !== undefined) {
+    lines.push(`memory_target_pct: ${fm.memory_target_pct}`);
+  }
+  if (fm.memory_max_tokens !== undefined) {
+    lines.push(`memory_max_tokens: ${fm.memory_max_tokens}`);
+  }
+  if (fm.territory_size !== undefined) {
+    lines.push(`territory_size: ${fm.territory_size}`);
+  }
+  if (fm.code_coverage_pct !== undefined) {
+    lines.push(`code_coverage_pct: ${fm.code_coverage_pct}`);
   }
   return lines.join('\n');
 }
