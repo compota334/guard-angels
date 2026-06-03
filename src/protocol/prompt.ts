@@ -1,6 +1,7 @@
 import type { MemoryConfig, AngelEntry } from '../config/schema.js';
 import type { DeepDiscoveryContext } from './discovery-enhanced.js';
 import type { WriteMode } from './response.js';
+import type { Chunk } from './discovery-chunker.js';
 import { getDenseTemplate } from '../angels/template.js';
 
 export type PromptPhase = 'init' | 'discovery' | 'review' | 'execute' | 'sweep' | 'ask';
@@ -576,4 +577,207 @@ export function buildDenseDiscoveryPrompt(params: {
   sections.push('When done, exit. Do not loop or wait for input.');
 
   return sections.join('\n');
+}
+
+// ─── Chunked Writing Prompts ──────────────────────────────────────────────────
+
+/**
+ * Build a prompt for writing a single chunk of a large angel.md.
+ *
+ * For chunk 0 (first): instructs the angel to write the FIRST chunk with
+ * WRITE_MODE: CHUNK and specific sections.
+ *
+ * For chunks 1+ (subsequent): tells the angel which sections are already
+ * written and which new sections to generate, using WRITE_MODE: CHUNK
+ * (or CHUNK_FINAL for the last chunk).
+ *
+ * @param params - Parameters for building the chunk prompt
+ * @returns The complete chunk prompt string
+ */
+export function buildChunkPrompt(params: {
+  angel: AngelEntry;
+  chunk: Chunk;
+  deepContext: DeepDiscoveryContext;
+  existingAngelMd?: string;
+  chunkIndex: number;
+  totalChunks: number;
+}): string {
+  const { angel, chunk, deepContext, existingAngelMd, chunkIndex, totalChunks } = params;
+  const pathDesc = angel.type === 'root' ? '.' : angel.path;
+  const isFirst = chunkIndex === 0;
+  const isLast = chunkIndex === totalChunks - 1;
+  const writeModeTag = isLast ? 'CHUNK_FINAL' : 'CHUNK';
+
+  const sections: string[] = [];
+
+  sections.push('[PROTOCOL]');
+  sections.push(PROTOCOL_HEADER);
+  sections.push('');
+
+  if (isFirst) {
+    sections.push('[CURRENT PHASE: DISCOVERY — CHUNKED WRITE, FIRST CHUNK]');
+    sections.push('');
+    sections.push(
+      `You are writing the FIRST chunk of the angel.md for ${pathDesc}. ` +
+        `The full angel.md will be written in ${totalChunks} chunks.`,
+    );
+    sections.push('');
+    sections.push(`Generate these sections:\n${chunk.sections.join(', ')}`);
+    sections.push('');
+    sections.push(
+      'Write ONLY these sections. Do NOT include other sections. ' +
+        'Use appendAngelMd() to write the body. ' +
+        'Start your response with WRITE_MODE: CHUNK then RESPONSE: done.',
+    );
+  } else {
+    const previousSections = getAllPreviousSections(chunkIndex, totalChunks);
+
+    sections.push('[CURRENT PHASE: DISCOVERY — CHUNKED WRITE]');
+    sections.push('');
+    sections.push(
+      `You are writing chunk ${chunkIndex + 1}/${totalChunks} of the angel.md for ${pathDesc}.`,
+    );
+    sections.push('');
+    sections.push(`Sections already written:\n${previousSections.join(', ')}`);
+    sections.push('');
+    if (existingAngelMd) {
+      sections.push(
+        'Current content (first 500 chars for reference):\n' +
+          existingAngelMd.slice(0, 500),
+      );
+      sections.push('');
+    }
+    sections.push(`Generate these NEW sections:\n${chunk.sections.join(', ')}`);
+    sections.push('');
+    sections.push(
+      'Do NOT repeat sections already written. ' +
+        'Use appendAngelMd() to append the new content. ' +
+        `Start your response with WRITE_MODE: ${writeModeTag} then RESPONSE: done.`,
+    );
+  }
+
+  // Discovery context reference
+  sections.push('');
+  sections.push('[DISCOVERY CONTEXT]');
+  sections.push(`Total files: ${deepContext.stats.totalFiles} | ` +
+    `High value: ${deepContext.stats.highValueFiles} | ` +
+    `Medium value: ${deepContext.stats.mediumValueFiles} | ` +
+    `Low value: ${deepContext.stats.lowValueFiles}`);
+  sections.push('');
+
+  // Add relevant context based on which sections are being generated
+  const needsFileContent =
+    chunk.sections.includes('Cobertura de Código') ||
+    chunk.sections.includes('Arquitectura del Área');
+  const needsHighValue =
+    chunk.sections.includes('Cobertura de Código');
+
+  if (needsFileContent) {
+    sections.push('[CLASSIFIED FILE LISTING]');
+    for (const cf of deepContext.classifiedFiles) {
+      sections.push(
+        `- [${cf.value}] ${cf.path} (${cf.language}, ${cf.sizeBytes} bytes) — ${cf.reason}`,
+      );
+    }
+    sections.push('');
+  }
+
+  if (needsHighValue && deepContext.highValueContent) {
+    sections.push('[HIGH VALUE FILES — FULL CONTENT]');
+    sections.push(deepContext.highValueContent);
+    sections.push('');
+  }
+
+  if (needsFileContent && !isFirst && deepContext.highValueContent) {
+    sections.push('[MEDIUM VALUE FILES — STUBS]');
+    sections.push(deepContext.mediumValueStubs || '(none)');
+    sections.push('');
+  }
+
+  // Output instructions
+  sections.push('[OUTPUT INSTRUCTIONS]');
+  sections.push(
+    '1. Start your response with WRITE_MODE: ' + writeModeTag + '\n' +
+    '2. Then RESPONSE: done\n' +
+    '3. DO NOT include the angel.md body in your response — use appendAngelMd() to write it\n' +
+    '4. Use the discovery context above for accurate file references',
+  );
+  sections.push('');
+  sections.push(CABLE_FORMAT_TEMPLATE);
+  sections.push('');
+  sections.push('When done, exit. Do not loop or wait for input.');
+
+  return sections.join('\n');
+}
+
+/**
+ * Build a finalize prompt to verify a chunked angel.md after all chunks are written.
+ *
+ * Instructs the angel to verify the complete file has all 11 sections,
+ * frontmatter timestamp is current, and no section is empty or has TODO/TBD placeholders.
+ *
+ * @param params - Parameters for building the finalize prompt
+ * @returns The complete finalize prompt string
+ */
+export function buildFinalizePrompt(params: {
+  angel: AngelEntry;
+  deepContext: DeepDiscoveryContext;
+  finalAngelMd: string;
+}): string {
+  const { angel, deepContext, finalAngelMd } = params;
+  const pathDesc = angel.type === 'root' ? '.' : angel.path;
+
+  const sections: string[] = [];
+
+  sections.push('[PROTOCOL]');
+  sections.push(PROTOCOL_HEADER);
+  sections.push('');
+
+  sections.push('[CURRENT PHASE: DISCOVERY — FINALIZE CHUNKED WRITE]');
+  sections.push('');
+  sections.push(
+    `All chunks have been written to .angels/${angel.id}/angel.md for ${pathDesc}.`,
+  );
+  sections.push('');
+  sections.push('Verify the file is complete and correct:');
+  sections.push('1. Check that all 11 sections are present');
+  sections.push('2. Check frontmatter has last_updated: now');
+  sections.push('3. Check no section is empty or says \'TODO\' or \'TBD\'');
+  sections.push('4. If anything is missing, write a brief CHUNK_FIX with the missing sections');
+  sections.push('');
+  sections.push('[FINAL ANGEL.MD CONTENT]');
+  sections.push(finalAngelMd.slice(0, 3000)); // first 3000 chars as reference
+  sections.push('');
+  sections.push('[OUTPUT INSTRUCTIONS]');
+  sections.push(
+    '1. If everything looks good, respond with RESPONSE: done and WRITE_MODE: CHUNK_FINAL\n' +
+    '2. If sections are missing or incomplete, describe what needs fixing\n' +
+    '3. Do NOT rewrite angel.md — just verify and report',
+  );
+  sections.push('');
+  sections.push(CABLE_FORMAT_TEMPLATE);
+  sections.push('');
+  sections.push('When done, exit. Do not loop or wait for input.');
+
+  return sections.join('\n');
+}
+
+/**
+ * Get the list of section names from chunks before the current index.
+ */
+function getAllPreviousSections(chunkIndex: number, totalChunks: number): string[] {
+  // These are the standard section groupings per chunk index
+  const chunkSections: string[][] = [
+    ['Charter y Boundaries', 'Arquitectura del Área', 'Public Contract', 'Invariantes y Reglas de Negocio'],
+    ['Cobertura de Código'],
+    ['Cobertura de Código', 'Data Model'],
+    ['Flujos Críticos', 'Testing Patterns'],
+    ['Decision Log', 'Known Debt y TODO', 'Dependencies'],
+  ];
+
+  const previous: string[] = [];
+  for (let i = 0; i < chunkIndex && i < chunkSections.length; i++) {
+    previous.push(...chunkSections[i]);
+  }
+  return previous;
 }

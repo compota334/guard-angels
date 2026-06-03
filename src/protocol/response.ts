@@ -205,6 +205,29 @@ export function detectWriteMode(responseText: string): 'proposed' | 'direct' {
   return 'proposed';
 }
 
+// ─── Chunk Mode Detection ─────────────────────────────────────────────────────
+
+/**
+ * Detect the chunk write mode from the response text.
+ *
+ * - 'chunk': response contains "WRITE_MODE: CHUNK" (more chunks coming)
+ * - 'chunk_final': response contains "WRITE_MODE: CHUNK_FINAL" (last chunk)
+ * - 'direct': response contains "WRITE_MODE: DIRECT"
+ * - 'proposed': default (no write mode header found)
+ */
+export function detectChunkMode(responseText: string): 'direct' | 'chunk' | 'chunk_final' | 'proposed' {
+  if (/^WRITE_MODE:\s*CHUNK_FINAL$/m.test(responseText)) {
+    return 'chunk_final';
+  }
+  if (/^WRITE_MODE:\s*CHUNK$/m.test(responseText)) {
+    return 'chunk';
+  }
+  if (/^WRITE_MODE:\s*DIRECT$/m.test(responseText)) {
+    return 'direct';
+  }
+  return 'proposed';
+}
+
 /**
  * Parse a direct-write response into a ParseResult.
  *

@@ -25,6 +25,14 @@ export interface VerificationResult {
   bodyLength: number;
 }
 
+export interface AppendResult {
+  success: boolean;
+  error?: string;
+  previousSizeBytes: number;
+  newSizeBytes: number;
+  appendedChars: number;
+}
+
 export interface AngelMd {
   frontmatter: AngelFrontmatter;
   body: string;
@@ -177,6 +185,78 @@ export function updateMetadata(
 }
 
 /**
+ * Append a body chunk to an existing angel.md file.
+ *
+ * Reads the existing angel.md, extracts the YAML frontmatter, appends the
+ * bodyChunk at the end of the current body (after the frontmatter, before
+ * EOF), updates last_updated in the frontmatter, and writes the file back.
+ *
+ * Also creates an automatic backup of the previous state in:
+ *   .angels/_backups/<relative-angel-path>/<timestamp>.md
+ *
+ * @param angelPath - Relative angel path (e.g. "src/auth" or "." for root)
+ * @param bodyChunk - The markdown body chunk to append
+ * @returns AppendResult with sizes before/after the operation
+ */
+export function appendAngelMd(angelPath: string, bodyChunk: string): AppendResult {
+  const filePath = getAngelMdPath(angelPath);
+  let previousSizeBytes = 0;
+
+  try {
+    // Read existing file if it exists
+    const existing = readAngelMd(filePath);
+    previousSizeBytes = existing.raw?.length ?? 0;
+
+    // Create backup before modifying
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupDir = path.join(
+      path.dirname(filePath),
+      '..',
+      '_backups',
+      angelPath === '.' ? '_root' : angelPath,
+    );
+    fs.mkdirSync(backupDir, { recursive: true });
+    const backupPath = path.join(backupDir, `${timestamp}.md`);
+    if (existing.raw) {
+      fs.writeFileSync(backupPath, existing.raw, 'utf-8');
+    }
+
+    // Append bodyChunk to existing body
+    const newBody = existing.body + '\n' + bodyChunk;
+
+    // Update frontmatter with fresh timestamp
+    const updatedFrontmatter: AngelFrontmatter = {
+      ...existing.frontmatter,
+      last_updated: new Date().toISOString(),
+      last_updated_by: 'main',
+    };
+
+    // Write the complete file
+    writeAngelMd(filePath, {
+      frontmatter: updatedFrontmatter,
+      body: newBody,
+    });
+
+    const newSizeBytes = fs.statSync(filePath).size;
+
+    return {
+      success: true,
+      previousSizeBytes,
+      newSizeBytes,
+      appendedChars: bodyChunk.length,
+    };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: (err as Error).message,
+      previousSizeBytes,
+      newSizeBytes: 0,
+      appendedChars: 0,
+    };
+  }
+}
+
+/**
  * Return the standard angel.md path for a given angel path.
  * E.g. getAngelMdPath('src/auth') → '.angels/src/auth/angel.md'
  */
@@ -192,11 +272,13 @@ export function getAngelMdPath(angelPath: string): string {
  * - Has valid YAML frontmatter (readAngelMd validates this)
  * - Has last_updated in frontmatter
  * - Body is not empty (> 50 characters)
+ * - Optionally: body tokens >= expectedMinTokens (chars * 0.75 >= expectedMinTokens)
  *
  * @param path - Absolute path to angel.md
+ * @param expectedMinTokens - If provided, verify body has at least this many tokens
  * @returns Verification result with valid flag, errors array, file size, parsed frontmatter, and body length
  */
-export function verifyAngelMd(filePath: string): VerificationResult {
+export function verifyAngelMd(filePath: string, expectedMinTokens?: number): VerificationResult {
   const errors: string[] = [];
 
   // 1. File exists
@@ -231,6 +313,17 @@ export function verifyAngelMd(filePath: string): VerificationResult {
   // 5. last_updated present in frontmatter
   if (!angelMd.frontmatter.last_updated) {
     errors.push('Missing last_updated in frontmatter');
+  }
+
+  // 6. Optional: check minimum token count (conservative chars→tokens ratio 0.75)
+  if (expectedMinTokens !== undefined) {
+    const estimatedTokens = Math.floor(bodyLength * 0.75);
+    if (estimatedTokens < expectedMinTokens) {
+      errors.push(
+        `Body too small: ~${estimatedTokens} estimated tokens (${bodyLength} chars * 0.75), ` +
+          `expected at least ${expectedMinTokens} tokens`,
+      );
+    }
   }
 
   // Build raw frontmatter dict for the result

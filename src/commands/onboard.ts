@@ -3,12 +3,13 @@ import * as readline from 'node:readline';
 import { resolve as resolvePath } from 'node:path';
 import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
-import { readAngelMd, writeAngelMd, verifyAngelMd } from '../angels/memory.js';
+import { readAngelMd, writeAngelMd, verifyAngelMd, appendAngelMd } from '../angels/memory.js';
 import { angelMdFile } from '../paths/layout.js';
 import { angelIdToPath } from '../paths/resolve.js';
 import { buildDiscoveryContext } from '../protocol/discovery.js';
 import { buildDeepDiscoveryContext } from '../protocol/discovery-enhanced.js';
-import { buildDenseDiscoveryPrompt, shouldUseDenseTemplate } from '../protocol/prompt.js';
+import { buildDenseDiscoveryPrompt, buildChunkPrompt, buildFinalizePrompt, shouldUseDenseTemplate } from '../protocol/prompt.js';
+import { buildChunkPlan, estimateTotalTokens } from '../protocol/discovery-chunker.js';
 import { invoke } from '../protocol/orchestrate.js';
 import { writeBrief } from '../protocol/brief.js';
 import type { Config, AngelEntry } from '../config/schema.js';
@@ -44,7 +45,18 @@ export async function onboardAngels(cwd: string, opts: OnboardOptions): Promise<
     const useDense = shouldUseDenseTemplate(angelConfigMemory);
 
     if (useDense) {
-      await onboardWithDirectWrite(cwd, angel, config, opts, angelPath, mdPath);
+      // Check if chunking is needed (estimated >50KB)
+      const absoluteAngelPath = resolvePath(cwd, angel.path);
+      const contextWindow = 128_000;
+      const deepContext = await buildDeepDiscoveryContext(absoluteAngelPath, angelConfigMemory, contextWindow);
+      const estimatedTok = estimateTotalTokens(deepContext);
+      const useChunking = estimatedTok > 12_000; // >50KB threshold
+
+      if (useChunking) {
+        await onboardWithChunks(cwd, angel, config, opts, angelPath, mdPath, deepContext, estimatedTok);
+      } else {
+        await onboardWithDirectWrite(cwd, angel, config, opts, angelPath, mdPath);
+      }
     } else {
       await onboardLegacy(cwd, angel, opts, angelPath, mdPath);
     }
@@ -211,6 +223,186 @@ async function onboardWithDirectWrite(
     await onboardLegacy(cwd, angel, opts, angelPath, mdPath);
     return;
   }
+
+  printSummary(angel.id, status);
+}
+
+/**
+ * Onboard an angel using chunked writing for large territories (>50KB estimated).
+ *
+ * 1. Build chunk plan from deep context
+ * 2. Write initial angel.md with just frontmatter (status: draft)
+ * 3. For each chunk:
+ *    a. Build chunk prompt
+ *    b. Write brief and invoke backend
+ *    c. Append chunk to angel.md
+ * 4. Verify final file integrity
+ */
+async function onboardWithChunks(
+  cwd: string,
+  angel: AngelEntry,
+  config: Config,
+  opts: OnboardOptions,
+  angelPath: string,
+  mdPath: string,
+  deepContext: Awaited<ReturnType<typeof buildDeepDiscoveryContext>>,
+  estimatedTokens: number,
+): Promise<void> {
+  // 1. Build chunk plan
+  const plan = buildChunkPlan(deepContext);
+
+  // 2. If only 1 chunk, delegate to direct write
+  if (plan.chunks.length === 1) {
+    console.log(`  Estimated size ${estimatedTokens} tokens — within single-write threshold, using direct write.`);
+    await onboardWithDirectWrite(cwd, angel, config, opts, angelPath, mdPath);
+    return;
+  }
+
+  console.log(`  Territory estimated at ~${estimatedTokens} tokens — using chunked write (${plan.chunks.length} chunks).`);
+
+  // 3. Write initial angel.md with only frontmatter (status: draft)
+  writeAngelMd(mdPath, {
+    frontmatter: {
+      status: 'draft',
+      last_updated: new Date().toISOString(),
+      last_updated_by: 'main',
+      memory_target_pct: deepContext.memoryConfig.targetPct,
+      memory_max_tokens: deepContext.memoryConfig.maxTokens,
+      territory_size: deepContext.fileCount,
+    },
+    body: '# Angel.md generated in chunks\n\n<!-- Content will be appended in sequential chunks -->\n',
+  });
+
+  // 4. Process each chunk sequentially
+  let currentAngelMd: string | undefined;
+
+  for (let i = 0; i < plan.chunks.length; i++) {
+    const chunk = plan.chunks[i];
+    const isFirst = i === 0;
+    const isLast = i === plan.chunks.length - 1;
+    let attempts = 0;
+    const maxRetries = 2;
+    let success = false;
+
+    while (attempts <= maxRetries && !success) {
+      try {
+        if (attempts > 0) {
+          console.log(`  Retry ${attempts}/${maxRetries} for chunk ${i + 1}/${plan.chunks.length}...`);
+        }
+
+        // a. Read current angel.md content for context (chunks 1+)
+        if (!isFirst) {
+          try {
+            const current = readAngelMd(mdPath);
+            currentAngelMd = current.raw;
+          } catch {
+            currentAngelMd = undefined;
+          }
+        }
+
+        // b. Build chunk prompt
+        const prompt = buildChunkPrompt({
+          angel,
+          chunk,
+          deepContext,
+          existingAngelMd: currentAngelMd,
+          chunkIndex: i,
+          totalChunks: plan.chunks.length,
+        });
+
+        // c. Write brief with chunk prompt
+        const timestamp = new Date().toISOString();
+        const briefPath = writeBrief(cwd, {
+          to: angel.id,
+          from: 'main',
+          timestamp,
+          phase: 'discovery',
+          type: 'change_request',
+          task: isFirst
+            ? `Write chunk ${i + 1}/${plan.chunks.length} of the angel.md. Generate sections: ${chunk.sections.join(', ')}.`
+            : `Write chunk ${i + 1}/${plan.chunks.length} of the angel.md. Generate NEW sections: ${chunk.sections.join(', ')}. Do NOT repeat sections already written.`,
+          context: prompt,
+          expectedScope: 'angel.md only — do not modify source files',
+          priorResponse: 'none',
+        });
+
+        // d. Invoke backend
+        const result = await invoke(cwd, {
+          phase: 'discovery',
+          angelId: angel.id,
+          briefPath,
+        });
+
+        // e. The angel responds with WRITE_MODE: CHUNK/CHUNK_FINAL.
+        //    The angel should have written the chunk via appendAngelMd().
+        //    We verify by checking the file was written correctly.
+
+        // f. Append chunk to angel.md (in case the angel didn't do it)
+        //    The chunk body is in proposedPlan field
+        const bodyChunk = result.response.proposedPlan?.trim() ?? '';
+        if (bodyChunk && bodyChunk.length > 50) {
+          const appendResult = appendAngelMd(angelPath, bodyChunk);
+          if (!appendResult.success) {
+            throw new Error(`Failed to append chunk ${i + 1}: ${appendResult.error}`);
+          }
+          console.log(`  Chunk ${i + 1}/${plan.chunks.length} appended (${appendResult.appendedChars} chars).`);
+        } else {
+          // The angel may have written directly — check if file grew
+          const currentStats = fs.statSync(mdPath);
+          if (currentStats.size <= 100) {
+            throw new Error(`Chunk ${i + 1} produced no output`);
+          }
+          console.log(`  Chunk ${i + 1}/${plan.chunks.length} written directly by angel.`);
+        }
+
+        success = true;
+      } catch (err: unknown) {
+        attempts++;
+        if (attempts > maxRetries) {
+          console.error(`  Chunk ${i + 1} failed after ${maxRetries + 1} attempts: ${(err as Error).message}`);
+          throw new Error(`Chunked write failed on chunk ${i + 1}/${plan.chunks.length}: ${(err as Error).message}`);
+        }
+        console.error(`  Chunk ${i + 1} attempt ${attempts} failed: ${(err as Error).message}. Retrying...`);
+      }
+    }
+  }
+
+  // 5. Build finalize prompt to verify integrity
+  console.log('  All chunks written. Verifying final angel.md...');
+
+  // Read the complete file
+  let finalAngelMd: string;
+  try {
+    const finalMd = readAngelMd(mdPath);
+    finalAngelMd = finalMd.raw ?? '';
+  } catch {
+    finalAngelMd = '';
+  }
+
+  // Verify with expected min tokens
+  const verification = verifyAngelMd(mdPath, Math.max(1000, Math.floor(estimatedTokens * 0.5)));
+
+  if (!verification.valid) {
+    console.error(`  Verification warnings: ${verification.errors.join('; ')}`);
+    // Non-fatal: the angel.md may still be usable
+  }
+
+  // Update frontmatter to active
+  const status = opts.autoActivate ? 'active' : 'draft';
+  writeAngelMd(mdPath, {
+    frontmatter: {
+      status,
+      last_updated: new Date().toISOString(),
+      last_updated_by: 'main',
+      memory_target_pct: deepContext.memoryConfig.targetPct,
+      memory_max_tokens: deepContext.memoryConfig.maxTokens,
+      territory_size: deepContext.fileCount,
+      code_coverage_pct: Math.round(
+        (deepContext.stats.highValueFiles / Math.max(deepContext.stats.totalFiles, 1)) * 100,
+      ),
+    },
+    body: finalAngelMd.startsWith('---') ? readAngelMd(mdPath).body : finalAngelMd,
+  });
 
   printSummary(angel.id, status);
 }
