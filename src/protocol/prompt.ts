@@ -1,5 +1,6 @@
 import type { MemoryConfig, AngelEntry } from '../config/schema.js';
 import type { DeepDiscoveryContext } from './discovery-enhanced.js';
+import type { WriteMode } from './response.js';
 import { getDenseTemplate } from '../angels/template.js';
 
 export type PromptPhase = 'init' | 'discovery' | 'review' | 'execute' | 'sweep' | 'ask';
@@ -308,10 +309,27 @@ export function getProtocolHeaderLength(): number {
  * Check whether the dense template should be used based on memory config.
  * Returns true if target_pct > 5 (indicating a large/full-context angel.md is desired).
  */
-function useDenseTemplate(memory: MemoryConfig | undefined): boolean {
+export function useDenseTemplate(memory: MemoryConfig | undefined): boolean {
   if (!memory) return false;
   const pct = memory.target_pct ?? 25;
   return pct > 5;
+}
+
+/**
+ * Check whether the dense template should be used based on angel memory config.
+ * Unlike `useDenseTemplate`, this accepts a plain config object (not necessarily
+ * the full MemoryConfig type) and also checks `max_tokens > 5000`.
+ *
+ * Returns true if:
+ * - target_pct > 5, OR
+ * - max_tokens > 5000
+ * Returns false if no config is provided (backward compatible).
+ */
+export function shouldUseDenseTemplate(angelMemory?: { target_pct?: number; max_tokens?: number }): boolean {
+  if (!angelMemory) return false;
+  if ((angelMemory.target_pct ?? 0) > 5) return true;
+  if ((angelMemory.max_tokens ?? 0) > 5000) return true;
+  return false;
 }
 
 /**
@@ -330,8 +348,14 @@ export function buildDiscoveryPrompt(params: {
   context: DeepDiscoveryContext;
   globalMemoryConfig?: MemoryConfig;
   responsePath: string;
+  /** When true, instruct the angel to write angel.md directly to the filesystem. */
+  directWrite?: boolean;
+  /** Write mode — 'direct' or 'proposed' (default). Takes precedence over directWrite when set. */
+  writeMode?: WriteMode;
+  /** Absolute path to the angel.md file. Required when directWrite is true. */
+  angelMdPath?: string;
 }): string {
-  const { angel, context, globalMemoryConfig, responsePath } = params;
+  const { angel, context, globalMemoryConfig, responsePath, directWrite, writeMode, angelMdPath } = params;
   const memory = angel.memory ?? globalMemoryConfig;
 
   if (useDenseTemplate(memory)) {
@@ -340,6 +364,9 @@ export function buildDiscoveryPrompt(params: {
       context,
       memoryConfig: context.memoryConfig,
       responsePath,
+      directWrite,
+      writeMode,
+      angelMdPath,
     });
   }
 
@@ -406,8 +433,15 @@ export function buildDenseDiscoveryPrompt(params: {
   context: DeepDiscoveryContext;
   memoryConfig: { targetPct: number; maxTokens: number };
   responsePath: string;
+  /** When true, instruct the angel to write angel.md directly to the filesystem
+   *  instead of embedding it in PROPOSED PLAN. Requires angelMdPath. */
+  directWrite?: boolean;
+  /** Write mode — 'direct' or 'proposed' (default). Takes precedence over directWrite when set. */
+  writeMode?: WriteMode;
+  /** Absolute path to the angel.md file. Required when directWrite is true. */
+  angelMdPath?: string;
 }): string {
-  const { angel, context, memoryConfig, responsePath } = params;
+  const { angel, context, memoryConfig, responsePath, directWrite, writeMode, angelMdPath } = params;
   const pathDesc = angel.type === 'root' ? '.' : angel.path;
   const denseTemplate = getDenseTemplate(pathDesc, angel.type);
 
@@ -503,17 +537,39 @@ export function buildDenseDiscoveryPrompt(params: {
   sections.push('[DENSE TEMPLATE — USE THIS STRUCTURE]');
   sections.push(denseTemplate);
 
+  const isDirect = writeMode === 'direct' || directWrite === true;
+
   // 10. Output instructions
   sections.push('');
   sections.push('[OUTPUT INSTRUCTIONS]');
-  sections.push(
-    `Write your response (the complete angel.md body) to: ${responsePath}`,
-  );
-  sections.push(
-    'Write ONLY the angel.md body (no frontmatter, no surrounding code fences, no extra commentary). ' +
+
+  if (isDirect && angelMdPath) {
+    // Direct write mode: angel writes angel.md directly to the filesystem
+    // and indicates success via WRITE_MODE: DIRECT header
+    sections.push(`WRITE angel.md directly at: ${angelMdPath}`);
+    sections.push('');
+    sections.push(
+      '1. Write the complete angel.md body (no YAML frontmatter) to that path.\n' +
+      '2. In your response, start with WRITE_MODE: DIRECT then RESPONSE: done.\n' +
+      '   On failure, use RESPONSE: error.\n' +
+      'DO NOT include the angel.md body in PROPOSED PLAN (leave it empty).',
+    );
+    sections.push('');
+    sections.push(
       'The body MUST follow the Dense Template structure above. ' +
       'Be specific: reference actual function names, types, modules, and file paths from the discovery context.',
-  );
+    );
+  } else {
+    // Legacy mode: angel writes body in PROPOSED PLAN field
+    sections.push(
+      `Write your response (the complete angel.md body) to: ${responsePath}`,
+    );
+    sections.push(
+      'Write ONLY the angel.md body (no frontmatter, no surrounding code fences, no extra commentary). ' +
+      'The body MUST follow the Dense Template structure above. ' +
+      'Be specific: reference actual function names, types, modules, and file paths from the discovery context.',
+    );
+  }
   sections.push('');
   sections.push(CABLE_FORMAT_TEMPLATE);
   sections.push('');

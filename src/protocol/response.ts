@@ -9,6 +9,8 @@ import {
   computeNextSeq,
 } from './parser-utils.js';
 
+export type WriteMode = 'proposed' | 'direct';
+
 export type ResponseVerdict = 'proceed' | 'concerns' | 'refuse' | 'done' | 'error';
 
 const VALID_VERDICTS: ReadonlySet<string> = new Set([
@@ -34,6 +36,21 @@ export interface ResponseData {
   cablesSent: string;
   filesChanged: string;
   angelMdUpdated: string;
+}
+
+/**
+ * Result of parsing a response file when the angel used direct write mode.
+ * Instead of embedding the full angel.md body in PROPOSED PLAN, the angel
+ * wrote angel.md directly to the filesystem and the response file only
+ * carries a short status message.
+ */
+export interface ParseResult {
+  status: 'done' | 'error' | 'partial';
+  body: string;            // angel.md body if using PROPOSED PLAN (legacy)
+  writeMode: WriteMode;    // 'direct' or 'proposed'
+  message: string;         // mensaje corto del angel ("done", "error: ...")
+  /** @deprecated Use writeMode instead — kept for backward compat */
+  directWrite: boolean;    // true si el angel usó direct write
 }
 
 /**
@@ -170,5 +187,61 @@ export function formatResponse(data: ResponseData): string {
   }
 
   return lines.join('\n');
+}
+
+// ─── Direct Write Mode Detection ──────────────────────────────────────────────
+
+/**
+ * Detect which write mode the angel used based on the response text.
+ *
+ * - 'direct': response contains "WRITE_MODE: DIRECT" header
+ * - 'proposed': response contains "PROPOSED PLAN:" section header
+ *   (backward compatible default)
+ */
+export function detectWriteMode(responseText: string): 'proposed' | 'direct' {
+  if (/^WRITE_MODE:\s*DIRECT$/m.test(responseText)) {
+    return 'direct';
+  }
+  return 'proposed';
+}
+
+/**
+ * Parse a direct-write response into a ParseResult.
+ *
+ * In direct-write mode, the response file does NOT carry the full angel.md
+ * body in PROPOSED PLAN. Instead it has:
+ *   WRITE_MODE: DIRECT
+ *   RESPONSE: done  |  error
+ *
+ * The `message` is the value of the RESPONSE field ("done" or "error").
+ * If RESPONSE is "error", any PROPOSED PLAN content (if present) is
+ * captured in `body` for diagnostic purposes.
+ */
+export function parseDirectWriteResponse(raw: string): ParseResult {
+  const responseValue = extractRequiredField(raw, 'RESPONSE').toLowerCase();
+  const message = responseValue;
+  const isError = responseValue === 'error';
+  const isPartial = responseValue === 'concerns' || responseValue === 'refuse' || responseValue === 'proceed';
+
+  let status: 'done' | 'error' | 'partial';
+  if (responseValue === 'done') {
+    status = 'done';
+  } else if (isError || responseValue === '') {
+    status = 'error';
+  } else {
+    status = 'partial';
+  }
+
+  // In direct-write mode, PROPOSED PLAN is usually empty. If the angel
+  // included it for error diagnostics, capture it.
+  const body = extractSection(raw, 'PROPOSED PLAN') ?? '';
+
+  return {
+    status,
+    body,
+    writeMode: 'direct',
+    directWrite: true,
+    message,
+  };
 }
 

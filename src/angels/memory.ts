@@ -17,6 +17,14 @@ export const AngelFrontmatterSchema = z.object({
 
 export type AngelFrontmatter = z.infer<typeof AngelFrontmatterSchema>;
 
+export interface VerificationResult {
+  valid: boolean;
+  errors: string[];
+  sizeBytes: number;
+  frontmatter: Record<string, unknown> | null;
+  bodyLength: number;
+}
+
 export interface AngelMd {
   frontmatter: AngelFrontmatter;
   body: string;
@@ -166,4 +174,73 @@ export function updateMetadata(
     ...partial,
   };
   writeAngelMd(filePath, { frontmatter: updated, body: current.body });
+}
+
+/**
+ * Return the standard angel.md path for a given angel path.
+ * E.g. getAngelMdPath('src/auth') → '.angels/src/auth/angel.md'
+ */
+export function getAngelMdPath(angelPath: string): string {
+  return `.angels/${angelPath}/angel.md`;
+}
+
+/**
+ * Verify that an angel.md file at the given path exists and is well-formed.
+ *
+ * Checks:
+ * - File exists
+ * - Has valid YAML frontmatter (readAngelMd validates this)
+ * - Has last_updated in frontmatter
+ * - Body is not empty (> 50 characters)
+ *
+ * @param path - Absolute path to angel.md
+ * @returns Verification result with valid flag, errors array, file size, parsed frontmatter, and body length
+ */
+export function verifyAngelMd(filePath: string): VerificationResult {
+  const errors: string[] = [];
+
+  // 1. File exists
+  if (!fs.existsSync(filePath)) {
+    return { valid: false, errors: ['File does not exist'], sizeBytes: 0, frontmatter: null, bodyLength: 0 };
+  }
+
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(filePath);
+  } catch {
+    return { valid: false, errors: ['Cannot stat file'], sizeBytes: 0, frontmatter: null, bodyLength: 0 };
+  }
+
+  const sizeBytes = stat.size;
+
+  // 2-3. Parse and validate frontmatter (readAngelMd throws on malformed)
+  let angelMd: AngelMd;
+  try {
+    angelMd = readAngelMd(filePath);
+  } catch (err: unknown) {
+    errors.push(`Invalid frontmatter: ${(err as Error).message}`);
+    return { valid: false, errors, sizeBytes, frontmatter: null, bodyLength: 0 };
+  }
+
+  // 4. Body should not be empty (> 50 characters)
+  const bodyLength = angelMd.body.trim().length;
+  if (bodyLength < 50) {
+    errors.push(`Body too short: ${bodyLength} characters, expected at least 50`);
+  }
+
+  // 5. last_updated present in frontmatter
+  if (!angelMd.frontmatter.last_updated) {
+    errors.push('Missing last_updated in frontmatter');
+  }
+
+  // Build raw frontmatter dict for the result
+  const frontmatter: Record<string, unknown> = { ...angelMd.frontmatter };
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    sizeBytes,
+    frontmatter,
+    bodyLength,
+  };
 }
