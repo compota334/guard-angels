@@ -3,10 +3,12 @@ import * as readline from 'node:readline';
 import { resolve as resolvePath } from 'node:path';
 import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
-import { readAngelMd, writeAngelMd } from '../angels/memory.js';
+import { readAngelMd, writeAngelMd, verifyAngelMd } from '../angels/memory.js';
 import { angelMdFile } from '../paths/layout.js';
 import { angelIdToPath } from '../paths/resolve.js';
 import { buildDiscoveryContext } from '../protocol/discovery.js';
+import { buildDeepDiscoveryContext } from '../protocol/discovery-enhanced.js';
+import { buildDenseDiscoveryPrompt, shouldUseDenseTemplate } from '../protocol/prompt.js';
 import { invoke } from '../protocol/orchestrate.js';
 import { writeBrief } from '../protocol/brief.js';
 import type { Config, AngelEntry } from '../config/schema.js';
@@ -37,58 +39,180 @@ export async function onboardAngels(cwd: string, opts: OnboardOptions): Promise<
 
     console.log(`Onboarding ${angel.id}...`);
 
-    const absoluteAngelPath = resolvePath(cwd, angelPath);
-    const ctx = buildDiscoveryContext(absoluteAngelPath, opts.depth ?? 3);
+    // Detect whether to use dense direct write mode
+    const angelConfigMemory = angel.memory ?? config.memory;
+    const useDense = shouldUseDenseTemplate(angelConfigMemory);
 
-    const timestamp = new Date().toISOString();
-    const priorityContent = Object.entries(ctx.priorityFiles)
-      .map(([file, content]) => `### ${file}\n\`\`\`\n${content}\n\`\`\``)
-      .join('\n\n');
-
-    const briefPath = writeBrief(cwd, {
-      to: angel.id,
-      from: 'main',
-      timestamp,
-      phase: 'discovery',
-      type: 'change_request',
-      task: 'Read this codebase territory and write your angel.md body. Cover: charter, public contract, invariants, dependencies, and open questions. Do not include frontmatter — the orchestrator adds it.',
-      context: `${ctx.fileListing}\n\n## Priority Files\n\n${priorityContent || '(none found)'}`,
-      expectedScope: 'angel.md only — do not modify source files',
-      priorResponse: 'none',
-    });
-
-    const result = await invoke(cwd, {
-      phase: 'discovery',
-      angelId: angel.id,
-      briefPath,
-    });
-    const body = result.response.proposedPlan.trim();
-
-    if (!body || !/^##\s+(Charter|Public contract|Invariants)/m.test(body)) {
-      throw new Error(
-        `Angel ${angel.id} returned an empty or malformed angel.md body in PROPOSED PLAN. ` +
-          `Response file: ${result.responsePath}. The angel likely wrote angel.md to the ` +
-          `wrong path or misunderstood the PROPOSED PLAN field. Re-onboard once the prompt ` +
-          `is fixed.`,
-      );
+    if (useDense) {
+      await onboardWithDirectWrite(cwd, angel, config, opts, angelPath, mdPath);
+    } else {
+      await onboardLegacy(cwd, angel, opts, angelPath, mdPath);
     }
-
-    const status = opts.autoActivate ? 'active' : 'draft';
-    writeAngelMd(mdPath, {
-      frontmatter: {
-        status,
-        last_updated: new Date().toISOString(),
-        last_updated_by: 'main',
-      },
-      body,
-    });
-
-    printSummary(angel.id, status);
   }
 
   if (!opts.autoActivate) {
     printActivateHint();
   }
+}
+
+async function onboardLegacy(
+  cwd: string,
+  angel: AngelEntry,
+  opts: OnboardOptions,
+  angelPath: string,
+  mdPath: string,
+): Promise<void> {
+  const absoluteAngelPath = resolvePath(cwd, angelPath);
+  const ctx = buildDiscoveryContext(absoluteAngelPath, opts.depth ?? 3);
+
+  const timestamp = new Date().toISOString();
+  const priorityContent = Object.entries(ctx.priorityFiles)
+    .map(([file, content]) => `### ${file}\n\`\`\`\n${content}\n\`\`\``)
+    .join('\n\n');
+
+  const briefPath = writeBrief(cwd, {
+    to: angel.id,
+    from: 'main',
+    timestamp,
+    phase: 'discovery',
+    type: 'change_request',
+    task: 'Read this codebase territory and write your angel.md body. Cover: charter, public contract, invariants, dependencies, and open questions. Do not include frontmatter — the orchestrator adds it.',
+    context: `${ctx.fileListing}\n\n## Priority Files\n\n${priorityContent || '(none found)'}`,
+    expectedScope: 'angel.md only — do not modify source files',
+    priorResponse: 'none',
+  });
+
+  const result = await invoke(cwd, {
+    phase: 'discovery',
+    angelId: angel.id,
+    briefPath,
+  });
+  const body = result.response.proposedPlan.trim();
+
+  if (!body || !/^##\s+(Charter|Public contract|Invariants)/m.test(body)) {
+    throw new Error(
+      `Angel ${angel.id} returned an empty or malformed angel.md body in PROPOSED PLAN. ` +
+        `Response file: ${result.responsePath}. The angel likely wrote angel.md to the ` +
+        `wrong path or misunderstood the PROPOSED PLAN field. Re-onboard once the prompt ` +
+        `is fixed.`,
+    );
+  }
+
+  const status = opts.autoActivate ? 'active' : 'draft';
+  writeAngelMd(mdPath, {
+    frontmatter: {
+      status,
+      last_updated: new Date().toISOString(),
+      last_updated_by: 'main',
+    },
+    body,
+  });
+
+  printSummary(angel.id, status);
+}
+
+/**
+ * Onboard an angel using the direct write flow:
+ * 1. Build deep discovery context (dense mode)
+ * 2. Build a dense discovery prompt
+ * 3. Write a brief with the prompt as context
+ * 4. Invoke the backend (the angel writes angel.md directly)
+ * 5. Verify angel.md exists and is valid, then update frontmatter
+ * 6. On failure, fall back to legacy onboard
+ */
+async function onboardWithDirectWrite(
+  cwd: string,
+  angel: AngelEntry,
+  config: Config,
+  opts: OnboardOptions,
+  angelPath: string,
+  mdPath: string,
+): Promise<void> {
+  // 1. Build deep discovery context
+  const absoluteAngelPath = resolvePath(cwd, angel.path);
+  const angelConfigMemory = angel.memory ?? config.memory;
+  const contextWindow = 128_000;
+  const deepContext = await buildDeepDiscoveryContext(absoluteAngelPath, angelConfigMemory, contextWindow);
+
+  // 2. Build dense discovery prompt for the brief context
+  const timestamp = new Date().toISOString();
+  const prompt = buildDenseDiscoveryPrompt({
+    angel,
+    context: deepContext,
+    memoryConfig: deepContext.memoryConfig,
+    responsePath: '',
+    writeMode: 'direct',
+    angelMdPath: mdPath,
+  });
+
+  // 3. Write brief with the dense prompt as context
+  const briefPath = writeBrief(cwd, {
+    to: angel.id,
+    from: 'main',
+    timestamp,
+    phase: 'discovery',
+    type: 'change_request',
+    task: 'Read this codebase territory and write your angel.md body. Cover: charter, public contract, invariants, dependencies, and open questions. Do not include frontmatter — the orchestrator adds it.',
+    context: prompt,
+    expectedScope: 'angel.md only — do not modify source files',
+    priorResponse: 'none',
+  });
+
+  // 4. Invoke backend (orchestrate.ts handles WRITE_MODE: DIRECT detection)
+  await invoke(cwd, {
+    phase: 'discovery',
+    angelId: angel.id,
+    briefPath,
+  });
+
+  // 5. Check that the angel wrote the body file
+  if (!fs.existsSync(mdPath)) {
+    console.error(`Direct write failed: angel.md not found at ${mdPath}`);
+    console.log(`Falling back to legacy onboard for ${angel.id}...`);
+    await onboardLegacy(cwd, angel, opts, angelPath, mdPath);
+    return;
+  }
+
+  const rawBody = fs.readFileSync(mdPath, 'utf-8')?.trim() ?? '';
+
+  // Angel was told to write body without frontmatter. If the content
+  // starts with '---' the old file content (with frontmatter) is still
+  // intact — the angel didn't actually write angel.md directly.
+  if (rawBody.startsWith('---')) {
+    console.error(`Direct write failed: angel.md at ${mdPath} still has old frontmatter — angel did not overwrite it`);
+    console.log(`Falling back to legacy onboard for ${angel.id}...`);
+    await onboardLegacy(cwd, angel, opts, angelPath, mdPath);
+    return;
+  }
+
+  if (rawBody.length < 50) {
+    console.error(`Direct write failed: angel.md body too short (${rawBody.length} chars)`);
+    console.log(`Falling back to legacy onboard for ${angel.id}...`);
+    await onboardLegacy(cwd, angel, opts, angelPath, mdPath);
+    return;
+  }
+
+  // 6. Add frontmatter (the angel wrote only the body) and verify
+  const status = opts.autoActivate ? 'active' : 'draft';
+  writeAngelMd(mdPath, {
+    frontmatter: {
+      status,
+      last_updated: new Date().toISOString(),
+      last_updated_by: 'main',
+    },
+    body: rawBody,
+  });
+
+  // 7. Verify the final angel.md is well-formed
+  const verification = verifyAngelMd(mdPath);
+  if (!verification.valid) {
+    console.error(`Direct write verification failed for ${angel.id}: ${verification.errors.join('; ')}`);
+    console.log(`Falling back to legacy onboard for ${angel.id}...`);
+    await onboardLegacy(cwd, angel, opts, angelPath, mdPath);
+    return;
+  }
+
+  printSummary(angel.id, status);
 }
 
 function ensureInit(cwd: string): Config {

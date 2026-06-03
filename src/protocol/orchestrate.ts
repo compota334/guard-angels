@@ -7,7 +7,7 @@ import { pickAdapter } from '../backend/factory.js';
 import { acquireLock, releaseLock } from '../locks/lock.js';
 import { createLogStreams, writeLogMeta } from '../logs/log.js';
 import { buildPrompt } from './prompt.js';
-import { parseResponse } from './response.js';
+import { parseResponseContent, detectWriteMode, parseDirectWriteResponse } from './response.js';
 import { parseBrief } from './brief.js';
 import { angelMdFile, angelResponsesDir, angelChatFile } from '../paths/layout.js';
 import { angelIdToPath } from '../paths/resolve.js';
@@ -250,12 +250,10 @@ export async function invoke(
       );
     }
 
-    // 11. Parse the response file. If the angel exited cleanly but didn't
-    // write a parseable response, that's a hard failure — throw rather than
-    // fabricate a synthetic response on disk.
-    let response: ResponseData;
+    // 11. Read the raw response file text and parse accordingly
+    let rawResponseText: string;
     try {
-      response = parseResponse(responsePath);
+      rawResponseText = fs.readFileSync(responsePath, 'utf-8');
     } catch (err: unknown) {
       throw new OrchestrationError(
         `Angel "${input.angelId}" did not produce a valid response file at ${responsePath}. Logs: ${logs.stderrPath}`,
@@ -265,6 +263,46 @@ export async function invoke(
         logMetaPath,
         { cause: err },
       );
+    }
+
+    // 11a. Detect write mode and parse accordingly
+    const writeMode = detectWriteMode(rawResponseText);
+    let response: ResponseData;
+
+    if (writeMode === 'direct') {
+      const directResult = parseDirectWriteResponse(rawResponseText);
+      if (directResult.status === 'error') {
+        throw new Error(`Direct write failed: ${directResult.message}`);
+      }
+      // Direct write: angel wrote angel.md directly, response is minimal
+      response = {
+        from: '',
+        timestamp: '',
+        response: 'done',
+        concerns: '',
+        proposedPlan: '',
+        questionsForMain: '',
+        proceedIf: '',
+        testResults: '',
+        driftReport: '',
+        cablesSent: '',
+        filesChanged: '',
+        angelMdUpdated: '',
+      };
+    } else {
+      // Legacy: proposed plan mode — parse full response structure
+      try {
+        response = parseResponseContent(rawResponseText);
+      } catch (err: unknown) {
+        throw new OrchestrationError(
+          `Angel "${input.angelId}" did not produce a valid response file at ${responsePath}. Logs: ${logs.stderrPath}`,
+          'missing_response',
+          logs.stdoutPath,
+          logs.stderrPath,
+          logMetaPath,
+          { cause: err },
+        );
+      }
     }
 
     return {
