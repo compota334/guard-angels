@@ -1,3 +1,7 @@
+import type { MemoryConfig, AngelEntry } from '../config/schema.js';
+import type { DeepDiscoveryContext } from './discovery-enhanced.js';
+import { getDenseTemplate } from '../angels/template.js';
+
 export type PromptPhase = 'init' | 'discovery' | 'review' | 'execute' | 'sweep' | 'ask';
 
 const CABLE_FORMAT_TEMPLATE = `\
@@ -296,4 +300,224 @@ export function buildPrompt(input: PromptInput): string {
  */
 export function getProtocolHeaderLength(): number {
   return PROTOCOL_HEADER.length;
+}
+
+// ─── Dense Discovery Prompt ───────────────────────────────────────────────────
+
+/**
+ * Check whether the dense template should be used based on memory config.
+ * Returns true if target_pct > 5 (indicating a large/full-context angel.md is desired).
+ */
+function useDenseTemplate(memory: MemoryConfig | undefined): boolean {
+  if (!memory) return false;
+  const pct = memory.target_pct ?? 25;
+  return pct > 5;
+}
+
+/**
+ * Build a discovery prompt for the DISCOVERY phase.
+ *
+ * If the memory config indicates a dense template (target_pct > 5),
+ * this function switches to the deep discovery context and dense template.
+ * Otherwise, it delegates to the standard `buildPrompt()` behavior
+ * (backward compatible).
+ *
+ * @param params - Parameters for building the discovery prompt
+ * @returns The complete prompt string
+ */
+export function buildDiscoveryPrompt(params: {
+  angel: AngelEntry;
+  context: DeepDiscoveryContext;
+  globalMemoryConfig?: MemoryConfig;
+  responsePath: string;
+}): string {
+  const { angel, context, globalMemoryConfig, responsePath } = params;
+  const memory = angel.memory ?? globalMemoryConfig;
+
+  if (useDenseTemplate(memory)) {
+    return buildDenseDiscoveryPrompt({
+      angel,
+      context,
+      memoryConfig: context.memoryConfig,
+      responsePath,
+    });
+  }
+
+  // Standard (backward compatible) discovery prompt — same structure as buildPrompt
+  const sections: string[] = [];
+
+  sections.push('[PROTOCOL]');
+  sections.push(PROTOCOL_HEADER);
+
+  sections.push('');
+  sections.push(PHASE_INSTRUCTIONS['discovery']);
+
+  sections.push('');
+  sections.push('[ANGEL IDENTITY]');
+  const pathDesc = angel.type === 'root' ? '.' : angel.path;
+  sections.push(`You are the angel for: ${pathDesc}`);
+  sections.push(`Your angel ID is: ${angel.id}`);
+  sections.push(`Your type is: ${angel.type}`);
+  sections.push('');
+  sections.push('## Territory File Listing');
+  sections.push('');
+  const fileLines: string[] = [];
+  for (const cf of context.classifiedFiles) {
+    fileLines.push(`- [${cf.value}] ${cf.path} (${cf.language}, ${cf.sizeBytes} bytes)`);
+  }
+  sections.push(fileLines.join('\n'));
+
+  sections.push('');
+  sections.push('## High Value Files (full content)');
+  sections.push(context.highValueContent || '(none)');
+
+  sections.push('');
+  sections.push('## Medium Value Files (stubs)');
+  sections.push(context.mediumValueStubs || '(none)');
+
+  sections.push('');
+  sections.push('## Low Value Files');
+  sections.push(context.lowValueListing || '(none)');
+
+  sections.push('');
+  sections.push('[OUTPUT INSTRUCTIONS]');
+  sections.push(`Write your response to: ${responsePath}`);
+  sections.push(buildResponseFormat('discovery'));
+  sections.push('');
+  sections.push(CABLE_FORMAT_TEMPLATE);
+  sections.push('When done, exit. Do not loop or wait for input.');
+
+  return sections.join('\n');
+}
+
+/**
+ * Build a dense discovery prompt using the deep discovery context and
+ * the 11-section dense template.
+ *
+ * Instructs the angel to generate a dense angel.md optimized for the
+ * available token budget, skipping boilerplate, imports, and obvious
+ * conventions.
+ *
+ * @param params - Parameters for building the dense discovery prompt
+ * @returns The complete dense prompt string
+ */
+export function buildDenseDiscoveryPrompt(params: {
+  angel: AngelEntry;
+  context: DeepDiscoveryContext;
+  memoryConfig: { targetPct: number; maxTokens: number };
+  responsePath: string;
+}): string {
+  const { angel, context, memoryConfig, responsePath } = params;
+  const pathDesc = angel.type === 'root' ? '.' : angel.path;
+  const denseTemplate = getDenseTemplate(pathDesc, angel.type);
+
+  const sections: string[] = [];
+
+  // 1. Protocol header
+  sections.push('[PROTOCOL]');
+  sections.push(PROTOCOL_HEADER);
+
+  // 2. Dense discovery instructions
+  sections.push('');
+  sections.push('[CURRENT PHASE: DISCOVERY — DENSE MODE]');
+  sections.push(
+    `You are generating a DENSE angel.md. Target size: ~${memoryConfig.maxTokens} tokens. ` +
+      'Skip boilerplate, imports, obvious conventions. Cover ALL files in your territory.',
+  );
+  sections.push('');
+  sections.push(
+    `Budget allocated: ${memoryConfig.targetPct}% of context window (${memoryConfig.maxTokens} max tokens). ` +
+      `Files in territory: ${context.stats.totalFiles} (high: ${context.stats.highValueFiles}, ` +
+      `medium: ${context.stats.mediumValueFiles}, low: ${context.stats.lowValueFiles}). ` +
+      `Boilerplate lines skipped: ${context.stats.boilerplateLinesSkipped}. ` +
+      `Compression ratio: ${context.stats.compressionRatio}%.`,
+  );
+  sections.push('');
+  sections.push(
+    'Rules:\n' +
+      '- Read the deep discovery context below (classified files, full content of high-value files, stubs of medium-value files).\n' +
+      '- Write a DENSE angel.md body (no YAML frontmatter — the orchestrator adds it).\n' +
+      '- Use the template structure provided below. Fill EVERY section with real content extracted from the code.\n' +
+      '- Name real functions, types, modules you can see. No generic placeholders.\n' +
+      '- If you cannot determine something, leave a specific question (e.g. "Q: Is retry logic bounded or unbounded?").\n' +
+      '- Do NOT include imports, JSDoc comments, standard framework decorators, or obvious boilerplate.\n' +
+      '- Do not modify any source files.',
+  );
+
+  // 3. Angel identity
+  sections.push('');
+  sections.push('[ANGEL IDENTITY]');
+  sections.push(`You are the angel for: ${pathDesc}`);
+  sections.push(`Your angel ID is: ${angel.id}`);
+  sections.push(`Your type is: ${angel.type}`);
+
+  // 4. Discovery stats
+  sections.push('');
+  sections.push('[DISCOVERY STATS]');
+  sections.push(
+    `Total files: ${context.stats.totalFiles} | ` +
+      `High value: ${context.stats.highValueFiles} | ` +
+      `Medium value: ${context.stats.mediumValueFiles} | ` +
+      `Low value: ${context.stats.lowValueFiles}`,
+  );
+  sections.push(
+    `Boilerplate skipped: ${context.stats.boilerplateLinesSkipped} lines | ` +
+      `Useful lines kept: ${context.stats.usefulLinesKept} | ` +
+      `Compression: ${context.stats.compressionRatio}%`,
+  );
+
+  // 5. File listing (classified)
+  sections.push('');
+  sections.push('[CLASSIFIED FILE LISTING]');
+  const listing: string[] = [];
+  for (const cf of context.classifiedFiles) {
+    listing.push(
+      `- [${cf.value}] ${cf.path} (${cf.language}, ${cf.sizeBytes} bytes) — ${cf.reason}`,
+    );
+  }
+  sections.push(listing.join('\n'));
+
+  // 6. High value content
+  sections.push('');
+  sections.push('[HIGH VALUE FILES — FULL CONTENT]');
+  sections.push(
+    context.highValueContent || '(no high-value files found)',
+  );
+
+  // 7. Medium value stubs
+  sections.push('');
+  sections.push('[MEDIUM VALUE FILES — STUBS]');
+  sections.push(
+    context.mediumValueStubs || '(no medium-value files found)',
+  );
+
+  // 8. Low value listing
+  sections.push('');
+  sections.push('[LOW VALUE FILES — LISTING]');
+  sections.push(
+    context.lowValueListing || '(no low-value files found)',
+  );
+
+  // 9. Template guidance — emit the dense template as reference
+  sections.push('');
+  sections.push('[DENSE TEMPLATE — USE THIS STRUCTURE]');
+  sections.push(denseTemplate);
+
+  // 10. Output instructions
+  sections.push('');
+  sections.push('[OUTPUT INSTRUCTIONS]');
+  sections.push(
+    `Write your response (the complete angel.md body) to: ${responsePath}`,
+  );
+  sections.push(
+    'Write ONLY the angel.md body (no frontmatter, no surrounding code fences, no extra commentary). ' +
+      'The body MUST follow the Dense Template structure above. ' +
+      'Be specific: reference actual function names, types, modules, and file paths from the discovery context.',
+  );
+  sections.push('');
+  sections.push(CABLE_FORMAT_TEMPLATE);
+  sections.push('');
+  sections.push('When done, exit. Do not loop or wait for input.');
+
+  return sections.join('\n');
 }
