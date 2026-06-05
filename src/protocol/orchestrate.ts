@@ -28,7 +28,12 @@ export class OrchestrationError extends Error {
   override readonly name = 'OrchestrationError';
   constructor(
     message: string,
-    public readonly kind: 'timeout' | 'missing_response' | 'spawn_error',
+    public readonly kind:
+      | 'timeout'
+      | 'missing_response'
+      | 'spawn_error'
+      | 'prompt_too_large'
+      | 'direct_write_failed',
     public readonly logStdoutPath: string,
     public readonly logStderrPath: string,
     public readonly logMetaPath: string,
@@ -283,7 +288,13 @@ export async function invoke(
     if (writeMode === 'direct') {
       const directResult = parseDirectWriteResponse(rawResponseText);
       if (directResult.status === 'error') {
-        throw new Error(`Direct write failed: ${directResult.message}`);
+        throw new OrchestrationError(
+          `Angel "${input.angelId}" direct write failed: ${directResult.message}. Logs: ${logs.stderrPath}`,
+          'direct_write_failed',
+          logs.stdoutPath,
+          logs.stderrPath,
+          logMetaPath,
+        );
       }
       // Direct write: angel wrote angel.md directly, response is minimal
       response = {
