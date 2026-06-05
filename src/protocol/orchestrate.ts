@@ -17,7 +17,7 @@ import type { PromptPhase, InboxEntry, PromptInput } from './prompt.js';
 import type { ResponseData } from './response.js';
 import type { LogMeta } from '../logs/log.js';
 
-const LOCK_TTL_PADDING_MS = 30_000;
+const LOCK_TTL_PADDING_MS = 10_000;
 
 /**
  * Thrown when an angel invocation fails in a way that produces no usable

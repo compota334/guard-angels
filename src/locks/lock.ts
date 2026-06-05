@@ -12,6 +12,45 @@ export interface LockInfo {
 }
 
 /**
+ * Locks currently held by this process, keyed by absolute lock path.
+ * Used by the signal handlers to release every held lock on SIGTERM/SIGINT
+ * so a terminated orchestrator does not leave stale lock files behind.
+ */
+const heldLocks = new Map<string, { projectRoot: string; scope?: string }>();
+let signalHandlersRegistered = false;
+
+/**
+ * Install SIGTERM/SIGINT handlers (once) that release every held lock and then
+ * re-raise the signal so the process exits with conventional signal semantics.
+ */
+function registerSignalHandlers(): void {
+  if (signalHandlersRegistered) return;
+  signalHandlersRegistered = true;
+
+  const handler = (signal: NodeJS.Signals): void => {
+    for (const { projectRoot, scope } of heldLocks.values()) {
+      try {
+        releaseLock(projectRoot, scope);
+      } catch (err: unknown) {
+        // Best-effort cleanup during shutdown: surface the failure but keep
+        // releasing the remaining locks instead of aborting on the first one.
+        process.stderr.write(
+          `Failed to release lock during ${signal}: ${(err as Error).message ?? String(err)}\n`,
+        );
+      }
+    }
+    // Restore default behavior and re-raise so exit codes reflect the signal
+    // (130 for SIGINT, 143 for SIGTERM) rather than a fabricated value.
+    process.removeListener('SIGTERM', handler);
+    process.removeListener('SIGINT', handler);
+    process.kill(process.pid, signal);
+  };
+
+  process.on('SIGTERM', handler);
+  process.on('SIGINT', handler);
+}
+
+/**
  * Acquire the global orchestrator lock.
  * If a stale lock is found (PID dead or TTL elapsed), it is reclaimed.
  * Throws if a valid lock is held by another process.
@@ -35,6 +74,8 @@ export function acquireLock(projectRoot: string, ttlMs: number, scope?: string):
     try {
       // wx flag: exclusive create — fails atomically with EEXIST if file exists
       fs.writeFileSync(lockPath, content, { encoding: 'utf-8', flag: 'wx' });
+      heldLocks.set(lockPath, { projectRoot, scope });
+      registerSignalHandlers();
       return lockPath;
     } catch (err: unknown) {
       const code = (err as NodeJS.ErrnoException).code;
@@ -69,6 +110,8 @@ export function acquireLock(projectRoot: string, ttlMs: number, scope?: string):
 export function releaseLock(projectRoot: string, scope?: string): void {
   const lockFileName = scope ? `orchestrator-${scope}.lock` : LOCK_FILENAME;
   const lockPath = path.join(locksDir(projectRoot), lockFileName);
+  // Stop tracking this lock regardless of outcome — we are relinquishing it.
+  heldLocks.delete(lockPath);
   const existing = readLock(lockPath);
   if (!existing) return;
 
