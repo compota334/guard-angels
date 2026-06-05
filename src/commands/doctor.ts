@@ -1,11 +1,11 @@
 import * as fs from 'node:fs';
-import { resolve, join, relative, dirname, basename } from 'node:path';
+import { resolve, join, relative, dirname, basename, sep } from 'node:path';
 import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
 import { identifyCandidates } from '../angels/identify.js';
 import { readLock, isStale, lockFilePath, type LockInfo } from '../locks/lock.js';
 import { readAngelMd } from '../angels/memory.js';
-import { angelMdFile, briefsDir, responsesDir, logsDir, archiveDir } from '../paths/layout.js';
+import { angelMdFile, briefsDir, responsesDir, logsDir, outboxDir, inboxDir, archiveDir } from '../paths/layout.js';
 import type { Config } from '../config/schema.js';
 
 // --- Report types ---
@@ -195,7 +195,7 @@ export function checkStaleDrafts(
 
 // --- Archive ---
 
-const ARCHIVABLE_DIRS = ['_briefs', '_responses', '_logs'] as const;
+const ARCHIVABLE_DIRS = ['_briefs', '_responses', '_logs', '_outbox', '_inbox'] as const;
 
 /**
  * Recursively collect all files under a directory.
@@ -217,8 +217,53 @@ function collectFiles(dir: string): string[] {
 }
 
 /**
- * Archive old files from _briefs/, _responses/, _logs/ into _archive/<YYYY-MM>/.
- * Files are moved (not copied), preserving their relative path under each top-level directory.
+ * Move a single old file into _archive/<YYYY-MM>/<topName>/<relative-path>.
+ * No-op if the file is younger than the threshold. Pushes to `movedFiles` on move.
+ */
+function archiveFileIfOld(
+  filePath: string,
+  topName: string,
+  topDir: string,
+  archive: string,
+  now: number,
+  thresholdMs: number,
+  movedFiles: ArchivedFile[],
+): void {
+  // Skip angel.md files (should never appear here, but belt-and-suspenders)
+  if (basename(filePath) === 'angel.md') return;
+
+  const stat = fs.statSync(filePath);
+  const fileAge = now - stat.mtimeMs;
+  if (fileAge <= thresholdMs) return;
+
+  // Compute archive destination: _archive/<YYYY-MM>/<topName>/<relative-path>
+  const fileDate = new Date(stat.mtimeMs);
+  const yearMonth = `${fileDate.getFullYear()}-${String(fileDate.getMonth() + 1).padStart(2, '0')}`;
+  const relPath = relative(topDir, filePath);
+  const destPath = join(archive, yearMonth, topName, relPath);
+
+  // Create destination directory
+  fs.mkdirSync(dirname(destPath), { recursive: true });
+
+  // Move file (rename if same filesystem, copy+delete otherwise)
+  try {
+    fs.renameSync(filePath, destPath);
+  } catch {
+    // Cross-device move: copy then delete
+    fs.copyFileSync(filePath, destPath);
+    fs.unlinkSync(filePath);
+  }
+
+  movedFiles.push({ sourcePath: filePath, destPath });
+}
+
+/**
+ * Archive old files into _archive/<YYYY-MM>/. Files are moved (not copied),
+ * preserving their relative path under each top-level directory.
+ *
+ * Fully archivable: _briefs/, _responses/, _logs/, _outbox/.
+ * Inbox is archived selectively: only quarantined malformed cables
+ * (_inbox/<angelId>/_quarantine/...) — pending messages are never touched.
  * Newspaper, cursors, _config.yml, and angel.md files are NEVER archived.
  */
 export function archiveOldFiles(
@@ -230,47 +275,31 @@ export function archiveOldFiles(
   const archive = archiveDir(projectRoot);
   const movedFiles: ArchivedFile[] = [];
 
+  // Directories whose entire contents are archivable.
   const sourceDirs: Record<string, string> = {
     _briefs: briefsDir(projectRoot),
     _responses: responsesDir(projectRoot),
     _logs: logsDir(projectRoot),
+    _outbox: outboxDir(projectRoot),
   };
 
   for (const [topName, topDir] of Object.entries(sourceDirs)) {
-    const files = collectFiles(topDir);
-    for (const filePath of files) {
-      // Skip angel.md files (should never appear here, but belt-and-suspenders)
-      if (basename(filePath) === 'angel.md') continue;
-
-      const stat = fs.statSync(filePath);
-      const fileAge = now - stat.mtimeMs;
-
-      if (fileAge > thresholdMs) {
-        // Compute archive destination: _archive/<YYYY-MM>/<topName>/<relative-path>
-        const fileDate = new Date(stat.mtimeMs);
-        const yearMonth = `${fileDate.getFullYear()}-${String(fileDate.getMonth() + 1).padStart(2, '0')}`;
-        const relPath = relative(topDir, filePath);
-        const destPath = join(archive, yearMonth, topName, relPath);
-
-        // Create destination directory
-        fs.mkdirSync(dirname(destPath), { recursive: true });
-
-        // Move file (rename if same filesystem, copy+delete otherwise)
-        try {
-          fs.renameSync(filePath, destPath);
-        } catch {
-          // Cross-device move: copy then delete
-          fs.copyFileSync(filePath, destPath);
-          fs.unlinkSync(filePath);
-        }
-
-        movedFiles.push({ sourcePath: filePath, destPath });
-      }
+    for (const filePath of collectFiles(topDir)) {
+      archiveFileIfOld(filePath, topName, topDir, archive, now, thresholdMs, movedFiles);
     }
   }
 
+  // Inbox: archive only quarantined cables, never pending messages.
+  const inbox = inboxDir(projectRoot);
+  const quarantineFiles = collectFiles(inbox).filter((f) =>
+    relative(inbox, f).split(sep).includes('_quarantine'),
+  );
+  for (const filePath of quarantineFiles) {
+    archiveFileIfOld(filePath, '_inbox', inbox, archive, now, thresholdMs, movedFiles);
+  }
+
   // Clean up empty directories left behind in the source dirs
-  for (const topDir of Object.values(sourceDirs)) {
+  for (const topDir of [...Object.values(sourceDirs), inbox]) {
     cleanEmptyDirs(topDir);
   }
 

@@ -218,6 +218,50 @@ describe('doctor --archive', () => {
     }
   });
 
+  it('archives old outbox files', () => {
+    setupCleanProject(tmpDir);
+    const angelsDir = join(tmpDir, '.angels');
+    const oldDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+
+    const outboxDir = join(angelsDir, '_outbox', 'auth');
+    fs.mkdirSync(outboxDir, { recursive: true });
+    const outFile = join(outboxDir, '2026-03-15T1400-cable.md');
+    fs.writeFileSync(outFile, 'old outbound cable', 'utf-8');
+    fs.utimesSync(outFile, oldDate, oldDate);
+
+    const result = archiveOldFiles(tmpDir, 30);
+
+    expect(result.movedFiles).toHaveLength(1);
+    expect(fs.existsSync(outFile)).toBe(false);
+    expect(result.movedFiles[0].destPath).toContain(join('_archive'));
+    expect(result.movedFiles[0].destPath).toContain('_outbox');
+  });
+
+  it('archives quarantined inbox cables but never pending inbox messages', () => {
+    setupCleanProject(tmpDir);
+    const angelsDir = join(tmpDir, '.angels');
+    const oldDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+
+    // Quarantined malformed cable: should be archived.
+    const quarantineDir = join(angelsDir, '_inbox', 'auth', '_quarantine');
+    fs.mkdirSync(quarantineDir, { recursive: true });
+    const badCable = join(quarantineDir, 'bad-cable.md');
+    fs.writeFileSync(badCable, 'malformed', 'utf-8');
+    fs.utimesSync(badCable, oldDate, oldDate);
+
+    // Pending inbox message (not quarantined): must be preserved even if old.
+    const pending = join(angelsDir, '_inbox', 'auth', 'pending.md');
+    fs.writeFileSync(pending, 'pending message', 'utf-8');
+    fs.utimesSync(pending, oldDate, oldDate);
+
+    const result = archiveOldFiles(tmpDir, 30);
+
+    expect(result.movedFiles).toHaveLength(1);
+    expect(fs.existsSync(badCable)).toBe(false);
+    expect(fs.existsSync(pending)).toBe(true);
+    expect(result.movedFiles[0].destPath).toContain('_quarantine');
+  });
+
   it('does not archive recent files', () => {
     setupCleanProject(tmpDir);
     const angelsDir = join(tmpDir, '.angels');

@@ -328,7 +328,7 @@ program
 program
   .command('doctor')
   .description('Sanity check: orphaned angels, missing angels, stale locks')
-  .option('--archive', 'Archive old briefs/responses/logs')
+  .option('--archive', 'Archive old briefs/responses/logs/outbox and quarantined inbox cables')
   .option('--older-than <days>', 'Archive threshold in days (default: 30)')
   .action(async (options: { archive?: boolean; olderThan?: string }) => {
     try {
