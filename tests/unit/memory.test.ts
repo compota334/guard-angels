@@ -474,8 +474,7 @@ Provides test data to other modules.
   });
 
   it('appends bodyChunk to existing angel.md and updates last_updated', () => {
-    const result = appendAngelMd(testAngelPath, '## New section\nAppended content.\n');
-    expect(result.success).toBe(true);
+    appendAngelMd(testAngelPath, '## New section\nAppended content.\n');
 
     // Verify the body was appended
     const fp = path.join(tmpDir, '.angels', testAngelPath, 'angel.md');
@@ -512,7 +511,6 @@ Provides test data to other modules.
 
     const result = appendAngelMd(testAngelPath, bodyChunk);
 
-    expect(result.success).toBe(true);
     expect(result.previousSizeBytes).toBe(beforeStat.size);
     expect(result.newSizeBytes).toBeGreaterThan(beforeStat.size);
     expect(result.appendedChars).toBe(bodyChunk.length);
@@ -532,20 +530,16 @@ Provides test data to other modules.
 
     const bodyChunk = '## New section\nFresh content.\n';
     const result = appendAngelMd(testAngelPath, bodyChunk);
-    expect(result.success).toBe(true);
 
     const md = readAngelMd(fp);
     expect(md.body).toContain('Fresh content.');
     expect(result.previousSizeBytes).toBeGreaterThan(0); // frontmatter is part of raw
   });
 
-  it('returns error AppendResult when file does not exist', () => {
-    const result = appendAngelMd('nonexistent/path', 'Some content.\n');
-    expect(result.success).toBe(false);
-    expect(result.error).toBeTruthy();
-    expect(result.previousSizeBytes).toBe(0);
-    expect(result.newSizeBytes).toBe(0);
-    expect(result.appendedChars).toBe(0);
+  it('throws when the angel.md does not exist', () => {
+    expect(() => appendAngelMd('nonexistent/path', 'Some content.\n')).toThrow(
+      /Cannot read angel\.md/,
+    );
   });
 });
 

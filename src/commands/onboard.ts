@@ -351,10 +351,8 @@ async function onboardWithChunks(
         //    The chunk body is in proposedPlan field
         const bodyChunk = result.response.proposedPlan?.trim() ?? '';
         if (bodyChunk && bodyChunk.length > 50) {
+          // appendAngelMd throws on failure; the surrounding retry loop catches it.
           const appendResult = appendAngelMd(angelPath, bodyChunk);
-          if (!appendResult.success) {
-            throw new Error(`Failed to append chunk ${i + 1}: ${appendResult.error}`);
-          }
           console.log(`  Chunk ${i + 1}/${plan.chunks.length} appended (${appendResult.appendedChars} chars).`);
         } else {
           // The angel may have written directly — check if file grew

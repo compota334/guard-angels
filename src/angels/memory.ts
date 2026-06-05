@@ -26,8 +26,6 @@ export interface VerificationResult {
 }
 
 export interface AppendResult {
-  success: boolean;
-  error?: string;
   previousSizeBytes: number;
   newSizeBytes: number;
   appendedChars: number;
@@ -194,66 +192,58 @@ export function updateMetadata(
  * Also creates an automatic backup of the previous state in:
  *   .angels/_backups/<relative-angel-path>/<timestamp>.md
  *
+ * Throws if the angel.md is missing/malformed or the write fails — there is
+ * no silent failure path, so callers must let the error propagate or handle
+ * it explicitly.
+ *
  * @param angelPath - Relative angel path (e.g. "src/auth" or "." for root)
  * @param bodyChunk - The markdown body chunk to append
  * @returns AppendResult with sizes before/after the operation
  */
 export function appendAngelMd(angelPath: string, bodyChunk: string): AppendResult {
   const filePath = getAngelMdPath(angelPath);
-  let previousSizeBytes = 0;
 
-  try {
-    // Read existing file if it exists
-    const existing = readAngelMd(filePath);
-    previousSizeBytes = existing.raw?.length ?? 0;
+  // Read existing file (throws if missing or malformed)
+  const existing = readAngelMd(filePath);
+  const previousSizeBytes = existing.raw?.length ?? 0;
 
-    // Create backup before modifying
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupDir = path.join(
-      path.dirname(filePath),
-      '..',
-      '_backups',
-      angelPath === '.' ? '_root' : angelPath,
-    );
-    fs.mkdirSync(backupDir, { recursive: true });
-    const backupPath = path.join(backupDir, `${timestamp}.md`);
-    if (existing.raw) {
-      fs.writeFileSync(backupPath, existing.raw, 'utf-8');
-    }
-
-    // Append bodyChunk to existing body
-    const newBody = existing.body + '\n' + bodyChunk;
-
-    // Update frontmatter with fresh timestamp
-    const updatedFrontmatter: AngelFrontmatter = {
-      ...existing.frontmatter,
-      last_updated: new Date().toISOString(),
-      last_updated_by: 'main',
-    };
-
-    // Write the complete file
-    writeAngelMd(filePath, {
-      frontmatter: updatedFrontmatter,
-      body: newBody,
-    });
-
-    const newSizeBytes = fs.statSync(filePath).size;
-
-    return {
-      success: true,
-      previousSizeBytes,
-      newSizeBytes,
-      appendedChars: bodyChunk.length,
-    };
-  } catch (err: unknown) {
-    return {
-      success: false,
-      error: (err as Error).message,
-      previousSizeBytes,
-      newSizeBytes: 0,
-      appendedChars: 0,
-    };
+  // Create backup before modifying
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupDir = path.join(
+    path.dirname(filePath),
+    '..',
+    '_backups',
+    angelPath === '.' ? '_root' : angelPath,
+  );
+  fs.mkdirSync(backupDir, { recursive: true });
+  const backupPath = path.join(backupDir, `${timestamp}.md`);
+  if (existing.raw) {
+    fs.writeFileSync(backupPath, existing.raw, 'utf-8');
   }
+
+  // Append bodyChunk to existing body
+  const newBody = existing.body + '\n' + bodyChunk;
+
+  // Update frontmatter with fresh timestamp
+  const updatedFrontmatter: AngelFrontmatter = {
+    ...existing.frontmatter,
+    last_updated: new Date().toISOString(),
+    last_updated_by: 'main',
+  };
+
+  // Write the complete file (throws on failure)
+  writeAngelMd(filePath, {
+    frontmatter: updatedFrontmatter,
+    body: newBody,
+  });
+
+  const newSizeBytes = fs.statSync(filePath).size;
+
+  return {
+    previousSizeBytes,
+    newSizeBytes,
+    appendedChars: bodyChunk.length,
+  };
 }
 
 /**
