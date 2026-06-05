@@ -6,13 +6,14 @@ import { readAngelMd } from '../angels/memory.js';
 import { pickAdapter } from '../backend/factory.js';
 import { acquireLock, releaseLock } from '../locks/lock.js';
 import { createLogStreams, writeLogMeta } from '../logs/log.js';
-import { buildPrompt } from './prompt.js';
+import { buildPrompt, measurePromptSize, formatPromptSizeWarning } from './prompt.js';
 import { parseResponseContent, detectWriteMode, parseDirectWriteResponse } from './response.js';
 import { parseBrief } from './brief.js';
+import { DEFAULT_PROMPT_WARN_BYTES } from '../config/defaults.js';
 import { angelMdFile, angelResponsesDir, angelChatFile } from '../paths/layout.js';
 import { angelIdToPath } from '../paths/resolve.js';
 import { extractDatePrefix, computeNextSeq } from './parser-utils.js';
-import type { PromptPhase, InboxEntry } from './prompt.js';
+import type { PromptPhase, InboxEntry, PromptInput } from './prompt.js';
 import type { ResponseData } from './response.js';
 import type { LogMeta } from '../logs/log.js';
 
@@ -129,7 +130,7 @@ export async function invoke(
 
     // 7. Build prompt
     const globalNotes = config.global_notes ?? undefined;
-    const prompt = buildPrompt({
+    const promptInput: PromptInput = {
       phase: input.phase,
       angelId: input.angelId,
       angelPath,
@@ -144,7 +145,17 @@ export async function invoke(
       angelNotes,
       globalNotes,
       chatHistory,
-    });
+    };
+    const prompt = buildPrompt(promptInput);
+
+    // 7a. Diagnostic: warn (without blocking) when the prompt is oversized.
+    const promptBytes = Buffer.byteLength(prompt);
+    if (promptBytes > DEFAULT_PROMPT_WARN_BYTES) {
+      const report = measurePromptSize(prompt, promptInput);
+      process.stderr.write(
+        formatPromptSizeWarning(input.angelId, input.phase, report, DEFAULT_PROMPT_WARN_BYTES) + '\n',
+      );
+    }
 
     // 7. Create log streams
     const logs = createLogStreams(projectRoot, input.angelId, timestamp);

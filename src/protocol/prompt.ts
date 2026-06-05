@@ -296,6 +296,68 @@ export function buildPrompt(input: PromptInput): string {
   return sections.join('\n');
 }
 
+// ─── Prompt size diagnostics ──────────────────────────────────────────────────
+
+export interface PromptSizeReport {
+  totalBytes: number;
+  /** Per-section byte sizes, including a synthetic "fixed" entry for boilerplate. */
+  sections: { name: string; bytes: number }[];
+}
+
+/**
+ * Measure the byte size of the variable-length inputs that dominate a prompt.
+ *
+ * Used to produce a diagnostic breakdown when a prompt grows unexpectedly large.
+ * The fixed protocol/phase/output boilerplate (everything not attributable to a
+ * specific input field) is grouped under the synthetic "fixed" section so the
+ * per-section bytes plus "fixed" sum to the prompt's total byte length.
+ */
+export function measurePromptSize(prompt: string, input: PromptInput): PromptSizeReport {
+  const b = (s: string | null | undefined): number => (s ? Buffer.byteLength(s) : 0);
+  const inboxBytes = input.inbox.reduce(
+    (sum, c) => sum + Buffer.byteLength(c.content || c.subject || ''),
+    0,
+  );
+
+  const sections = [
+    { name: 'angelMd', bytes: b(input.angelMd) },
+    { name: 'folderListing', bytes: b(input.folderListing) },
+    { name: 'newspaperDelta', bytes: b(input.newspaperDelta) },
+    { name: 'inbox', bytes: inboxBytes },
+    { name: 'brief', bytes: b(input.brief) },
+    { name: 'chatHistory', bytes: b(input.chatHistory) },
+    { name: 'globalNotes', bytes: b(input.globalNotes) },
+    { name: 'angelNotes', bytes: b(input.angelNotes) },
+  ];
+
+  const totalBytes = Buffer.byteLength(prompt);
+  const variable = sections.reduce((sum, s) => sum + s.bytes, 0);
+  sections.push({ name: 'fixed', bytes: Math.max(0, totalBytes - variable) });
+
+  return { totalBytes, sections };
+}
+
+/**
+ * Format a human-readable, stderr-bound warning for an oversized prompt,
+ * with a per-section byte breakdown sorted largest-first.
+ */
+export function formatPromptSizeWarning(
+  angelId: string,
+  phase: PromptPhase,
+  report: PromptSizeReport,
+  thresholdBytes: number,
+): string {
+  const breakdown = [...report.sections]
+    .sort((a, b) => b.bytes - a.bytes)
+    .map((s) => `${s.name}=${s.bytes}`)
+    .join(' ');
+  return (
+    `[guard-angel][warn] prompt for angel "${angelId}" (phase=${phase}) is ${report.totalBytes} bytes, ` +
+    `exceeds threshold ${thresholdBytes} bytes\n` +
+    `[guard-angel][warn]   breakdown (bytes): ${breakdown}`
+  );
+}
+
 // ─── Dense Discovery Prompt ───────────────────────────────────────────────────
 
 /**
