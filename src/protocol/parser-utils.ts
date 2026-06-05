@@ -90,11 +90,15 @@ export function extractDatePrefix(isoTimestamp: string, kind: string): string {
 }
 
 /**
- * Compute the next zero-padded 3-digit sequence number for a same-day
- * file in `dir`. Filenames are expected to look like
- * "<YYYY-MM-DD>T<HHMM>-<NNN>.md".
+ * Compute the next zero-padded sequence number for a same-day file in `dir`.
+ * Filenames are expected to look like "<YYYY-MM-DD>T<HHMM>-<NNNN>.md".
  *
- * If `dir` doesn't exist or can't be read, the next seq is "001".
+ * The sequence matcher is `(\d+)` (not a fixed width): a fixed `\d{3}` made
+ * the 1000th same-day file invisible to the scanner, so `computeNextSeq`
+ * kept returning "1000" and silently overwrote it. Padding is 4 digits for
+ * lexicographic order up to 9999; legacy 3-digit names still parse.
+ *
+ * If `dir` doesn't exist or can't be read, the next seq is "0001".
  */
 export function computeNextSeq(dir: string, datePrefix: string): string {
   const dateOnly = datePrefix.slice(0, 10);
@@ -108,7 +112,7 @@ export function computeNextSeq(dir: string, datePrefix: string): string {
   }
 
   for (const entry of entries) {
-    const match = entry.match(/^(\d{4}-\d{2}-\d{2})T\d{4}-(\d{3})\.md$/);
+    const match = entry.match(/^(\d{4}-\d{2}-\d{2})T\d{4}-(\d+)\.md$/);
     if (match && match[1] === dateOnly) {
       const seq = parseInt(match[2], 10);
       if (seq > maxSeq) {
@@ -117,5 +121,5 @@ export function computeNextSeq(dir: string, datePrefix: string): string {
     }
   }
 
-  return String(maxSeq + 1).padStart(3, '0');
+  return String(maxSeq + 1).padStart(4, '0');
 }

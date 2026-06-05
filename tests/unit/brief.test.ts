@@ -37,7 +37,7 @@ describe('writeBrief', () => {
     const filePath = writeBrief(tmpDir, data);
 
     expect(filePath).toContain('.angels/_briefs/src-auth/');
-    expect(filePath).toMatch(/2026-04-28T1432-001\.md$/);
+    expect(filePath).toMatch(/2026-04-28T1432-0001\.md$/);
 
     const content = readFileSync(filePath, 'utf-8');
     expect(content).toContain('TO: src-auth');
@@ -66,26 +66,26 @@ describe('writeBrief', () => {
     const data = makeBriefData();
 
     const path1 = writeBrief(tmpDir, data);
-    expect(path1).toMatch(/-001\.md$/);
+    expect(path1).toMatch(/-0001\.md$/);
 
     const path2 = writeBrief(tmpDir, { ...data, timestamp: '2026-04-28T15:00:00Z' });
-    expect(path2).toMatch(/-002\.md$/);
+    expect(path2).toMatch(/-0002\.md$/);
 
     const path3 = writeBrief(tmpDir, { ...data, timestamp: '2026-04-28T16:30:00Z' });
-    expect(path3).toMatch(/-003\.md$/);
+    expect(path3).toMatch(/-0003\.md$/);
   });
 
   it('resets sequence number for a different day', () => {
     const data = makeBriefData();
 
     const path1 = writeBrief(tmpDir, data);
-    expect(path1).toMatch(/-001\.md$/);
+    expect(path1).toMatch(/-0001\.md$/);
 
     const path2 = writeBrief(tmpDir, {
       ...data,
       timestamp: '2026-04-29T10:00:00Z',
     });
-    expect(path2).toMatch(/-001\.md$/);
+    expect(path2).toMatch(/-0001\.md$/);
   });
 
   it('handles the execute phase', () => {
@@ -119,13 +119,27 @@ describe('writeBrief', () => {
     const dir = join(tmpDir, '.angels', '_briefs', 'src-auth');
     mkdirSync(dir, { recursive: true });
 
-    // Manually create files with seq 001 and 005
+    // Manually create files with seq 001 and 005 (legacy 3-digit names still parse)
     writeFileSync(join(dir, '2026-04-28T1200-001.md'), 'placeholder');
     writeFileSync(join(dir, '2026-04-28T1300-005.md'), 'placeholder');
 
     const filePath = writeBrief(tmpDir, data);
-    // Should pick max(5)+1 = 006
-    expect(filePath).toMatch(/-006\.md$/);
+    // Should pick max(5)+1 = 0006
+    expect(filePath).toMatch(/-0006\.md$/);
+  });
+
+  it('does not overwrite past sequence 999 (4-digit overflow)', () => {
+    const data = makeBriefData();
+    const dir = join(tmpDir, '.angels', '_briefs', 'src-auth');
+    mkdirSync(dir, { recursive: true });
+
+    // A same-day file already at seq 1000. A fixed \d{3} matcher would be
+    // blind to it and re-derive 1000, silently overwriting. With \d+ the
+    // scanner sees it and advances to 1001.
+    writeFileSync(join(dir, '2026-04-28T1200-1000.md'), 'placeholder');
+
+    const filePath = writeBrief(tmpDir, data);
+    expect(filePath).toMatch(/-1001\.md$/);
   });
 });
 

@@ -65,7 +65,7 @@ describe('writeResponse', () => {
     const filePath = writeResponse(tmpDir, data);
 
     expect(filePath).toContain('.angels/_responses/src-auth/');
-    expect(filePath).toMatch(/2026-04-28T1432-001\.md$/);
+    expect(filePath).toMatch(/2026-04-28T1432-0001\.md$/);
 
     const content = readFileSync(filePath, 'utf-8');
     expect(content).toContain('FROM: src-auth');
@@ -87,26 +87,26 @@ describe('writeResponse', () => {
     const data = makeResponseData();
 
     const path1 = writeResponse(tmpDir, data);
-    expect(path1).toMatch(/-001\.md$/);
+    expect(path1).toMatch(/-0001\.md$/);
 
     const path2 = writeResponse(tmpDir, { ...data, timestamp: '2026-04-28T15:00:00Z' });
-    expect(path2).toMatch(/-002\.md$/);
+    expect(path2).toMatch(/-0002\.md$/);
 
     const path3 = writeResponse(tmpDir, { ...data, timestamp: '2026-04-28T16:30:00Z' });
-    expect(path3).toMatch(/-003\.md$/);
+    expect(path3).toMatch(/-0003\.md$/);
   });
 
   it('resets sequence number for a different day', () => {
     const data = makeResponseData();
 
     const path1 = writeResponse(tmpDir, data);
-    expect(path1).toMatch(/-001\.md$/);
+    expect(path1).toMatch(/-0001\.md$/);
 
     const path2 = writeResponse(tmpDir, {
       ...data,
       timestamp: '2026-04-29T10:00:00Z',
     });
-    expect(path2).toMatch(/-001\.md$/);
+    expect(path2).toMatch(/-0001\.md$/);
   });
 
   it('includes done-only fields when response is done', () => {
@@ -139,11 +139,12 @@ describe('writeResponse', () => {
     const dir = join(tmpDir, '.angels', '_responses', 'src-auth');
     mkdirSync(dir, { recursive: true });
 
+    // Legacy 3-digit names still parse
     writeFileSync(join(dir, '2026-04-28T1200-001.md'), 'placeholder');
     writeFileSync(join(dir, '2026-04-28T1300-007.md'), 'placeholder');
 
     const filePath = writeResponse(tmpDir, data);
-    expect(filePath).toMatch(/-008\.md$/);
+    expect(filePath).toMatch(/-0008\.md$/);
   });
 });
 
