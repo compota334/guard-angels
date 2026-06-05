@@ -2,7 +2,7 @@
 
 > **Fecha**: 2026-06-03
 > **Autor**: Análisis automatizado del código fuente
-> **Estado**: Propuesta
+> **Estado**: Implementado
 
 ---
 
@@ -883,19 +883,19 @@ User: angels onboard src/auth
 - [x] 5.9: onboard.ts refactor (direct write path)
 - [x] 5.7: Response parser extension
 - [x] 5.10: Orchestrate.ts adjustments
-- [ ] Pruebas de escritura directa con backends Claude y Codex
+- [x] Pruebas de escritura directa con backends Claude y Codex
 
 ### Fase 4: Chunking (Día 7-8)
 - [x] 5.13: Chunk planner (`discovery-chunker.ts`)
 - [x] 5.8: AppendAngelMd (`memory.ts`)
 - [x] 5.9: onboard.ts chunked path
-- [ ] Pruebas de chunking con angel.md de 250K tokens
+- [x] Pruebas de chunking con angel.md de 250K tokens
 
 ### Fase 5: Polish (Día 9-10)
-- [ ] Documentación actualizada (`docs/architecture.md`)
-- [ ] Tests de integración para pipeline completo
-- [ ] Benchmark: comparar calidad de angel.md antes vs después
-- [ ] CLI flags: `--memory-pct 30`, `--memory-tokens 250000`
+- [x] Documentación actualizada (`docs/architecture.md`, README.md, CHANGELOG.md)
+- [x] Tests de integración para pipeline completo
+- [x] Benchmark: comparar calidad de angel.md antes vs después
+- [x] CLI flags: `--target-pct <n>`, `--max-tokens <n>`
 
 ---
 

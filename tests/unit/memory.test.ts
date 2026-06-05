@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { readAngelMd, writeAngelMd, updateMetadata } from '../../src/angels/memory.js';
+import { readAngelMd, writeAngelMd, updateMetadata, getAngelMdPath, appendAngelMd, verifyAngelMd } from '../../src/angels/memory.js';
 import type { AngelMd, AngelFrontmatter } from '../../src/angels/memory.js';
 
 let tmpDir: string;
@@ -427,5 +427,223 @@ const x = "hello";
     updateMetadata(p, { status: 'draft' });
     const result = readAngelMd(p);
     expect(result.body).toBe(complexBody);
+  });
+});
+
+describe('getAngelMdPath', () => {
+  it('returns path/angel.md for a nested angel path', () => {
+    expect(getAngelMdPath('src/auth')).toBe('.angels/src/auth/angel.md');
+  });
+
+  it('returns path/angel.md for root angel path (.)', () => {
+    expect(getAngelMdPath('.')).toBe('.angels/./angel.md');
+  });
+
+  it('returns path/angel.md for a single-segment angel path', () => {
+    expect(getAngelMdPath('api')).toBe('.angels/api/angel.md');
+  });
+});
+
+describe('appendAngelMd', () => {
+  let originalCwd: string;
+  const testAngelPath = 'src/test-angel';
+
+  beforeEach(() => {
+    originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    // Create the angel.md file inside tmpDir/.angels/src/test-angel/
+    const angelDir = path.join(tmpDir, '.angels', testAngelPath);
+    fs.mkdirSync(angelDir, { recursive: true });
+    const fp = path.join(angelDir, 'angel.md');
+    const body = `# Angel: src/test-angel (folder)
+
+## Charter
+Owns test-related logic.
+
+## Public contract
+Provides test data to other modules.
+`;
+    writeAngelMd(fp, {
+      frontmatter: { status: 'active', last_updated: '2026-04-28T14:32:00Z', last_updated_by: 'main' },
+      body,
+    });
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+  });
+
+  it('appends bodyChunk to existing angel.md and updates last_updated', () => {
+    const result = appendAngelMd(testAngelPath, '## New section\nAppended content.\n');
+    expect(result.success).toBe(true);
+
+    // Verify the body was appended
+    const fp = path.join(tmpDir, '.angels', testAngelPath, 'angel.md');
+    const md = readAngelMd(fp);
+    expect(md.body).toContain('## New section');
+    expect(md.body).toContain('Appended content.');
+
+    // Verify last_updated was updated to a recent timestamp
+    const updated = new Date(md.frontmatter.last_updated).getTime();
+    const now = Date.now();
+    expect(updated).toBeGreaterThan(new Date('2026-04-28T14:32:00Z').getTime());
+    expect(now - updated).toBeLessThan(10_000);
+  });
+
+  it('creates a backup in _backups/<angelPath>/ before appending', () => {
+    appendAngelMd(testAngelPath, 'Extra content.\n');
+
+    // appendAngelMd constructs backupDir as:
+    //   path.join(path.dirname(filePath), '..', '_backups', angelPath)
+    // For angelPath='src/test-angel', filePath='.angels/src/test-angel/angel.md'
+    // This resolves to .angels/src/_backups/src/test-angel/
+    const backupDir = path.join(tmpDir, '.angels', 'src', '_backups', testAngelPath);
+    expect(fs.existsSync(backupDir)).toBe(true);
+
+    // Check at least one backup .md file was created
+    const files = fs.readdirSync(backupDir).filter((f) => f.endsWith('.md'));
+    expect(files.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('returns AppendResult with correct sizes', () => {
+    const bodyChunk = '## Extra\n\nMore content.\n';
+    const fp = path.join(tmpDir, '.angels', testAngelPath, 'angel.md');
+    const beforeStat = fs.statSync(fp);
+
+    const result = appendAngelMd(testAngelPath, bodyChunk);
+
+    expect(result.success).toBe(true);
+    expect(result.previousSizeBytes).toBe(beforeStat.size);
+    expect(result.newSizeBytes).toBeGreaterThan(beforeStat.size);
+    expect(result.appendedChars).toBe(bodyChunk.length);
+
+    // Verify new size matches actual file size after append
+    const afterStat = fs.statSync(fp);
+    expect(result.newSizeBytes).toBe(afterStat.size);
+  });
+
+  it('handles angel.md with no body (empty body after frontmatter)', () => {
+    // Create an angel.md with empty body
+    const fp = path.join(tmpDir, '.angels', testAngelPath, 'angel.md');
+    writeAngelMd(fp, {
+      frontmatter: { status: 'draft', last_updated: '2026-04-28T10:00:00Z', last_updated_by: 'self' },
+      body: '',
+    });
+
+    const bodyChunk = '## New section\nFresh content.\n';
+    const result = appendAngelMd(testAngelPath, bodyChunk);
+    expect(result.success).toBe(true);
+
+    const md = readAngelMd(fp);
+    expect(md.body).toContain('Fresh content.');
+    expect(result.previousSizeBytes).toBeGreaterThan(0); // frontmatter is part of raw
+  });
+
+  it('returns error AppendResult when file does not exist', () => {
+    const result = appendAngelMd('nonexistent/path', 'Some content.\n');
+    expect(result.success).toBe(false);
+    expect(result.error).toBeTruthy();
+    expect(result.previousSizeBytes).toBe(0);
+    expect(result.newSizeBytes).toBe(0);
+    expect(result.appendedChars).toBe(0);
+  });
+});
+
+describe('verifyAngelMd', () => {
+  const longBody = `# Angel: src/test (folder)
+
+## Charter
+Owns all test-related functionality and test utilities.
+
+## Public contract
+- provides mock data for unit tests
+- supplies integration test fixtures
+- exports assertion helpers
+
+## Invariants
+- Tests must be deterministic
+- No external network calls
+
+## Dependencies
+- Depends on: src-core
+`;
+  const shortBody = '# Angel\n\nToo short.';
+
+  it('returns valid: true for a well-formed angel.md', () => {
+    const content = `---
+status: active
+last_updated: 2026-04-28T14:32:00Z
+last_updated_by: main
+---
+${longBody}`;
+    const p = writeRaw(content);
+    const result = verifyAngelMd(p);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.frontmatter).not.toBeNull();
+    expect(result.bodyLength).toBeGreaterThanOrEqual(50);
+  });
+
+  it('returns issues for a file without frontmatter', () => {
+    const p = writeRaw('Plain text without any YAML frontmatter.\n');
+    const result = verifyAngelMd(p);
+    expect(result.valid).toBe(false);
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors[0]).toContain('Invalid frontmatter');
+    expect(result.frontmatter).toBeNull();
+  });
+
+  it('returns valid: true when expectedMinTokens is satisfied', () => {
+    const content = `---
+status: active
+last_updated: 2026-04-28T14:32:00Z
+last_updated_by: main
+---
+${longBody}`;
+    const p = writeRaw(content);
+    // longBody is ~350+ chars, so ~262+ estimated tokens, easily > 50
+    const result = verifyAngelMd(p, 50);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('includes a token warning when expectedMinTokens is NOT met', () => {
+    const content = `---
+status: active
+last_updated: 2026-04-28T14:32:00Z
+last_updated_by: main
+---
+${shortBody}`;
+    const p = writeRaw(content);
+    /* shortBody = '# Angel\n\nToo short.' (20 chars trimmed)
+       20 * 0.75 = 15 estimated tokens, so expectedMinTokens=100 should fail */
+    const result = verifyAngelMd(p, 100);
+    expect(result.valid).toBe(false);
+    const tokenIssue = result.errors.find((e) => e.startsWith('Body too small'));
+    expect(tokenIssue).toBeTruthy();
+  });
+
+  it('returns valid: false for a non-existent file', () => {
+    const p = path.join(tmpDir, 'does-not-exist.md');
+    const result = verifyAngelMd(p);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('File does not exist');
+    expect(result.sizeBytes).toBe(0);
+    expect(result.frontmatter).toBeNull();
+    expect(result.bodyLength).toBe(0);
+  });
+
+  it('returns valid: false when body is shorter than 50 characters', () => {
+    const content = `---
+status: active
+last_updated: 2026-04-28T14:32:00Z
+last_updated_by: main
+---
+Short body.`;
+    const p = writeRaw(content);
+    const result = verifyAngelMd(p);
+    expect(result.valid).toBe(false);
+    const bodyIssue = result.errors.find((e) => e.startsWith('Body too short'));
+    expect(bodyIssue).toBeTruthy();
   });
 });

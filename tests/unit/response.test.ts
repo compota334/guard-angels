@@ -2,8 +2,15 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { writeResponse, parseResponse, parseResponseContent } from '../../src/protocol/response.js';
-import type { ResponseData } from '../../src/protocol/response.js';
+import {
+  writeResponse,
+  parseResponse,
+  parseResponseContent,
+  detectWriteMode,
+  detectChunkMode,
+  parseDirectWriteResponse,
+} from '../../src/protocol/response.js';
+import type { ResponseData, ParseResult } from '../../src/protocol/response.js';
 
 function makeResponseData(overrides: Partial<ResponseData> = {}): ResponseData {
   return {
@@ -855,5 +862,169 @@ describe('sweep response parsing', () => {
 
     const parsed = parseResponseContent(content);
     expect(parsed.driftReport).toBe('');
+  });
+});
+
+// ─── detectWriteMode ──────────────────────────────────────────────────────────
+
+describe('detectWriteMode', () => {
+  it('returns "direct" when WRITE_MODE: DIRECT is present', () => {
+    const text = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T14:32:00Z',
+      'WRITE_MODE: DIRECT',
+      'RESPONSE: done',
+    ].join('\n');
+
+    expect(detectWriteMode(text)).toBe('direct');
+  });
+
+  it('returns "proposed" for normal text without WRITE_MODE header', () => {
+    const text = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T14:32:00Z',
+      'RESPONSE: proceed',
+      '',
+      'PROPOSED PLAN:',
+      '1. Do the thing',
+    ].join('\n');
+
+    expect(detectWriteMode(text)).toBe('proposed');
+  });
+
+  it('returns "direct" when WRITE_MODE: DIRECT and RESPONSE: done are both present', () => {
+    const text = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T14:32:00Z',
+      'WRITE_MODE: DIRECT',
+      'RESPONSE: done',
+    ].join('\n');
+
+    expect(detectWriteMode(text)).toBe('direct');
+  });
+});
+
+// ─── detectChunkMode ──────────────────────────────────────────────────────────
+
+describe('detectChunkMode', () => {
+  it('returns "chunk" when WRITE_MODE: CHUNK is present', () => {
+    const text = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T14:32:00Z',
+      'WRITE_MODE: CHUNK',
+      'RESPONSE: proceed',
+    ].join('\n');
+
+    expect(detectChunkMode(text)).toBe('chunk');
+  });
+
+  it('returns "chunk_final" when WRITE_MODE: CHUNK_FINAL is present', () => {
+    const text = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T14:32:00Z',
+      'WRITE_MODE: CHUNK_FINAL',
+      'RESPONSE: done',
+    ].join('\n');
+
+    expect(detectChunkMode(text)).toBe('chunk_final');
+  });
+
+  it('returns "direct" when WRITE_MODE: DIRECT is present', () => {
+    const text = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T14:32:00Z',
+      'WRITE_MODE: DIRECT',
+      'RESPONSE: done',
+    ].join('\n');
+
+    expect(detectChunkMode(text)).toBe('direct');
+  });
+
+  it('returns "proposed" for normal text without any WRITE_MODE header', () => {
+    const text = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T14:32:00Z',
+      'RESPONSE: proceed',
+      '',
+      'PROPOSED PLAN:',
+      '1. Something',
+    ].join('\n');
+
+    expect(detectChunkMode(text)).toBe('proposed');
+  });
+});
+
+// ─── parseDirectWriteResponse ─────────────────────────────────────────────────
+
+describe('parseDirectWriteResponse', () => {
+  it('returns status "done" when RESPONSE: done', () => {
+    const text = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T14:32:00Z',
+      'WRITE_MODE: DIRECT',
+      'RESPONSE: done',
+    ].join('\n');
+
+    const result = parseDirectWriteResponse(text);
+    expect(result.status).toBe('done');
+    expect(result.message).toContain('done');
+    expect(result.writeMode).toBe('direct');
+    expect(result.directWrite).toBe(true);
+  });
+
+  it('returns message containing extra text when RESPONSE: done with a message', () => {
+    const text = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T14:32:00Z',
+      'WRITE_MODE: DIRECT',
+      'RESPONSE: done',
+      '',
+      'CONCERNS:',
+      'All files updated successfully',
+    ].join('\n');
+
+    const result = parseDirectWriteResponse(text);
+    expect(result.status).toBe('done');
+    expect(result.message).toContain('done');
+  });
+
+  it('returns status "error" when RESPONSE: error', () => {
+    const text = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T14:32:00Z',
+      'WRITE_MODE: DIRECT',
+      'RESPONSE: error',
+    ].join('\n');
+
+    const result = parseDirectWriteResponse(text);
+    expect(result.status).toBe('error');
+    expect(result.message).toContain('error');
+  });
+
+  it('returns status "error" with specific error text when RESPONSE: error and PROPOSED PLAN has details', () => {
+    const text = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T14:32:00Z',
+      'WRITE_MODE: DIRECT',
+      'RESPONSE: error',
+      '',
+      'PROPOSED PLAN:',
+      'Failed to write angel.md: EACCES permission denied',
+    ].join('\n');
+
+    const result = parseDirectWriteResponse(text);
+    expect(result.status).toBe('error');
+    expect(result.message).toContain('error');
+    expect(result.body).toContain('Failed to write angel.md');
+  });
+
+  it('throws when RESPONSE field is missing', () => {
+    const text = [
+      'FROM: src-auth',
+      'TIMESTAMP: 2026-04-28T14:32:00Z',
+      'WRITE_MODE: DIRECT',
+    ].join('\n');
+
+    expect(() => parseDirectWriteResponse(text)).toThrow(/missing.*RESPONSE/i);
   });
 });

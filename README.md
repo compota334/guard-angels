@@ -26,10 +26,12 @@ All state lives on disk inside `.angels/`, committed to git. No database, no ser
 Angels operate in five phases:
 
 1. **INIT** — `angels init` bootstraps `.angels/` and writes blank `angel.md` templates. For greenfield projects with no existing code.
-2. **DISCOVERY** — `angels onboard` reads an existing codebase and synthesizes a real `angel.md` per angel. AI-heavy; priority files (READMEs, entry points, type definitions, tests) are pre-read and passed inline.
+2. **DISCOVERY** — `angels onboard` reads an existing codebase and synthesizes a real `angel.md` per angel. AI-heavy; priority files (READMEs, entry points, type definitions, tests) are pre-read and passed inline. Supports **direct write** (angel writes `angel.md` directly instead of via PROPOSED PLAN) when `memory.target_pct > 5%`, and **chunked writing** (large outputs split into ~50K-token chunks generated sequentially) when estimated `angel.md` exceeds 50 KB.
 3. **REVIEW** — `angels brief <angel-id> "<task>"` sends the task to the angel. The angel reads its charter, the code, and the brief, then responds with `proceed`, `concerns`, or `refuse`. No files are modified.
 4. **EXECUTE** — `angels execute <angel-id> <brief-path>` re-invokes the angel with approval. The angel makes the changes, updates its `angel.md`, sends cables to affected angels, and reports what it did.
 5. **SWEEP** — `angels sweep` wakes every active angel in maintenance mode. Angels review their territory for drift and may send cables. Report-only in v1.
+
+The DISCOVERY pipeline is configured via `memory` in `_config.yml` — see [Angel memory system](#angel-memory-system) for details.
 
 ## Quickstart
 
@@ -96,7 +98,7 @@ angels doctor --archive --older-than=30
 | Command | Description |
 |---|---|
 | `angels init [--auto\|--manual]` | Bootstrap `.angels/` in current project. Walks the tree, identifies significant folders, creates angel.md drafts. |
-| `angels onboard [--angel <id>] [--force] [--auto-activate]` | Bootstrap angel context from existing codebase (runs DISCOVERY phase). |
+| `angels onboard [--angel <id>] [--force] [--auto-activate] [--target-pct <n>] [--max-tokens <n>]` | Bootstrap angel context from existing codebase (runs DISCOVERY phase). `--target-pct` overrides `memory.target_pct` (1-100); `--max-tokens` overrides `memory.max_tokens`. |
 | `angels activate [<angel-id>] [--all]` | Promote draft angels to active after reviewing. |
 | `angels list` | List all registered angels with their status. |
 | `angels create <path>` | Create an angel for a specific folder. |
@@ -150,6 +152,54 @@ Response file: .angels/_responses/src-auth/2026-05-12T1433-001.md
 ```
 
 If the angel wrote files outside its territory, a `WARNING: Out-of-territory writes detected` block appears and is also logged to the newspaper.
+
+## Angel memory system
+
+The DISCOVERY phase builds a persistent `angel.md` file per angel. Three mechanisms control how large and detailed these memory files become:
+
+### Deep context reading
+
+DISCOVERY reads priority files from each angel's territory — READMEs, entry points, type definitions, tests, and config files — and passes them inline to the angel. The old pipeline was limited to 50 KB / 10 files; the enhanced pipeline classifies files by value (`high` / `medium` / `low`), reads high-value files in full (with boilerplate filtering), and dynamically allocates context budget.
+
+### Direct write
+
+When the memory target is ambitious (`memory.target_pct > 5%`), the angel writes `angel.md` **directly** to disk instead of embedding it inside a `PROPOSED PLAN` field in the response file. This eliminates the response-file throughput bottleneck and allows much larger outputs. The orchestrator verifies the file was written and updates frontmatter after the invocation completes.
+
+### Chunked writing
+
+If the estimated `angel.md` body exceeds **50 KB**, the pipeline splits generation into **chunks** of ~50K tokens each, generated in separate backend invocations. Each chunk appends to the same `angel.md` file (via `appendAngelMd`). Sections are pre-assigned to chunks so the angel knows what to cover in each invocation:
+
+| Chunk | Sections |
+|-------|----------|
+| 1 | Charter & Boundaries, Architecture |
+| 2 | Public Contract, Invariants |
+| 3 | Code Coverage (files 1–10) |
+| 4 | Code Coverage (files 11+) + Data Model |
+| 5 | Critical Flows, Testing Patterns, Decision Log, Debt, Dependencies |
+
+### Configuration
+
+Add a `memory` key to `.angels/_config.yml`:
+
+```yaml
+memory:
+  target_pct: 25           # % of context window to use (1–100, default 25)
+  # max_tokens: 250000     # absolute token budget; overrides target_pct
+```
+
+- `target_pct` — percentage of the estimated context window (default: 25%). At `≤ 5%`, direct write is disabled and the legacy PROPOSED PLAN path is used.
+- `max_tokens` — absolute token budget. Takes priority over `target_pct` when both are set.
+
+Per-angel overrides are also supported:
+
+```yaml
+angels:
+  - id: src-api
+    type: folder
+    path: src/api
+    memory:
+      max_tokens: 200000   # override for this angel only
+```
 
 ## Backend configuration
 

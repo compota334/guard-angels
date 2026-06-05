@@ -93,7 +93,9 @@ program
   .option('--force', 'Overwrite active angel.md without prompting')
   .option('--auto-activate', 'Set status=active immediately (skip draft review)')
   .option('--depth <n>', 'Recursion depth for file listing (default: 3)')
-  .action(async (options: { angel?: string; force?: boolean; autoActivate?: boolean; depth?: string }) => {
+  .option('--target-pct <n>', 'Memory target percentage for angel.md density (1-100, overrides config)')
+  .option('--max-tokens <n>', 'Max tokens for angel.md (overrides config)')
+  .action(async (options: { angel?: string; force?: boolean; autoActivate?: boolean; depth?: string; targetPct?: string; maxTokens?: string }) => {
     try {
       const depth =
         options.depth !== undefined ? parseInt(options.depth, 10) : 3;
@@ -104,11 +106,17 @@ program
         process.exit(1);
         return;
       }
+      const targetPct =
+        options.targetPct !== undefined ? parseInt(options.targetPct, 10) : undefined;
+      const maxTokens =
+        options.maxTokens !== undefined ? parseInt(options.maxTokens, 10) : undefined;
       await onboardAngels(process.cwd(), {
         angel: options.angel,
         force: options.force,
         autoActivate: options.autoActivate,
         depth,
+        targetPct,
+        maxTokens,
       });
     } catch (err: unknown) {
       handleError(err, 1);

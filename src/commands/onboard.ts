@@ -19,6 +19,8 @@ export interface OnboardOptions {
   force?: boolean;
   autoActivate?: boolean;
   depth?: number;
+  targetPct?: number;
+  maxTokens?: number;
 }
 
 export async function onboardAngels(cwd: string, opts: OnboardOptions): Promise<void> {
@@ -42,13 +44,17 @@ export async function onboardAngels(cwd: string, opts: OnboardOptions): Promise<
 
     // Detect whether to use dense direct write mode
     const angelConfigMemory = angel.memory ?? config.memory;
-    const useDense = shouldUseDenseTemplate(angelConfigMemory);
+    const cliOverrides = opts.targetPct !== undefined || opts.maxTokens !== undefined;
+    const effectiveMemory = cliOverrides
+      ? { target_pct: opts.targetPct ?? angelConfigMemory?.target_pct ?? 25, max_tokens: opts.maxTokens ?? angelConfigMemory?.max_tokens }
+      : angelConfigMemory;
+    const useDense = shouldUseDenseTemplate(effectiveMemory);
 
     if (useDense) {
       // Check if chunking is needed (estimated >50KB)
       const absoluteAngelPath = resolvePath(cwd, angel.path);
       const contextWindow = 128_000;
-      const deepContext = await buildDeepDiscoveryContext(absoluteAngelPath, angelConfigMemory, contextWindow);
+      const deepContext = await buildDeepDiscoveryContext(absoluteAngelPath, effectiveMemory, contextWindow);
       const estimatedTok = estimateTotalTokens(deepContext);
       const useChunking = estimatedTok > 12_000; // >50KB threshold
 
@@ -143,8 +149,12 @@ async function onboardWithDirectWrite(
   // 1. Build deep discovery context
   const absoluteAngelPath = resolvePath(cwd, angel.path);
   const angelConfigMemory = angel.memory ?? config.memory;
+  const cliOverrides = opts.targetPct !== undefined || opts.maxTokens !== undefined;
+  const effectiveMemory = cliOverrides
+    ? { target_pct: opts.targetPct ?? angelConfigMemory?.target_pct ?? 25, max_tokens: opts.maxTokens ?? angelConfigMemory?.max_tokens }
+    : angelConfigMemory;
   const contextWindow = 128_000;
-  const deepContext = await buildDeepDiscoveryContext(absoluteAngelPath, angelConfigMemory, contextWindow);
+  const deepContext = await buildDeepDiscoveryContext(absoluteAngelPath, effectiveMemory, contextWindow);
 
   // 2. Build dense discovery prompt for the brief context
   const timestamp = new Date().toISOString();

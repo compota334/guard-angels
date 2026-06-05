@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildPrompt,
+  buildDiscoveryPrompt,
+  buildDenseDiscoveryPrompt,
+  buildChunkPrompt,
+  buildFinalizePrompt,
   getProtocolHeaderLength,
+  shouldUseDenseTemplate,
+  useDenseTemplate,
   type PromptInput,
   type PromptPhase,
   type InboxEntry,
@@ -349,5 +355,456 @@ describe('getProtocolHeaderLength', () => {
     const len = getProtocolHeaderLength();
     const estimatedTokens = len / 4;
     expect(estimatedTokens).toBeLessThan(600);
+  });
+});
+
+// ─── useDenseTemplate ─────────────────────────────────────────────────────────
+
+describe('useDenseTemplate', () => {
+  it('returns false when memory is undefined', () => {
+    expect(useDenseTemplate(undefined)).toBe(false);
+  });
+
+  it('returns true when target_pct is > 5 (default is 25)', () => {
+    expect(useDenseTemplate({ target_pct: 25 })).toBe(true);
+    expect(useDenseTemplate({ target_pct: 100 })).toBe(true);
+    expect(useDenseTemplate({ target_pct: 6 })).toBe(true);
+  });
+
+  it('returns false when target_pct is <= 5', () => {
+    expect(useDenseTemplate({ target_pct: 5 })).toBe(false);
+    expect(useDenseTemplate({ target_pct: 1 })).toBe(false);
+    expect(useDenseTemplate({ target_pct: 0 })).toBe(false);
+  });
+});
+
+// ─── shouldUseDenseTemplate ───────────────────────────────────────────────────
+
+describe('shouldUseDenseTemplate', () => {
+  it('returns false when angelMemory is undefined', () => {
+    expect(shouldUseDenseTemplate(undefined)).toBe(false);
+  });
+
+  it('returns true when target_pct > 5', () => {
+    expect(shouldUseDenseTemplate({ target_pct: 25 })).toBe(true);
+    expect(shouldUseDenseTemplate({ target_pct: 6 })).toBe(true);
+  });
+
+  it('returns true when max_tokens > 5000', () => {
+    expect(shouldUseDenseTemplate({ max_tokens: 5001 })).toBe(true);
+    expect(shouldUseDenseTemplate({ max_tokens: 6000 })).toBe(true);
+  });
+
+  it('returns false when target_pct <= 5 and max_tokens <= 5000', () => {
+    expect(shouldUseDenseTemplate({ target_pct: 5, max_tokens: 5000 })).toBe(false);
+    expect(shouldUseDenseTemplate({ target_pct: 0, max_tokens: 0 })).toBe(false);
+    expect(shouldUseDenseTemplate({ target_pct: 5 })).toBe(false);
+    expect(shouldUseDenseTemplate({})).toBe(false);
+  });
+});
+
+// ─── buildDiscoveryPrompt ─────────────────────────────────────────────────────
+
+describe('buildDiscoveryPrompt', () => {
+  const angel = {
+    id: 'src-api',
+    type: 'folder' as const,
+    path: 'src/api',
+    memory: undefined,
+  };
+
+  const context = {
+    territoryPath: 'src/api',
+    fileCount: 3,
+    classifiedFiles: [
+      { path: 'src/api/routes.ts', value: 'high' as const, sizeBytes: 2048, language: 'TypeScript', reason: 'core routes' },
+      { path: 'src/api/middleware.ts', value: 'medium' as const, sizeBytes: 1024, language: 'TypeScript', reason: 'middleware logic' },
+      { path: 'src/api/types.ts', value: 'low' as const, sizeBytes: 256, language: 'TypeScript', reason: 'type definitions' },
+    ],
+    highValueContent: '// routes.ts\nexport const router = ...',
+    mediumValueStubs: '// middleware.ts\nfunction auth() {}',
+    lowValueListing: '- src/api/types.ts (256 bytes)',
+    totalTokens: 5000,
+    budgetUsed: 4000,
+    memoryConfig: { targetPct: 25, maxTokens: 2000 },
+    stats: {
+      totalFiles: 3,
+      highValueFiles: 1,
+      mediumValueFiles: 1,
+      lowValueFiles: 1,
+      boilerplateLinesSkipped: 10,
+      usefulLinesKept: 200,
+      compressionRatio: 85,
+    },
+  };
+
+  it('includes the territory file listing with classified files', () => {
+    const prompt = buildDiscoveryPrompt({
+      angel,
+      context,
+      responsePath: '/responses/discovery.md',
+      writeMode: 'proposed',
+    });
+    expect(prompt).toContain('## Territory File Listing');
+    expect(prompt).toContain('- [high] src/api/routes.ts');
+    expect(prompt).toContain('- [medium] src/api/middleware.ts');
+    expect(prompt).toContain('- [low] src/api/types.ts');
+  });
+
+  it('includes high/medium/low value sections', () => {
+    const prompt = buildDiscoveryPrompt({
+      angel,
+      context,
+      responsePath: '/responses/discovery.md',
+      writeMode: 'proposed',
+    });
+    expect(prompt).toContain('## High Value Files (full content)');
+    expect(prompt).toContain('// routes.ts');
+    expect(prompt).toContain('## Medium Value Files (stubs)');
+    expect(prompt).toContain('// middleware.ts');
+    expect(prompt).toContain('## Low Value Files');
+    expect(prompt).toContain('- src/api/types.ts');
+  });
+
+  it('includes output instructions with response path', () => {
+    const prompt = buildDiscoveryPrompt({
+      angel,
+      context,
+      responsePath: '/responses/discovery.md',
+      writeMode: 'proposed',
+    });
+    expect(prompt).toContain('[OUTPUT INSTRUCTIONS]');
+    expect(prompt).toContain('Write your response to: /responses/discovery.md');
+  });
+
+  it('shows root path correctly for root angel', () => {
+    const rootAngel = { ...angel, type: 'root' as const, path: '.' };
+    const prompt = buildDiscoveryPrompt({
+      angel: rootAngel,
+      context,
+      responsePath: '/responses/discovery.md',
+      writeMode: 'proposed',
+    });
+    expect(prompt).toContain('You are the angel for: .');
+  });
+});
+
+// ─── buildDenseDiscoveryPrompt ────────────────────────────────────────────────
+
+describe('buildDenseDiscoveryPrompt', () => {
+  const angel = {
+    id: 'src-api',
+    type: 'folder' as const,
+    path: 'src/api',
+  };
+
+  const memoryConfig = { targetPct: 25, maxTokens: 2000 };
+
+  const context = {
+    territoryPath: 'src/api',
+    fileCount: 3,
+    classifiedFiles: [
+      { path: 'src/api/routes.ts', value: 'high' as const, sizeBytes: 2048, language: 'TypeScript', reason: 'core routes' },
+    ],
+    highValueContent: '// routes.ts\nexport const router = ...',
+    mediumValueStubs: '(none)',
+    lowValueListing: '(none)',
+    totalTokens: 5000,
+    budgetUsed: 4000,
+    memoryConfig,
+    stats: {
+      totalFiles: 3,
+      highValueFiles: 1,
+      mediumValueFiles: 0,
+      lowValueFiles: 2,
+      boilerplateLinesSkipped: 10,
+      usefulLinesKept: 200,
+      compressionRatio: 85,
+    },
+  };
+
+  it('includes DENSE MODE header and stats', () => {
+    const prompt = buildDenseDiscoveryPrompt({
+      angel,
+      context,
+      memoryConfig,
+      responsePath: '/responses/discovery.md',
+      writeMode: 'proposed',
+    });
+    expect(prompt).toContain('[CURRENT PHASE: DISCOVERY — DENSE MODE]');
+    expect(prompt).toContain('Target size: ~2000 tokens');
+    expect(prompt).toContain('Budget allocated: 25%');
+  });
+
+  it('with writeMode="direct" includes WRITE_MODE: DIRECT', () => {
+    const prompt = buildDenseDiscoveryPrompt({
+      angel,
+      context,
+      memoryConfig,
+      responsePath: '/responses/discovery.md',
+      writeMode: 'direct',
+      angelMdPath: '/project/.angels/src-api/angel.md',
+    });
+    expect(prompt).toContain('WRITE_MODE: DIRECT');
+  });
+
+  it('with writeMode="proposed" does NOT include WRITE_MODE', () => {
+    const prompt = buildDenseDiscoveryPrompt({
+      angel,
+      context,
+      memoryConfig,
+      responsePath: '/responses/discovery.md',
+      writeMode: 'proposed',
+    });
+    expect(prompt).not.toContain('WRITE_MODE');
+  });
+
+  it('includes DENSE TEMPLATE section', () => {
+    const prompt = buildDenseDiscoveryPrompt({
+      angel,
+      context,
+      memoryConfig,
+      responsePath: '/responses/discovery.md',
+      writeMode: 'proposed',
+    });
+    expect(prompt).toContain('[DENSE TEMPLATE — USE THIS STRUCTURE]');
+  });
+
+  it('direct write outputs angel.md path and instructions', () => {
+    const prompt = buildDenseDiscoveryPrompt({
+      angel,
+      context,
+      memoryConfig,
+      responsePath: '/responses/discovery.md',
+      writeMode: 'direct',
+      angelMdPath: '/project/.angels/src-api/angel.md',
+    });
+    expect(prompt).toContain('WRITE angel.md directly at: /project/.angels/src-api/angel.md');
+    expect(prompt).toContain('DO NOT include the angel.md body in PROPOSED PLAN');
+  });
+
+  it('proposed mode writes to response path', () => {
+    const prompt = buildDenseDiscoveryPrompt({
+      angel,
+      context,
+      memoryConfig,
+      responsePath: '/responses/discovery.md',
+      writeMode: 'proposed',
+    });
+    expect(prompt).toContain('Write your response (the complete angel.md body) to: /responses/discovery.md');
+  });
+});
+
+// ─── buildChunkPrompt ─────────────────────────────────────────────────────────
+
+describe('buildChunkPrompt', () => {
+  const angel = {
+    id: 'src-api',
+    type: 'folder' as const,
+    path: 'src/api',
+  };
+
+  const baseContext = {
+    territoryPath: 'src/api',
+    fileCount: 5,
+    classifiedFiles: [
+      { path: 'src/api/routes.ts', value: 'high' as const, sizeBytes: 2048, language: 'TypeScript', reason: 'core routes' },
+    ],
+    highValueContent: '// routes.ts content here',
+    mediumValueStubs: '(none)',
+    lowValueListing: '(none)',
+    totalTokens: 8000,
+    budgetUsed: 6000,
+    memoryConfig: { targetPct: 50, maxTokens: 4000 },
+    stats: {
+      totalFiles: 5,
+      highValueFiles: 1,
+      mediumValueFiles: 2,
+      lowValueFiles: 2,
+      boilerplateLinesSkipped: 20,
+      usefulLinesKept: 400,
+      compressionRatio: 80,
+    },
+  };
+
+  const chunk0 = { id: 0, sections: ['Charter y Boundaries', 'Arquitectura del Área'], estimatedTokens: 500, contextHint: 'structure' };
+  const chunk1 = { id: 1, sections: ['Cobertura de Código'], estimatedTokens: 500, contextHint: 'code coverage' };
+  const chunkFinal = { id: 4, sections: ['Decision Log', 'Known Debt y TODO'], estimatedTokens: 500, contextHint: 'final sections' };
+
+  it('chunk 0 mentions FIRST chunk', () => {
+    const prompt = buildChunkPrompt({
+      angel,
+      chunk: chunk0,
+      deepContext: baseContext,
+      chunkIndex: 0,
+      totalChunks: 5,
+    });
+    expect(prompt).toContain('FIRST chunk');
+    expect(prompt).toContain('CHUNKED WRITE, FIRST CHUNK');
+    expect(prompt).toContain('WRITE_MODE: CHUNK');
+  });
+
+  it('chunk 0 includes section list', () => {
+    const prompt = buildChunkPrompt({
+      angel,
+      chunk: chunk0,
+      deepContext: baseContext,
+      chunkIndex: 0,
+      totalChunks: 5,
+    });
+    expect(prompt).toContain('Charter y Boundaries, Arquitectura del Área');
+  });
+
+  it('chunk 1+ says "chunk N of M"', () => {
+    const prompt = buildChunkPrompt({
+      angel,
+      chunk: chunk1,
+      deepContext: baseContext,
+      chunkIndex: 1,
+      totalChunks: 5,
+    });
+    expect(prompt).toContain('chunk 2/5');
+    expect(prompt).toContain('Sections already written:');
+    expect(prompt).toContain('WRITE_MODE: CHUNK');
+  });
+
+  it('last chunk uses CHUNK_FINAL write mode', () => {
+    const prompt = buildChunkPrompt({
+      angel,
+      chunk: chunkFinal,
+      deepContext: baseContext,
+      chunkIndex: 4,
+      totalChunks: 5,
+    });
+    expect(prompt).toContain('CHUNK_FINAL');
+  });
+
+  it('includes discovery context stats', () => {
+    const prompt = buildChunkPrompt({
+      angel,
+      chunk: chunk0,
+      deepContext: baseContext,
+      chunkIndex: 0,
+      totalChunks: 5,
+    });
+    expect(prompt).toContain('[DISCOVERY CONTEXT]');
+    expect(prompt).toContain('Total files: 5');
+    expect(prompt).toContain('High value: 1');
+  });
+
+  it('includes classified file listing when sections need file content', () => {
+    const chunkWithCoverage = { id: 0, sections: ['Cobertura de Código'], estimatedTokens: 500, contextHint: 'coverage' };
+    const prompt = buildChunkPrompt({
+      angel,
+      chunk: chunkWithCoverage,
+      deepContext: baseContext,
+      chunkIndex: 0,
+      totalChunks: 3,
+    });
+    expect(prompt).toContain('[CLASSIFIED FILE LISTING]');
+  });
+});
+
+// ─── buildFinalizePrompt ──────────────────────────────────────────────────────
+
+describe('buildFinalizePrompt', () => {
+  const angel = {
+    id: 'src-api',
+    type: 'folder' as const,
+    path: 'src/api',
+  };
+
+  const context = {
+    territoryPath: 'src/api',
+    fileCount: 3,
+    classifiedFiles: [
+      { path: 'src/api/routes.ts', value: 'high' as const, sizeBytes: 2048, language: 'TypeScript', reason: 'core routes' },
+    ],
+    highValueContent: '// routes.ts',
+    mediumValueStubs: '(none)',
+    lowValueListing: '(none)',
+    totalTokens: 5000,
+    budgetUsed: 4000,
+    memoryConfig: { targetPct: 25, maxTokens: 2000 },
+    stats: {
+      totalFiles: 3,
+      highValueFiles: 1,
+      mediumValueFiles: 0,
+      lowValueFiles: 2,
+      boilerplateLinesSkipped: 10,
+      usefulLinesKept: 200,
+      compressionRatio: 85,
+    },
+  };
+
+  const finalAngelMd = [
+    '---',
+    'status: active',
+    'last_updated: 2026-06-04T12:00:00Z',
+    'last_updated_by: discovery',
+    '---',
+    '',
+    '## Charter y Boundaries',
+    'Owns the API layer.',
+    '',
+    '## Arquitectura del Área',
+    'Express-based REST API.',
+  ].join('\n');
+
+  it('includes FINALIZE CHUNKED WRITE header', () => {
+    const prompt = buildFinalizePrompt({
+      angel,
+      deepContext: context,
+      finalAngelMd,
+    });
+    expect(prompt).toContain('[CURRENT PHASE: DISCOVERY — FINALIZE CHUNKED WRITE]');
+  });
+
+  it('mentions angel.md path for the angel', () => {
+    const prompt = buildFinalizePrompt({
+      angel,
+      deepContext: context,
+      finalAngelMd,
+    });
+    expect(prompt).toContain('.angels/src-api/angel.md');
+  });
+
+  it('asks to verify all 11 sections are present', () => {
+    const prompt = buildFinalizePrompt({
+      angel,
+      deepContext: context,
+      finalAngelMd,
+    });
+    expect(prompt).toContain('Check that all 11 sections are present');
+  });
+
+  it('asks to verify frontmatter, sections, and empty/TODO/TBD checks', () => {
+    const prompt = buildFinalizePrompt({
+      angel,
+      deepContext: context,
+      finalAngelMd,
+    });
+    expect(prompt).toContain('Check frontmatter has last_updated: now');
+    expect(prompt).toContain("Check no section is empty or says 'TODO' or 'TBD'");
+    expect(prompt).toContain('If anything is missing, write a brief CHUNK_FIX');
+  });
+
+  it('includes the final angel.md content as reference', () => {
+    const prompt = buildFinalizePrompt({
+      angel,
+      deepContext: context,
+      finalAngelMd,
+    });
+    expect(prompt).toContain('[FINAL ANGEL.MD CONTENT]');
+    expect(prompt).toContain('Owns the API layer.');
+  });
+
+  it('output instructions mention WRITE_MODE: CHUNK_FINAL', () => {
+    const prompt = buildFinalizePrompt({
+      angel,
+      deepContext: context,
+      finalAngelMd,
+    });
+    expect(prompt).toContain('WRITE_MODE: CHUNK_FINAL');
   });
 });
