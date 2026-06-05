@@ -91,8 +91,16 @@ async function sweepSingleAngel(
   angelId: string,
   options: { since?: string; timeoutSeconds?: number },
 ): Promise<AngelSweepResult> {
-  // 1. Read the angel's newspaper cursor and compute the delta
+  // 1. Read the angel's newspaper cursor and compute the delta.
+  //
+  // Snapshot the newspaper size NOW, before the (~60s) invoke. With
+  // concurrent sweeps, angels B/C/D append entries to the newspaper while
+  // this angel is being invoked. If we read the size AFTER invoke to set the
+  // cursor, we'd advance past those entries — which this angel never saw —
+  // and silently skip them on its next sweep. The snapshot bounds the cursor
+  // to exactly what this angel was shown.
   const cursor = getCursor(cwd, angelId);
+  const newspaperSizeAtRead = getNewspaperSize(cwd);
   const newspaperDelta = computeNewspaperDelta(cwd, cursor, options.since);
 
   // 2. Read the angel's inbox and map to InboxEntry[]
@@ -138,12 +146,15 @@ async function sweepSingleAngel(
   // successfully process the newspaper entries presented to it, so we leave
   // the cursor where it was; the next sweep will re-present the same delta
   // (along with this sweep's failure entry, which is informative).
+  //
+  // Advance to the snapshot taken before invoke, NOT the current size: any
+  // entries appended during the invoke (by concurrent sweeps, or by this
+  // sweep's own newspaper entry in step 5) were never shown to this angel.
   if (
     result.response.response === 'done' ||
     result.response.response === 'concerns'
   ) {
-    const newCursor = getNewspaperSize(cwd);
-    setCursor(cwd, angelId, newCursor);
+    setCursor(cwd, angelId, newspaperSizeAtRead);
   }
 
   // 7. Print per-angel result

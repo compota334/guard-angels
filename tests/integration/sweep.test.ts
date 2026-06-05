@@ -35,6 +35,16 @@ describe('sweepAngels', () => {
   });
 
   it('sweeps all angels sequentially and returns exit code 0', async () => {
+    // Seed a pre-existing newspaper entry so the angels have a non-empty
+    // delta to consume. The cursor advances only as far as the snapshot taken
+    // before invoke (what the angel was actually shown), so without a seeded
+    // entry the cursor would correctly stay at 0.
+    appendNewspaper(tmpDir, {
+      timestamp: '2026-04-28T10:00:00Z',
+      angelId: 'src-auth',
+      summary: 'Seed entry before sweep.',
+    });
+
     const exitCode = await sweepAngels(tmpDir);
 
     expect(exitCode).toBe(0);
