@@ -5,7 +5,6 @@ import {
   buildDenseDiscoveryPrompt,
   buildChunkPrompt,
   buildFinalizePrompt,
-  getProtocolHeaderLength,
   shouldUseDenseTemplate,
   useDenseTemplate,
   type PromptInput,
@@ -341,20 +340,6 @@ describe('buildPrompt', () => {
       expect(alphaIdx).toBeLessThan(betaIdx);
       expect(betaIdx).toBeLessThan(gammaIdx);
     });
-  });
-});
-
-describe('getProtocolHeaderLength', () => {
-  it('returns the header character count', () => {
-    const len = getProtocolHeaderLength();
-    expect(len).toBeGreaterThan(0);
-    expect(typeof len).toBe('number');
-  });
-
-  it('header is under ~600 tokens (rough estimate: length / 4 < 600)', () => {
-    const len = getProtocolHeaderLength();
-    const estimatedTokens = len / 4;
-    expect(estimatedTokens).toBeLessThan(600);
   });
 });
 

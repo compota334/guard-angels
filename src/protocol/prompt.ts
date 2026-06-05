@@ -296,14 +296,6 @@ export function buildPrompt(input: PromptInput): string {
   return sections.join('\n');
 }
 
-/**
- * Returns the fixed protocol header length in characters.
- * Useful for rough token budget checks (~4 chars per token for English).
- */
-export function getProtocolHeaderLength(): number {
-  return PROTOCOL_HEADER.length;
-}
-
 // ─── Dense Discovery Prompt ───────────────────────────────────────────────────
 
 /**
