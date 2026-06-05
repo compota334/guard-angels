@@ -102,6 +102,36 @@ export interface PromptInput {
   angelNotes?: string;
   globalNotes?: string;
   chatHistory?: string;
+  /**
+   * Token budget for the angel.md injected into the prompt. In SWEEP the raw
+   * angel.md is truncated to this budget; DISCOVERY/EXECUTE always get the full
+   * memory. Undefined means no limit (inject in full regardless of phase).
+   */
+  memoryMaxTokens?: number;
+}
+
+/** Rough token estimate: ~4 characters per token. */
+const APPROX_CHARS_PER_TOKEN = 4;
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / APPROX_CHARS_PER_TOKEN);
+}
+
+/**
+ * Truncate an angel.md to a token budget for the SWEEP phase, keeping the
+ * leading portion (charter, contract, invariants live at the top of the dense
+ * template) and appending a notice so the angel knows its memory was clipped.
+ */
+function truncateMemoryForSweep(angelMd: string, maxTokens: number): string {
+  const maxChars = maxTokens * APPROX_CHARS_PER_TOKEN;
+  const head = angelMd.slice(0, maxChars).trimEnd();
+  const originalTokens = estimateTokens(angelMd);
+  return (
+    head +
+    `\n\n[... angel.md truncated for SWEEP: kept ~${maxTokens} of ~${originalTokens} ` +
+    `estimated tokens. Full memory is preserved on disk and used unabridged in ` +
+    `DISCOVERY/EXECUTE. This report-only pass sees only the leading portion.]`
+  );
 }
 
 export interface InboxEntry {
@@ -218,7 +248,15 @@ export function buildPrompt(input: PromptInput): string {
   sections.push('');
   sections.push('[YOUR MEMORY]');
   if (input.angelMd) {
-    sections.push(input.angelMd);
+    if (
+      input.phase === 'sweep' &&
+      input.memoryMaxTokens != null &&
+      estimateTokens(input.angelMd) > input.memoryMaxTokens
+    ) {
+      sections.push(truncateMemoryForSweep(input.angelMd, input.memoryMaxTokens));
+    } else {
+      sections.push(input.angelMd);
+    }
   } else {
     sections.push('(no angel.md exists yet — you are being initialized for the first time)');
   }

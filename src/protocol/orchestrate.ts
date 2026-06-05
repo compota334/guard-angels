@@ -9,7 +9,7 @@ import { createLogStreams, writeLogMeta } from '../logs/log.js';
 import { buildPrompt, measurePromptSize, formatPromptSizeWarning } from './prompt.js';
 import { parseResponseContent, detectWriteMode, parseDirectWriteResponse } from './response.js';
 import { parseBrief } from './brief.js';
-import { DEFAULT_PROMPT_WARN_BYTES } from '../config/defaults.js';
+import { DEFAULT_PROMPT_WARN_BYTES, resolveMemoryConfig } from '../config/defaults.js';
 import { angelMdFile, angelResponsesDir, angelChatFile } from '../paths/layout.js';
 import { angelIdToPath } from '../paths/resolve.js';
 import { extractDatePrefix, computeNextSeq } from './parser-utils.js';
@@ -135,6 +135,12 @@ export async function invoke(
 
     // 7. Build prompt
     const globalNotes = config.global_notes ?? undefined;
+    // Resolve the angel.md token budget (per-angel memory overrides global).
+    // 128K is the assumed context window, consistent with discovery/onboard.
+    const { maxTokens: memoryMaxTokens } = resolveMemoryConfig(
+      angel.memory ?? config.memory,
+      128_000,
+    );
     const promptInput: PromptInput = {
       phase: input.phase,
       angelId: input.angelId,
@@ -150,6 +156,7 @@ export async function invoke(
       angelNotes,
       globalNotes,
       chatHistory,
+      memoryMaxTokens,
     };
     const prompt = buildPrompt(promptInput);
 

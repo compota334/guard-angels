@@ -345,6 +345,51 @@ describe('buildPrompt', () => {
   });
 });
 
+// ─── angel.md memory budget ───────────────────────────────────────────────────
+
+describe('buildPrompt memory budget', () => {
+  // ~4 chars/token, so 200 tokens ≈ 800 chars. Build an angel.md well past that.
+  const bigAngelMd = '# Charter\n' + 'x'.repeat(4000);
+  const maxTokens = 200;
+
+  it('truncates the angel.md in SWEEP when it exceeds memoryMaxTokens', () => {
+    const prompt = buildPrompt(
+      makeInput({ phase: 'sweep', angelMd: bigAngelMd, memoryMaxTokens: maxTokens }),
+    );
+    expect(prompt).toContain('# Charter');
+    expect(prompt).toContain('angel.md truncated for SWEEP');
+    // Body should not survive in full — the tail of the 4000 x's is dropped.
+    expect(prompt).not.toContain('x'.repeat(4000));
+  });
+
+  it('keeps the angel.md complete in EXECUTE and DISCOVERY even when oversized', () => {
+    for (const phase of ['execute', 'discovery'] as PromptPhase[]) {
+      const prompt = buildPrompt(
+        makeInput({ phase, angelMd: bigAngelMd, memoryMaxTokens: maxTokens }),
+      );
+      expect(prompt).toContain('x'.repeat(4000));
+      expect(prompt).not.toContain('angel.md truncated for SWEEP');
+    }
+  });
+
+  it('does not truncate in SWEEP when under budget', () => {
+    const small = '# Charter\nOwns auth.';
+    const prompt = buildPrompt(
+      makeInput({ phase: 'sweep', angelMd: small, memoryMaxTokens: maxTokens }),
+    );
+    expect(prompt).toContain('Owns auth.');
+    expect(prompt).not.toContain('angel.md truncated for SWEEP');
+  });
+
+  it('does not truncate when memoryMaxTokens is undefined', () => {
+    const prompt = buildPrompt(
+      makeInput({ phase: 'sweep', angelMd: bigAngelMd, memoryMaxTokens: undefined }),
+    );
+    expect(prompt).toContain('x'.repeat(4000));
+    expect(prompt).not.toContain('angel.md truncated for SWEEP');
+  });
+});
+
 // ─── useDenseTemplate ─────────────────────────────────────────────────────────
 
 describe('useDenseTemplate', () => {
