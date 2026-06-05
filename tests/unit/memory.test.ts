@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { readAngelMd, writeAngelMd, updateMetadata, getAngelMdPath, appendAngelMd, verifyAngelMd } from '../../src/angels/memory.js';
+import { readAngelMd, writeAngelMd, updateMetadata, getAngelMdPath, appendAngelMd, pruneBackups, verifyAngelMd } from '../../src/angels/memory.js';
 import type { AngelMd, AngelFrontmatter } from '../../src/angels/memory.js';
 
 let tmpDir: string;
@@ -540,6 +540,71 @@ Provides test data to other modules.
     expect(() => appendAngelMd('nonexistent/path', 'Some content.\n')).toThrow(
       /Cannot read angel\.md/,
     );
+  });
+
+  it('retains only the most recent maxBackups backups', () => {
+    const backupDir = path.join(tmpDir, '.angels', 'src', '_backups', testAngelPath);
+
+    // 5 appends with maxBackups=3 should leave exactly 3 backups.
+    for (let i = 0; i < 5; i++) {
+      appendAngelMd(testAngelPath, `chunk ${i}\n`, 3);
+    }
+
+    const files = fs.readdirSync(backupDir).filter((f) => f.endsWith('.md'));
+    expect(files.length).toBe(3);
+
+    // The retained files must be the newest ones (lexically largest names).
+    const sorted = [...files].sort();
+    expect(sorted).toEqual(files.sort());
+  });
+
+  it('defaults to retaining 10 backups', () => {
+    const backupDir = path.join(tmpDir, '.angels', 'src', '_backups', testAngelPath);
+
+    for (let i = 0; i < 12; i++) {
+      appendAngelMd(testAngelPath, `chunk ${i}\n`);
+    }
+
+    const files = fs.readdirSync(backupDir).filter((f) => f.endsWith('.md'));
+    expect(files.length).toBe(10);
+  });
+});
+
+describe('pruneBackups', () => {
+  let originalCwd: string;
+
+  beforeEach(() => {
+    originalCwd = process.cwd();
+    process.chdir(tmpDir);
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+  });
+
+  it('is a no-op when the directory does not exist', () => {
+    expect(() => pruneBackups(path.join(tmpDir, 'does-not-exist'), 5)).not.toThrow();
+  });
+
+  it('keeps all files when count is below the limit', () => {
+    const dir = path.join(tmpDir, 'bk-under');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const name of ['2026-01-01.md', '2026-01-02.md']) {
+      fs.writeFileSync(path.join(dir, name), 'x');
+    }
+    pruneBackups(dir, 5);
+    expect(fs.readdirSync(dir).length).toBe(2);
+  });
+
+  it('removes all .md backups when maxBackups is 0', () => {
+    const dir = path.join(tmpDir, 'bk-zero');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const name of ['2026-01-01.md', '2026-01-02.md', 'keep.txt']) {
+      fs.writeFileSync(path.join(dir, name), 'x');
+    }
+    pruneBackups(dir, 0);
+    const remaining = fs.readdirSync(dir);
+    expect(remaining).toEqual(['keep.txt']);
   });
 });
 

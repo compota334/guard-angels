@@ -31,6 +31,12 @@ export interface AppendResult {
   appendedChars: number;
 }
 
+/**
+ * Default number of timestamped backups to retain per angel in _backups/.
+ * Older backups beyond this count are pruned on each append.
+ */
+export const DEFAULT_MAX_BACKUPS = 10;
+
 export interface AngelMd {
   frontmatter: AngelFrontmatter;
   body: string;
@@ -191,6 +197,7 @@ export function updateMetadata(
  *
  * Also creates an automatic backup of the previous state in:
  *   .angels/_backups/<relative-angel-path>/<timestamp>.md
+ * and prunes that directory to the most recent `maxBackups` files.
  *
  * Throws if the angel.md is missing/malformed or the write fails — there is
  * no silent failure path, so callers must let the error propagate or handle
@@ -198,9 +205,14 @@ export function updateMetadata(
  *
  * @param angelPath - Relative angel path (e.g. "src/auth" or "." for root)
  * @param bodyChunk - The markdown body chunk to append
+ * @param maxBackups - Number of timestamped backups to retain (default: 10)
  * @returns AppendResult with sizes before/after the operation
  */
-export function appendAngelMd(angelPath: string, bodyChunk: string): AppendResult {
+export function appendAngelMd(
+  angelPath: string,
+  bodyChunk: string,
+  maxBackups: number = DEFAULT_MAX_BACKUPS,
+): AppendResult {
   const filePath = getAngelMdPath(angelPath);
 
   // Read existing file (throws if missing or malformed)
@@ -216,9 +228,13 @@ export function appendAngelMd(angelPath: string, bodyChunk: string): AppendResul
     angelPath === '.' ? '_root' : angelPath,
   );
   fs.mkdirSync(backupDir, { recursive: true });
-  const backupPath = path.join(backupDir, `${timestamp}.md`);
+  // Suffix with random bytes so appends within the same millisecond don't
+  // collide and silently overwrite each other's backups. The timestamp prefix
+  // keeps lexical order chronological across distinct milliseconds.
+  const backupPath = path.join(backupDir, `${timestamp}-${crypto.randomBytes(3).toString('hex')}.md`);
   if (existing.raw) {
     fs.writeFileSync(backupPath, existing.raw, 'utf-8');
+    pruneBackups(backupDir, maxBackups);
   }
 
   // Append bodyChunk to existing body
@@ -244,6 +260,33 @@ export function appendAngelMd(angelPath: string, bodyChunk: string): AppendResul
     newSizeBytes,
     appendedChars: bodyChunk.length,
   };
+}
+
+/**
+ * Prune a backup directory to the `maxBackups` most recent timestamped files.
+ *
+ * Backup filenames are ISO-8601 timestamps with `:` and `.` replaced by `-`,
+ * so lexical sort matches chronological order. The newest `maxBackups` files
+ * are kept; older `.md` files are deleted. A non-positive `maxBackups` removes
+ * all `.md` backups.
+ */
+export function pruneBackups(backupDir: string, maxBackups: number = DEFAULT_MAX_BACKUPS): void {
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(backupDir);
+  } catch {
+    // Directory missing or unreadable: nothing to prune.
+    return;
+  }
+
+  const backups = entries.filter((f) => f.endsWith('.md')).sort();
+  const keep = maxBackups > 0 ? maxBackups : 0;
+  if (backups.length <= keep) return;
+
+  const toDelete = backups.slice(0, backups.length - keep);
+  for (const name of toDelete) {
+    fs.unlinkSync(path.join(backupDir, name));
+  }
 }
 
 /**
