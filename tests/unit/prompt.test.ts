@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  measurePromptSize,
   buildPrompt,
   buildDiscoveryPrompt,
   buildDenseDiscoveryPrompt,
@@ -836,5 +837,44 @@ describe('buildFinalizePrompt', () => {
       finalAngelMd,
     });
     expect(prompt).toContain('WRITE_MODE: CHUNK_FINAL');
+  });
+});
+
+// ─── measurePromptSize ────────────────────────────────────────────────────────
+
+describe('measurePromptSize', () => {
+  it('sections plus fixed sum to the total prompt bytes', () => {
+    const input = makeInput();
+    const prompt = buildPrompt(input);
+    const report = measurePromptSize(prompt, input);
+    const sum = report.sections.reduce((acc, s) => acc + s.bytes, 0);
+    expect(report.totalBytes).toBe(Buffer.byteLength(prompt));
+    expect(sum).toBe(report.totalBytes);
+  });
+
+  it('counts only the subject line for normal/low urgency cables', () => {
+    const bigContent = 'X'.repeat(10_000);
+    const cables: InboxEntry[] = [
+      { urgency: 'normal', subject: 'short subject', content: bigContent },
+    ];
+    const input = makeInput({ inbox: cables });
+    const prompt = buildPrompt(input);
+    const report = measurePromptSize(prompt, input);
+    const inbox = report.sections.find((s) => s.name === 'inbox')!;
+    expect(inbox.bytes).toBe(Buffer.byteLength('- [normal] short subject'));
+    // The full content never entered the prompt, so total stays small
+    expect(report.totalBytes).toBeLessThan(10_000);
+  });
+
+  it('counts full content for high urgency cables', () => {
+    const content = 'URGENT: the build is broken because of X'.repeat(10);
+    const cables: InboxEntry[] = [
+      { urgency: 'high', subject: 'ignored for sizing', content },
+    ];
+    const input = makeInput({ inbox: cables });
+    const prompt = buildPrompt(input);
+    const report = measurePromptSize(prompt, input);
+    const inbox = report.sections.find((s) => s.name === 'inbox')!;
+    expect(inbox.bytes).toBe(Buffer.byteLength(content));
   });
 });

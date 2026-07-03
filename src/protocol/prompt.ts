@@ -352,10 +352,14 @@ export interface PromptSizeReport {
  */
 export function measurePromptSize(prompt: string, input: PromptInput): PromptSizeReport {
   const b = (s: string | null | undefined): number => (s ? Buffer.byteLength(s) : 0);
-  const inboxBytes = input.inbox.reduce(
-    (sum, c) => sum + Buffer.byteLength(c.content || c.subject || ''),
-    0,
-  );
+  // Mirror buildPrompt's inbox rendering: high-urgency cables are inlined in
+  // full, normal/low cables contribute only their one-line subject entry.
+  const inboxBytes = input.inbox.reduce((sum, c) => {
+    if (c.urgency === 'high') {
+      return sum + Buffer.byteLength(c.content);
+    }
+    return sum + Buffer.byteLength(`- [${c.urgency}] ${c.subject}`);
+  }, 0);
 
   const sections = [
     { name: 'angelMd', bytes: b(input.angelMd) },
