@@ -1,19 +1,80 @@
 # Guard Angels
 
+<p>
+  <a href="https://www.npmjs.com/package/@guard-angels/cli"><img alt="npm version" src="https://img.shields.io/npm/v/%40guard-angels%2Fcli.svg"></a>
+  <a href="LICENSE.md"><img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <a href="https://nodejs.org/"><img alt="node version" src="https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg"></a>
+  <a href="https://github.com/compota335/guard-angels/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/compota335/guard-angels/actions/workflows/ci.yml/badge.svg"></a>
+</p>
+
 CLI orchestrator that gives each significant folder in your codebase its own persistent "angel" — a per-folder LLM agent that owns the *why* of that folder, executes changes within its territory, and coordinates with other angels via cables and a shared newspaper.
 
-## Install
+## Quickstart
 
-Guard Angels is not published to npm. Requires **Node.js >= 22**.
-
-### Fresh install / Update
+Requires **Node.js >= 22** and an AI coding CLI on your `PATH` (Claude Code by default; Codex and others are [configurable](#backend-configuration)).
 
 ```bash
-cd /path/to/guard-angel   # wherever you placed the source
+# One-liner, no install needed:
+npx @guard-angels/cli init
+
+# Or install globally and use the angels command:
+npm install -g @guard-angels/cli
+```
+
+From zero in an existing codebase:
+
+```bash
+cd your-project
+angels init              # create .angels/ and pick which folders get angels
+angels onboard           # angels read the code and write their own memory (angel.md)
+angels activate --all    # promote the generated drafts to active
+
+# Delegate your first change (review, then execute):
+angels do src-auth "Add rate limiting to the login endpoint"
+
+# After a batch of changes, let angels update their memory and read the log:
+angels sweep
+angels newspaper
+```
+
+That's it — all state lives in plain files under `.angels/`, committed to git. See the [usage guide](#usage-guide) for the full workflow and [Commands](#commands) for the complete reference.
+
+## Installation
+
+### One-liner (npx)
+
+```bash
+npx @guard-angels/cli init
+```
+
+Runs the CLI without installing anything permanently. Good for trying it out.
+
+### Global install (recommended)
+
+```bash
+npm install -g @guard-angels/cli
+angels --version
+```
+
+### From source
+
+```bash
+git clone https://github.com/compota335/guard-angels.git
+cd guard-angels
 make install
 ```
 
 `make install` is idempotent — same command for first install and updates. It checks Node version, installs dependencies (if needed), builds, verifies the binary, and links it globally.
+
+### Shell completion (optional)
+
+```bash
+# bash
+angels completion bash >> ~/.bashrc
+
+# zsh
+angels completion zsh > "${fpath[1]}/_angels"
+```
 
 ## How it works
 
@@ -33,7 +94,7 @@ Angels operate in five phases:
 
 The DISCOVERY pipeline is configured via `memory` in `_config.yml` — see [Angel memory system](#angel-memory-system) for details.
 
-## Quickstart
+## Usage guide
 
 ### New project
 
@@ -110,6 +171,11 @@ angels doctor --archive --older-than=30
 | `angels newspaper [--since=<iso>]` | Print newspaper entries (append-only log). Records cable, brief, execute, and sweep events. |
 | `angels sweep [--since=<iso>] [--timeout=<seconds>]` | Wake every angel in maintenance mode. `--timeout` caps each angel invocation; default from config. Report-only in v1. |
 | `angels doctor [--archive] [--older-than=N]` | Health check: orphaned angels, missing angels, stale locks, stale drafts. `--archive` moves old files to `_archive/`. |
+| `angels retire <angel-id>` | Archive and remove an angel from the project. |
+| `angels ask <angel-id> "<question>"` | Ask an angel a read-only question (no brief file, no execute path). |
+| `angels chat <angel-id> "<message>"` | Append a note to the angel's chat history (no invocation). |
+| `angels show <angel-id>` | Print the current `angel.md` for an angel. |
+| `angels completion <shell>` | Print a shell completion script. Supported shells: `bash`, `zsh`. |
 
 ## Response format
 
