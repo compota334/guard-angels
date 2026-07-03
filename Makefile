@@ -1,4 +1,4 @@
-.PHONY: install build test lint typecheck clean
+.PHONY: install build test lint typecheck clean pack publish
 
 NODE_MAJOR := $(shell node -e "const m = process.version.match(/^v(\d+)/); console.log(m ? m[1] : '0')")
 
@@ -33,3 +33,11 @@ typecheck:
 
 clean:
 	rm -rf dist
+
+# --ignore-scripts=false re-enables lifecycle scripts disabled in .npmrc,
+# so prepublishOnly (build + test) and prepack (dist check) run.
+pack:
+	npm pack --dry-run --ignore-scripts=false
+
+publish:
+	npm publish --ignore-scripts=false

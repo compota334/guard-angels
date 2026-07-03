@@ -3,17 +3,28 @@
   "version": "0.1.0",
   "description": "CLI orchestrator that creates per-folder angel agents for persistent codebase context",
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "angels": "dist/bin/angels.js"
   },
+  "files": [
+    "dist/",
+    "CHANGELOG.md"
+  ],
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "prepack": "node -e \"if (!require('node:fs').existsSync('dist/bin/angels.js')) { console.error('dist/ is missing or incomplete - run npm run build before packing'); process.exit(1); }\"",
+    "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
     "cli",
