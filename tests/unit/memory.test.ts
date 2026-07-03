@@ -273,6 +273,29 @@ describe('writeAngelMd', () => {
     const result = readAngelMd(p);
     expect(result.body).toBe('');
   });
+
+  it('round-trips notes containing newlines', () => {
+    const p = angelPath();
+    const notes = 'first line\nsecond line: with colon\nthird line';
+    writeAngelMd(p, {
+      frontmatter: { ...validFrontmatter, notes },
+      body: 'Body.\n',
+    });
+    const result = readAngelMd(p);
+    expect(result.frontmatter.notes).toBe(notes);
+    expect(result.body).toBe('Body.\n');
+  });
+
+  it('round-trips notes containing quotes and YAML special characters', () => {
+    const p = angelPath();
+    const notes = 'quoted "text" with \'single\' quotes, #comment-lookalike, and: colon';
+    writeAngelMd(p, {
+      frontmatter: { ...validFrontmatter, notes },
+      body: 'Body.\n',
+    });
+    const result = readAngelMd(p);
+    expect(result.frontmatter.notes).toBe(notes);
+  });
 });
 
 describe('updateMetadata', () => {

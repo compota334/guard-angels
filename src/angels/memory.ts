@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import * as z from 'zod';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 export const AngelFrontmatterSchema = z.object({
   status: z.enum(['draft', 'active']),
@@ -47,51 +48,34 @@ export interface AngelMd {
 const FRONTMATTER_OPEN = '---\n';
 const FRONTMATTER_CLOSE = '\n---\n';
 
-function parseFrontmatterYaml(block: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const line of block.split('\n')) {
-    const trimmed = line.trim();
-    if (trimmed === '' || trimmed.startsWith('#')) continue;
-    const colonIdx = trimmed.indexOf(':');
-    if (colonIdx === -1) {
-      throw new Error(`Invalid frontmatter line (no colon): "${trimmed}"`);
-    }
-    const key = trimmed.slice(0, colonIdx).trim();
-    let value = trimmed.slice(colonIdx + 1).trim();
-    // Strip surrounding quotes if present
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    result[key] = value;
+function parseFrontmatterYaml(block: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(block);
+  } catch (err: unknown) {
+    throw new Error(`Invalid frontmatter YAML: ${(err as Error).message}`, { cause: err });
   }
-  return result;
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Invalid frontmatter YAML: expected a key-value mapping');
+  }
+  return parsed as Record<string, unknown>;
 }
 
 function serializeFrontmatter(fm: AngelFrontmatter): string {
-  const lines = [
-    `status: ${fm.status}`,
-    `last_updated: ${fm.last_updated}`,
-    `last_updated_by: ${fm.last_updated_by}`,
-  ];
-  if (fm.notes !== undefined) {
-    lines.push(`notes: ${fm.notes}`);
-  }
-  if (fm.memory_target_pct !== undefined) {
-    lines.push(`memory_target_pct: ${fm.memory_target_pct}`);
-  }
-  if (fm.memory_max_tokens !== undefined) {
-    lines.push(`memory_max_tokens: ${fm.memory_max_tokens}`);
-  }
-  if (fm.territory_size !== undefined) {
-    lines.push(`territory_size: ${fm.territory_size}`);
-  }
-  if (fm.code_coverage_pct !== undefined) {
-    lines.push(`code_coverage_pct: ${fm.code_coverage_pct}`);
-  }
-  return lines.join('\n');
+  // Build the object with only defined keys so optional fields are omitted
+  // instead of being serialized as null.
+  const obj: Record<string, unknown> = {
+    status: fm.status,
+    last_updated: fm.last_updated,
+    last_updated_by: fm.last_updated_by,
+  };
+  if (fm.notes !== undefined) obj.notes = fm.notes;
+  if (fm.memory_target_pct !== undefined) obj.memory_target_pct = fm.memory_target_pct;
+  if (fm.memory_max_tokens !== undefined) obj.memory_max_tokens = fm.memory_max_tokens;
+  if (fm.territory_size !== undefined) obj.territory_size = fm.territory_size;
+  if (fm.code_coverage_pct !== undefined) obj.code_coverage_pct = fm.code_coverage_pct;
+  // stringify appends a trailing newline; the caller joins with FRONTMATTER_CLOSE
+  return stringifyYaml(obj).trimEnd();
 }
 
 export function readAngelMd(filePath: string): AngelMd {
