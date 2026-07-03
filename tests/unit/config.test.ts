@@ -102,7 +102,7 @@ sweep:
     expect(() => loadConfig(tmpDir)).toThrow(/Invalid config/);
   });
 
-  it('throws on wrong version number', () => {
+  it('throws a schema version mismatch error on wrong version number', () => {
     const config = `
 version: 2
 backend:
@@ -116,7 +116,8 @@ sweep:
   autonomy: report-only
 `;
     writeConfig(tmpDir, config);
-    expect(() => loadConfig(tmpDir)).toThrow(/Invalid config/);
+    expect(() => loadConfig(tmpDir)).toThrow(/Schema version mismatch/);
+    expect(() => loadConfig(tmpDir)).toThrow(/has version 2/);
   });
 
   it('throws on missing backend.angel_cmd', () => {

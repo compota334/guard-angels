@@ -38,6 +38,19 @@ export function loadConfig(cwd: string): Config {
     return ConfigSchema.parse(parsed);
   } catch (err: unknown) {
     if (err instanceof ZodError) {
+      const versionIssue = err.issues.find((i) => i.path.join('.') === 'version');
+      const foundVersion =
+        typeof parsed === 'object' && parsed !== null && 'version' in parsed
+          ? (parsed as Record<string, unknown>).version
+          : undefined;
+      if (versionIssue && foundVersion !== undefined) {
+        throw new Error(
+          `Schema version mismatch in ${configPath}: the binary expects schema version 1, ` +
+          `but the config file has version ${JSON.stringify(foundVersion)}.\n` +
+          `Either downgrade the binary or manually update .angels/_config.yml to schema version 1.`,
+          { cause: err },
+        );
+      }
       const details = err.issues
         .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
         .join('\n');
