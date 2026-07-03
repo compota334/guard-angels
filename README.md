@@ -4,16 +4,16 @@ CLI orchestrator that gives each significant folder in your codebase its own per
 
 ## Install
 
-Guard Angels is not published to npm. Build from source:
+Guard Angels is not published to npm. Requires **Node.js >= 22**.
+
+### Fresh install / Update
 
 ```bash
 cd /path/to/guard-angel   # wherever you placed the source
-npm install
-npm run build
-npm install -g .
+make install
 ```
 
-Requires Node.js >= 22.
+`make install` is idempotent — same command for first install and updates. It checks Node version, installs dependencies (if needed), builds, verifies the binary, and links it globally.
 
 ## How it works
 
