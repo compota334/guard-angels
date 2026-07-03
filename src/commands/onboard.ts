@@ -3,7 +3,7 @@ import * as readline from 'node:readline';
 import { resolve as resolvePath } from 'node:path';
 import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
-import { readAngelMd, writeAngelMd, verifyAngelMd, appendAngelMd } from '../angels/memory.js';
+import { readAngelMd, writeAngelMd, verifyAngelMd, appendAngelMd, type AngelMd } from '../angels/memory.js';
 import { angelMdFile } from '../paths/layout.js';
 import { angelIdToPath } from '../paths/resolve.js';
 import { buildDiscoveryContext } from '../protocol/discovery.js';
@@ -335,7 +335,9 @@ async function onboardWithChunks(
           priorResponse: 'none',
         });
 
-        // d. Invoke backend
+        // d. Invoke backend (capture the file size first so a direct write
+        //    by the angel can be detected as growth)
+        const sizeBefore = fs.statSync(mdPath).size;
         const result = await invoke(cwd, {
           phase: 'discovery',
           angelId: angel.id,
@@ -355,8 +357,8 @@ async function onboardWithChunks(
           console.log(`  Chunk ${i + 1}/${plan.chunks.length} appended (${appendResult.appendedChars} chars).`);
         } else {
           // The angel may have written directly — check if file grew
-          const currentStats = fs.statSync(mdPath);
-          if (currentStats.size <= 100) {
+          const sizeAfter = fs.statSync(mdPath).size;
+          if (sizeAfter <= sizeBefore) {
             throw new Error(`Chunk ${i + 1} produced no output`);
           }
           console.log(`  Chunk ${i + 1}/${plan.chunks.length} written directly by angel.`);
@@ -377,13 +379,18 @@ async function onboardWithChunks(
   // 5. Verify integrity of the assembled angel.md
   console.log('  All chunks written. Verifying final angel.md...');
 
-  // Read the complete file
-  let finalAngelMd: string;
+  // Read the complete file. A parse failure here means the chunked write
+  // produced a corrupt angel.md — abort instead of silently overwriting the
+  // assembled content with an empty body.
+  let finalMd: AngelMd;
   try {
-    const finalMd = readAngelMd(mdPath);
-    finalAngelMd = finalMd.raw ?? '';
-  } catch {
-    finalAngelMd = '';
+    finalMd = readAngelMd(mdPath);
+  } catch (err: unknown) {
+    throw new Error(
+      `Chunked write completed but the assembled angel.md at ${mdPath} is unreadable: ` +
+        `${(err as Error).message}. The file was left untouched for inspection.`,
+      { cause: err },
+    );
   }
 
   // Verify with expected min tokens
@@ -408,7 +415,7 @@ async function onboardWithChunks(
         (deepContext.stats.highValueFiles / Math.max(deepContext.stats.totalFiles, 1)) * 100,
       ),
     },
-    body: finalAngelMd.startsWith('---') ? readAngelMd(mdPath).body : finalAngelMd,
+    body: finalMd.body,
   });
 
   printSummary(angel.id, status);

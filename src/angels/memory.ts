@@ -197,6 +197,7 @@ export function appendAngelMd(
   bodyChunk: string,
   maxBackups: number = DEFAULT_MAX_BACKUPS,
 ): AppendResult {
+  const angelDir = angelPath === '.' ? '_root' : angelPath;
   const filePath = getAngelMdPath(angelPath);
 
   // Read existing file (throws if missing or malformed)
@@ -205,12 +206,7 @@ export function appendAngelMd(
 
   // Create backup before modifying
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupDir = path.join(
-    path.dirname(filePath),
-    '..',
-    '_backups',
-    angelPath === '.' ? '_root' : angelPath,
-  );
+  const backupDir = path.join('.angels', '_backups', angelDir);
   fs.mkdirSync(backupDir, { recursive: true });
   // Suffix with random bytes so appends within the same millisecond don't
   // collide and silently overwrite each other's backups. The timestamp prefix
@@ -276,9 +272,12 @@ export function pruneBackups(backupDir: string, maxBackups: number = DEFAULT_MAX
 /**
  * Return the standard angel.md path for a given angel path.
  * E.g. getAngelMdPath('src/auth') → '.angels/src/auth/angel.md'
+ * The root territory ('.') maps to the '_root' directory:
+ * getAngelMdPath('.') → '.angels/_root/angel.md'
  */
 export function getAngelMdPath(angelPath: string): string {
-  return `.angels/${angelPath}/angel.md`;
+  const dir = angelPath === '.' ? '_root' : angelPath;
+  return `.angels/${dir}/angel.md`;
 }
 
 /**
@@ -289,7 +288,7 @@ export function getAngelMdPath(angelPath: string): string {
  * - Has valid YAML frontmatter (readAngelMd validates this)
  * - Has last_updated in frontmatter
  * - Body is not empty (> 50 characters)
- * - Optionally: body tokens >= expectedMinTokens (chars * 0.75 >= expectedMinTokens)
+ * - Optionally: body tokens >= expectedMinTokens (chars / 4 >= expectedMinTokens)
  *
  * @param path - Absolute path to angel.md
  * @param expectedMinTokens - If provided, verify body has at least this many tokens
@@ -332,12 +331,13 @@ export function verifyAngelMd(filePath: string, expectedMinTokens?: number): Ver
     errors.push('Missing last_updated in frontmatter');
   }
 
-  // 6. Optional: check minimum token count (conservative chars→tokens ratio 0.75)
+  // 6. Optional: check minimum token count (~4 chars per token, same ratio
+  // as estimateTotalTokens in discovery-enhanced.ts)
   if (expectedMinTokens !== undefined) {
-    const estimatedTokens = Math.floor(bodyLength * 0.75);
+    const estimatedTokens = Math.ceil(bodyLength / 4);
     if (estimatedTokens < expectedMinTokens) {
       errors.push(
-        `Body too small: ~${estimatedTokens} estimated tokens (${bodyLength} chars * 0.75), ` +
+        `Body too small: ~${estimatedTokens} estimated tokens (${bodyLength} chars / 4), ` +
           `expected at least ${expectedMinTokens} tokens`,
       );
     }

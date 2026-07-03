@@ -458,8 +458,8 @@ describe('getAngelMdPath', () => {
     expect(getAngelMdPath('src/auth')).toBe('.angels/src/auth/angel.md');
   });
 
-  it('returns path/angel.md for root angel path (.)', () => {
-    expect(getAngelMdPath('.')).toBe('.angels/./angel.md');
+  it('maps the root angel path (.) to the _root directory', () => {
+    expect(getAngelMdPath('.')).toBe('.angels/_root/angel.md');
   });
 
   it('returns path/angel.md for a single-segment angel path', () => {
@@ -512,14 +512,10 @@ Provides test data to other modules.
     expect(now - updated).toBeLessThan(10_000);
   });
 
-  it('creates a backup in _backups/<angelPath>/ before appending', () => {
+  it('creates a backup in .angels/_backups/<angelPath>/ before appending', () => {
     appendAngelMd(testAngelPath, 'Extra content.\n');
 
-    // appendAngelMd constructs backupDir as:
-    //   path.join(path.dirname(filePath), '..', '_backups', angelPath)
-    // For angelPath='src/test-angel', filePath='.angels/src/test-angel/angel.md'
-    // This resolves to .angels/src/_backups/src/test-angel/
-    const backupDir = path.join(tmpDir, '.angels', 'src', '_backups', testAngelPath);
+    const backupDir = path.join(tmpDir, '.angels', '_backups', testAngelPath);
     expect(fs.existsSync(backupDir)).toBe(true);
 
     // Check at least one backup .md file was created
@@ -566,7 +562,7 @@ Provides test data to other modules.
   });
 
   it('retains only the most recent maxBackups backups', () => {
-    const backupDir = path.join(tmpDir, '.angels', 'src', '_backups', testAngelPath);
+    const backupDir = path.join(tmpDir, '.angels', '_backups', testAngelPath);
 
     // 5 appends with maxBackups=3 should leave exactly 3 backups.
     for (let i = 0; i < 5; i++) {
@@ -582,7 +578,7 @@ Provides test data to other modules.
   });
 
   it('defaults to retaining 10 backups', () => {
-    const backupDir = path.join(tmpDir, '.angels', 'src', '_backups', testAngelPath);
+    const backupDir = path.join(tmpDir, '.angels', '_backups', testAngelPath);
 
     for (let i = 0; i < 12; i++) {
       appendAngelMd(testAngelPath, `chunk ${i}\n`);
