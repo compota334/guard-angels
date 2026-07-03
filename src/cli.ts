@@ -17,6 +17,7 @@ import { retireAngel } from './commands/retire.js';
 import { showAngel } from './commands/show.js';
 import { askAngel } from './commands/ask.js';
 import { chatWithAngel } from './commands/chat.js';
+import { generateCompletion } from './commands/completion.js';
 
 const program = new Command();
 
@@ -344,6 +345,21 @@ program
         olderThanDays,
       });
       process.exit(exitCode);
+    } catch (err: unknown) {
+      handleError(err, 1);
+    }
+  });
+
+program
+  .command('completion')
+  .argument('<shell>', 'Shell type: bash or zsh')
+  .description('Print a shell completion script for the angels command')
+  .action((shell: string) => {
+    try {
+      const commands = program.commands
+        .map((cmd) => ({ name: cmd.name(), description: cmd.description() }))
+        .filter((cmd) => cmd.name !== 'help');
+      process.stdout.write(generateCompletion(shell, commands));
     } catch (err: unknown) {
       handleError(err, 1);
     }
