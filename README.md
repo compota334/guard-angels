@@ -359,4 +359,4 @@ break the audit trail (newspaper, FILES CHANGED record). Instead:
 
 ## License
 
-Private. All rights reserved.
+[MIT](LICENSE.md)

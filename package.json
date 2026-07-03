@@ -21,10 +21,22 @@
     "agents",
     "codebase",
     "context",
-    "orchestrator"
+    "orchestrator",
+    "llm",
+    "claude",
+    "developer-tools",
+    "code-assistant",
+    "multi-agent"
   ],
-  "license": "UNLICENSED",
-  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/compota335/guard-angels.git"
+  },
+  "homepage": "https://github.com/compota335/guard-angels#readme",
+  "bugs": {
+    "url": "https://github.com/compota335/guard-angels/issues"
+  },
   "dependencies": {
     "commander": "14.0.3",
     "execa": "9.6.1",
