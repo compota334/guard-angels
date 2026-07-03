@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { CLI_VERSION } from './version.js';
 import { initAngels } from './commands/init.js';
 import { onboardAngels } from './commands/onboard.js';
 import { activateAngels } from './commands/activate.js';
@@ -22,7 +23,7 @@ const program = new Command();
 program
   .name('angels')
   .description('CLI orchestrator that creates per-folder angel agents for persistent codebase context')
-  .version('0.1.0')
+  .version(CLI_VERSION)
   .option('--verbose', 'Enable stack traces and debug output on errors');
 
 /**

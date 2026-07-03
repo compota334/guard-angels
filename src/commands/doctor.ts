@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import { resolve, join, relative, dirname, basename, sep } from 'node:path';
 import { loadConfig } from '../config/load.js';
+import { CLI_VERSION } from '../version.js';
 import { AngelRegistry } from '../angels/registry.js';
 import { identifyCandidates } from '../angels/identify.js';
 import { readLock, isStale, lockFilePath, type LockInfo } from '../locks/lock.js';
@@ -378,8 +379,15 @@ export async function runDoctorChecks(
 /**
  * Format the doctor report as a human-readable string.
  */
-export function formatDoctorReport(report: DoctorReport): string {
+export function formatDoctorReport(
+  report: DoctorReport,
+  versions?: { cli: string; schema: number; node: string },
+): string {
   const lines: string[] = [];
+  if (versions) {
+    lines.push(`Guard Angels ${versions.cli} — Schema v${versions.schema} — Node ${versions.node}`);
+    lines.push('');
+  }
   const totalFindings =
     report.orphanedAngels.length +
     report.missingAngels.length +
@@ -444,7 +452,13 @@ export async function runDoctor(
   const registry = AngelRegistry.fromConfig(config);
   const report = await runDoctorChecks(cwd, config, registry, options);
 
-  const output = formatDoctorReport(report);
+  const versions = {
+    cli: CLI_VERSION,
+    schema: config.version,
+    node: process.version,
+  };
+
+  const output = formatDoctorReport(report, versions);
   console.log(output);
 
   if (options?.archive) {
