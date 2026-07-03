@@ -88,7 +88,6 @@ export async function executeAngel(
 
   // 8. Detect territory violations
   const changedFiles = detectChangedFiles(beforeSnapshot, afterSnapshot);
-  const allChanged = [...changedFiles.added, ...changedFiles.modified];
   const outOfTerritoryAdded = findOutOfTerritoryWrites(
     changedFiles.added,
     cwd,

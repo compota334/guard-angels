@@ -291,7 +291,7 @@ const AGGRESSIVE_FILTERS: BoilerplateFilter[] = [
   {
     name: 'aggressive-jsdoc-block',
     language: ['typescript', 'javascript'],
-    test: (line: string, _index: number, lines: string[]) => {
+    test: (line: string) => {
       const trimmed = line.trim();
       // Detect JSDoc block start/end
       if (/^\/\*\*$/.test(trimmed)) return true;  /** opening */

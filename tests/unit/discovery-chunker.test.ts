@@ -2,8 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   estimateTotalTokens,
   buildChunkPlan,
-  type ChunkPlan,
-  type Chunk,
 } from '../../src/protocol/discovery-chunker.js';
 import type { DeepDiscoveryContext } from '../../src/protocol/discovery-enhanced.js';
 

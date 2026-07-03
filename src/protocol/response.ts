@@ -244,7 +244,6 @@ export function parseDirectWriteResponse(raw: string): ParseResult {
   const responseValue = extractRequiredField(raw, 'RESPONSE').toLowerCase();
   const message = responseValue;
   const isError = responseValue === 'error';
-  const isPartial = responseValue === 'concerns' || responseValue === 'refuse' || responseValue === 'proceed';
 
   let status: 'done' | 'error' | 'partial';
   if (responseValue === 'done') {

@@ -10,7 +10,7 @@ import {
   detectChunkMode,
   parseDirectWriteResponse,
 } from '../../src/protocol/response.js';
-import type { ResponseData, ParseResult } from '../../src/protocol/response.js';
+import type { ResponseData } from '../../src/protocol/response.js';
 
 function makeResponseData(overrides: Partial<ResponseData> = {}): ResponseData {
   return {

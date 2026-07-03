@@ -278,7 +278,7 @@ async function promptManualFolders(cwd: string): Promise<string[]> {
 
   const paths: string[] = [];
 
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     const input = await ask('folder> ');
     const trimmed = input.trim();

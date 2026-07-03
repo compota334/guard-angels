@@ -87,6 +87,7 @@ export function acquireLock(projectRoot: string, ttlMs: number, scope?: string):
         throw new Error(
           `Orchestrator lock is held by PID ${existing.pid} (started ${existing.startedAt}). ` +
             `If the process is not running, delete ${lockPath} manually or wait for TTL expiry.`,
+          { cause: err },
         );
       }
       // Stale or unreadable — remove and retry the atomic write

@@ -8,7 +8,7 @@ import { angelMdFile } from '../paths/layout.js';
 import { angelIdToPath } from '../paths/resolve.js';
 import { buildDiscoveryContext } from '../protocol/discovery.js';
 import { buildDeepDiscoveryContext } from '../protocol/discovery-enhanced.js';
-import { buildDenseDiscoveryPrompt, buildChunkPrompt, buildFinalizePrompt, shouldUseDenseTemplate } from '../protocol/prompt.js';
+import { buildDenseDiscoveryPrompt, buildChunkPrompt, shouldUseDenseTemplate } from '../protocol/prompt.js';
 import { buildChunkPlan, estimateTotalTokens } from '../protocol/discovery-chunker.js';
 import { invoke } from '../protocol/orchestrate.js';
 import { writeBrief } from '../protocol/brief.js';
@@ -289,7 +289,6 @@ async function onboardWithChunks(
   for (let i = 0; i < plan.chunks.length; i++) {
     const chunk = plan.chunks[i];
     const isFirst = i === 0;
-    const isLast = i === plan.chunks.length - 1;
     let attempts = 0;
     const maxRetries = 2;
     let success = false;
@@ -368,14 +367,14 @@ async function onboardWithChunks(
         attempts++;
         if (attempts > maxRetries) {
           console.error(`  Chunk ${i + 1} failed after ${maxRetries + 1} attempts: ${(err as Error).message}`);
-          throw new Error(`Chunked write failed on chunk ${i + 1}/${plan.chunks.length}: ${(err as Error).message}`);
+          throw new Error(`Chunked write failed on chunk ${i + 1}/${plan.chunks.length}: ${(err as Error).message}`, { cause: err });
         }
         console.error(`  Chunk ${i + 1} attempt ${attempts} failed: ${(err as Error).message}. Retrying...`);
       }
     }
   }
 
-  // 5. Build finalize prompt to verify integrity
+  // 5. Verify integrity of the assembled angel.md
   console.log('  All chunks written. Verifying final angel.md...');
 
   // Read the complete file

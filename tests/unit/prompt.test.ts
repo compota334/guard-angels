@@ -7,8 +7,6 @@ import {
   buildFinalizePrompt,
   shouldUseDenseTemplate,
   useDenseTemplate,
-  measurePromptSize,
-  formatPromptSizeWarning,
   type PromptInput,
   type PromptPhase,
   type InboxEntry,

@@ -26,6 +26,7 @@ export function showAngel(cwd: string, angelId: string): void {
     if (code === 'ENOENT') {
       throw new Error(
         `Angel "${angelId}" is registered but has no angel.md at ${mdPath}. Run "angels onboard --angel ${angelId}" to initialize it.`,
+        { cause: err },
       );
     }
     throw err;

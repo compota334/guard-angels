@@ -722,7 +722,7 @@ export function buildChunkPrompt(params: {
         'Start your response with WRITE_MODE: CHUNK then RESPONSE: done.',
     );
   } else {
-    const previousSections = getAllPreviousSections(chunkIndex, totalChunks);
+    const previousSections = getAllPreviousSections(chunkIndex);
 
     sections.push('[CURRENT PHASE: DISCOVERY — CHUNKED WRITE]');
     sections.push('');
@@ -816,7 +816,7 @@ export function buildFinalizePrompt(params: {
   deepContext: DeepDiscoveryContext;
   finalAngelMd: string;
 }): string {
-  const { angel, deepContext, finalAngelMd } = params;
+  const { angel, finalAngelMd } = params;
   const pathDesc = angel.type === 'root' ? '.' : angel.path;
 
   const sections: string[] = [];
@@ -857,7 +857,7 @@ export function buildFinalizePrompt(params: {
 /**
  * Get the list of section names from chunks before the current index.
  */
-function getAllPreviousSections(chunkIndex: number, totalChunks: number): string[] {
+function getAllPreviousSections(chunkIndex: number): string[] {
   // These are the standard section groupings per chunk index
   const chunkSections: string[][] = [
     ['Charter y Boundaries', 'Arquitectura del Área', 'Public Contract', 'Invariantes y Reglas de Negocio'],
