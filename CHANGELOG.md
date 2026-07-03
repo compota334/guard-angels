@@ -4,8 +4,15 @@ All notable changes to Guard Angels are documented here.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-03
+
 ### Added
 
+- **MIT license**: the project is now open source under the MIT license (`LICENSE.md`).
+- **npm publishing**: the package is published as `@guard-angels/cli` with public access; `package.json` gained `files`, `engines`, `publishConfig`, and repository metadata, plus `prepack`/`prepublishOnly` guards.
+- **Shell completions**: new `angels completion` command generating bash and zsh completion scripts.
+- **CI/CD workflows**: GitHub Actions `ci.yml` (build, lint, and test on Node 22/23 for pushes and PRs against `main`) and `publish.yml` (publish to npm on `v*` tags).
+- **Contributing documentation**: `CONTRIBUTING.md` (setup, workflow, coding standards, PR checklist), `CODE_OF_CONDUCT.md` (Contributor Covenant v2.1), and `SECURITY.md` (vulnerability reporting policy).
 - **Direct write mode** for DISCOVERY phase: when `memory.target_pct > 5%`, the angel writes `angel.md` directly to disk instead of embedding it inside PROPOSED PLAN. Eliminates the response-file throughput bottleneck for large memory files.
 - **Chunked writing** for DISCOVERY phase: when the estimated `angel.md` body exceeds 50 KB, generation is split into ~50K-token chunks across multiple backend invocations. Each chunk appends to the same `angel.md` file; sections are pre-assigned per chunk.
 - **`memory` configuration** in `_config.yml`: `memory.target_pct` (1–100, default 25) controls the percentage of context window dedicated to angel memory; `memory.max_tokens` overrides `target_pct` with an absolute budget.
@@ -20,6 +27,7 @@ All notable changes to Guard Angels are documented here.
 
 ### Changed
 
+- **README restructured** around the npm install experience: installation via `npm install -g @guard-angels/cli` is now the entry point, with quick start, commands, and protocol documentation reorganized accordingly.
 - **Protocol phases documentation** updated in README.md: DISCOVERY phase now describes direct write and chunked writing.
 - **Commands table** updated: `angels onboard` now documents `--target-pct` and `--max-tokens` flags.
 - **New "Angel memory system" section** in README.md explaining deep context reading, direct write, chunked writing, and memory configuration.
