@@ -128,8 +128,7 @@ export async function createAngelDraft(
   entry: AngelEntry,
   cwd: string,
 ): Promise<void> {
-  const angelPath = entry.type === 'root' ? '_root' : entry.path;
-  const mdPath = angelMdFile(cwd, angelPath);
+  const mdPath = angelMdFile(cwd, entry.path);
 
   // Determine the actual folder in the project
   const projectFolder = entry.type === 'root' ? cwd : join(cwd, entry.path);

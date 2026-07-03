@@ -42,8 +42,7 @@ export async function retireAngel(cwd: string, angelId: string): Promise<number>
   const otherAngels = registry.listAll().filter((a) => a.id !== angelId);
   const referencedIn: string[] = [];
   for (const other of otherAngels) {
-    const otherAngelPath = other.type === 'root' ? '_root' : other.path;
-    const mdPath = angelMdFile(cwd, otherAngelPath);
+    const mdPath = angelMdFile(cwd, other.path);
     if (fs.existsSync(mdPath)) {
       const content = fs.readFileSync(mdPath, 'utf-8');
       if (content.includes(angelId)) {
@@ -61,8 +60,7 @@ export async function retireAngel(cwd: string, angelId: string): Promise<number>
   }
 
   // Archive angel.md
-  const angelPath = angel.type === 'root' ? '_root' : angel.path;
-  const mdSrc = angelMdFile(cwd, angelPath);
+  const mdSrc = angelMdFile(cwd, angel.path);
   const archiveDest = join(archiveDir(cwd), angelId);
   fs.mkdirSync(archiveDest, { recursive: true });
   if (fs.existsSync(mdSrc)) {

@@ -32,7 +32,7 @@ export async function activateAngels(
 
   for (const angel of targets) {
     const angelPath = angelIdToPath(angel.id);
-    const mdPath = angelMdFile(cwd, angelPath === '.' ? '_root' : angelPath);
+    const mdPath = angelMdFile(cwd, angelPath);
 
     if (!fs.existsSync(mdPath)) {
       console.log(`  ${angel.id}: no angel.md found, skipping.`);

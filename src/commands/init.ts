@@ -42,8 +42,7 @@ export async function initAngels(cwd: string, opts: InitOptions): Promise<void> 
     const existingConfig = loadConfig(cwd);
     const missingEntries: AngelEntry[] = [];
     for (const entry of existingConfig.angels) {
-      const angelPath = entry.type === 'root' ? '_root' : entry.path;
-      if (!fs.existsSync(angelMdFile(cwd, angelPath))) {
+      if (!fs.existsSync(angelMdFile(cwd, entry.path))) {
         missingEntries.push(entry);
       }
     }

@@ -16,7 +16,7 @@ export function showAngel(cwd: string, angelId: string): void {
   registry.getById(angelId); // throws if not found
 
   const angelPath = angelIdToPath(angelId);
-  const mdPath = angelMdFile(cwd, angelPath === '.' ? '_root' : angelPath);
+  const mdPath = angelMdFile(cwd, angelPath);
 
   let raw: string;
   try {

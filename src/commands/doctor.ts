@@ -165,8 +165,7 @@ export function checkStaleDrafts(
   const thresholdMs = thresholdDays * 24 * 60 * 60 * 1000;
 
   for (const angel of config.angels) {
-    const angelPath = angel.type === 'root' ? '_root' : angel.path;
-    const mdPath = angelMdFile(projectRoot, angelPath);
+    const mdPath = angelMdFile(projectRoot, angel.path);
     let md;
     try {
       md = readAngelMd(mdPath);

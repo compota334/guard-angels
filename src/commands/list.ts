@@ -39,8 +39,7 @@ export function listAngels(cwd: string): void {
   const rows: Array<{ id: string; type: string; path: string; status: string }> = [];
 
   for (const angel of angels) {
-    const angelPath = angel.type === 'root' ? '_root' : angel.path;
-    const mdPath = angelMdFile(cwd, angelPath);
+    const mdPath = angelMdFile(cwd, angel.path);
     const status = parseFrontmatterStatus(mdPath) ?? '-';
     rows.push({ id: angel.id, type: angel.type, path: angel.path, status });
   }

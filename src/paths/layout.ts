@@ -50,12 +50,10 @@ export function rootAngelDir(projectRoot: string): string {
   return join(projectRoot, ANGELS_DIR, '_root');
 }
 
-export function angelDir(projectRoot: string, angelPath: string): string {
-  return join(projectRoot, ANGELS_DIR, angelPath);
-}
-
 export function angelMdFile(projectRoot: string, angelPath: string): string {
-  return join(projectRoot, ANGELS_DIR, angelPath, 'angel.md');
+  // The root territory ('.') stores its angel.md under the '_root' directory.
+  const dir = angelPath === '.' ? '_root' : angelPath;
+  return join(projectRoot, ANGELS_DIR, dir, 'angel.md');
 }
 
 export function angelBriefsDir(projectRoot: string, angelId: string): string {

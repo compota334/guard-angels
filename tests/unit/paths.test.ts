@@ -13,7 +13,6 @@ import {
   cursorsDir,
   archiveDir,
   rootAngelDir,
-  angelDir,
   angelMdFile,
   angelBriefsDir,
   angelResponsesDir,
@@ -79,12 +78,16 @@ describe('layout', () => {
     expect(rootAngelDir(ROOT)).toBe(join(ROOT, '.angels', '_root'));
   });
 
-  it('angelDir returns the mirrored path under .angels/', () => {
-    expect(angelDir(ROOT, 'src/auth')).toBe(join(ROOT, '.angels', 'src', 'auth'));
-  });
-
   it('angelMdFile returns angel.md inside the mirrored path', () => {
     expect(angelMdFile(ROOT, 'src/auth')).toBe(join(ROOT, '.angels', 'src', 'auth', 'angel.md'));
+  });
+
+  it('angelMdFile maps the root territory (.) to _root', () => {
+    expect(angelMdFile(ROOT, '.')).toBe(join(ROOT, '.angels', '_root', 'angel.md'));
+  });
+
+  it('angelMdFile passes through an already-mapped _root', () => {
+    expect(angelMdFile(ROOT, '_root')).toBe(join(ROOT, '.angels', '_root', 'angel.md'));
   });
 
   it('angelBriefsDir returns _briefs/<angel-id>', () => {

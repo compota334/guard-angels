@@ -92,7 +92,7 @@ export async function invoke(
 
     // 2. Read angel.md if it exists
     const angelPath = angelIdToPath(input.angelId);
-    const angelMdPath = angelMdFile(projectRoot, angelPath === '.' ? '_root' : angelPath);
+    const angelMdPath = angelMdFile(projectRoot, angelPath);
     let angelMdContent: string | null = null;
     let angelNotes: string | undefined = undefined;
     try {

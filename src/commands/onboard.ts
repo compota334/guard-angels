@@ -30,7 +30,7 @@ export async function onboardAngels(cwd: string, opts: OnboardOptions): Promise<
 
   for (const angel of targets) {
     const angelPath = angelIdToPath(angel.id);
-    const mdPath = angelMdFile(cwd, angelPath === '.' ? '_root' : angelPath);
+    const mdPath = angelMdFile(cwd, angelPath);
 
     if (isActiveAngel(mdPath) && !opts.force) {
       const confirmed = await promptOverwrite(angel.id);
