@@ -151,14 +151,6 @@ export interface ParsedCable {
 }
 
 /**
- * Parse a cable file from disk.
- */
-export function parseCable(filePath: string): ParsedCable {
-  const raw = readFileSync(filePath, 'utf-8');
-  return parseCableContent(raw, filePath);
-}
-
-/**
  * Parse cable content from a string (useful for testing without files).
  */
 export function parseCableContent(

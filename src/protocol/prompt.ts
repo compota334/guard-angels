@@ -807,58 +807,6 @@ export function buildChunkPrompt(params: {
 }
 
 /**
- * Build a finalize prompt to verify a chunked angel.md after all chunks are written.
- *
- * Instructs the angel to verify the complete file has all 11 sections,
- * frontmatter timestamp is current, and no section is empty or has TODO/TBD placeholders.
- *
- * @param params - Parameters for building the finalize prompt
- * @returns The complete finalize prompt string
- */
-export function buildFinalizePrompt(params: {
-  angel: AngelEntry;
-  deepContext: DeepDiscoveryContext;
-  finalAngelMd: string;
-}): string {
-  const { angel, finalAngelMd } = params;
-  const pathDesc = angel.type === 'root' ? '.' : angel.path;
-
-  const sections: string[] = [];
-
-  sections.push('[PROTOCOL]');
-  sections.push(PROTOCOL_HEADER);
-  sections.push('');
-
-  sections.push('[CURRENT PHASE: DISCOVERY — FINALIZE CHUNKED WRITE]');
-  sections.push('');
-  sections.push(
-    `All chunks have been written to .angels/${angel.id}/angel.md for ${pathDesc}.`,
-  );
-  sections.push('');
-  sections.push('Verify the file is complete and correct:');
-  sections.push('1. Check that all 11 sections are present');
-  sections.push('2. Check frontmatter has last_updated: now');
-  sections.push('3. Check no section is empty or says \'TODO\' or \'TBD\'');
-  sections.push('4. If anything is missing, write a brief CHUNK_FIX with the missing sections');
-  sections.push('');
-  sections.push('[FINAL ANGEL.MD CONTENT]');
-  sections.push(finalAngelMd.slice(0, 3000)); // first 3000 chars as reference
-  sections.push('');
-  sections.push('[OUTPUT INSTRUCTIONS]');
-  sections.push(
-    '1. If everything looks good, respond with RESPONSE: done and WRITE_MODE: CHUNK_FINAL\n' +
-    '2. If sections are missing or incomplete, describe what needs fixing\n' +
-    '3. Do NOT rewrite angel.md — just verify and report',
-  );
-  sections.push('');
-  sections.push(CABLE_FORMAT_TEMPLATE);
-  sections.push('');
-  sections.push('When done, exit. Do not loop or wait for input.');
-
-  return sections.join('\n');
-}
-
-/**
  * Get the list of section names from chunks before the current index.
  */
 function getAllPreviousSections(chunkIndex: number): string[] {

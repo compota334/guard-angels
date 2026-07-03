@@ -5,7 +5,6 @@ import {
   buildDiscoveryPrompt,
   buildDenseDiscoveryPrompt,
   buildChunkPrompt,
-  buildFinalizePrompt,
   shouldUseDenseTemplate,
   useDenseTemplate,
   type PromptInput,
@@ -733,110 +732,6 @@ describe('buildChunkPrompt', () => {
       totalChunks: 3,
     });
     expect(prompt).toContain('[CLASSIFIED FILE LISTING]');
-  });
-});
-
-// ─── buildFinalizePrompt ──────────────────────────────────────────────────────
-
-describe('buildFinalizePrompt', () => {
-  const angel = {
-    id: 'src-api',
-    type: 'folder' as const,
-    path: 'src/api',
-  };
-
-  const context = {
-    territoryPath: 'src/api',
-    fileCount: 3,
-    classifiedFiles: [
-      { path: 'src/api/routes.ts', value: 'high' as const, sizeBytes: 2048, language: 'TypeScript', reason: 'core routes' },
-    ],
-    highValueContent: '// routes.ts',
-    mediumValueStubs: '(none)',
-    lowValueListing: '(none)',
-    totalTokens: 5000,
-    budgetUsed: 4000,
-    memoryConfig: { targetPct: 25, maxTokens: 2000 },
-    stats: {
-      totalFiles: 3,
-      highValueFiles: 1,
-      mediumValueFiles: 0,
-      lowValueFiles: 2,
-      boilerplateLinesSkipped: 10,
-      usefulLinesKept: 200,
-      compressionRatio: 85,
-    },
-  };
-
-  const finalAngelMd = [
-    '---',
-    'status: active',
-    'last_updated: 2026-06-04T12:00:00Z',
-    'last_updated_by: discovery',
-    '---',
-    '',
-    '## Charter y Boundaries',
-    'Owns the API layer.',
-    '',
-    '## Arquitectura del Área',
-    'Express-based REST API.',
-  ].join('\n');
-
-  it('includes FINALIZE CHUNKED WRITE header', () => {
-    const prompt = buildFinalizePrompt({
-      angel,
-      deepContext: context,
-      finalAngelMd,
-    });
-    expect(prompt).toContain('[CURRENT PHASE: DISCOVERY — FINALIZE CHUNKED WRITE]');
-  });
-
-  it('mentions angel.md path for the angel', () => {
-    const prompt = buildFinalizePrompt({
-      angel,
-      deepContext: context,
-      finalAngelMd,
-    });
-    expect(prompt).toContain('.angels/src-api/angel.md');
-  });
-
-  it('asks to verify all 11 sections are present', () => {
-    const prompt = buildFinalizePrompt({
-      angel,
-      deepContext: context,
-      finalAngelMd,
-    });
-    expect(prompt).toContain('Check that all 11 sections are present');
-  });
-
-  it('asks to verify frontmatter, sections, and empty/TODO/TBD checks', () => {
-    const prompt = buildFinalizePrompt({
-      angel,
-      deepContext: context,
-      finalAngelMd,
-    });
-    expect(prompt).toContain('Check frontmatter has last_updated: now');
-    expect(prompt).toContain("Check no section is empty or says 'TODO' or 'TBD'");
-    expect(prompt).toContain('If anything is missing, write a brief CHUNK_FIX');
-  });
-
-  it('includes the final angel.md content as reference', () => {
-    const prompt = buildFinalizePrompt({
-      angel,
-      deepContext: context,
-      finalAngelMd,
-    });
-    expect(prompt).toContain('[FINAL ANGEL.MD CONTENT]');
-    expect(prompt).toContain('Owns the API layer.');
-  });
-
-  it('output instructions mention WRITE_MODE: CHUNK_FINAL', () => {
-    const prompt = buildFinalizePrompt({
-      angel,
-      deepContext: context,
-      finalAngelMd,
-    });
-    expect(prompt).toContain('WRITE_MODE: CHUNK_FINAL');
   });
 });
 
