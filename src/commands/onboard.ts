@@ -195,7 +195,7 @@ async function onboardWithDirectWrite(
     return;
   }
 
-  const rawBody = fs.readFileSync(mdPath, 'utf-8')?.trim() ?? '';
+  const rawBody = fs.readFileSync(mdPath, 'utf-8').trim();
 
   // Angel was told to write body without frontmatter. If the content
   // starts with '---' the old file content (with frontmatter) is still

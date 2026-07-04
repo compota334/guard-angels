@@ -1,4 +1,5 @@
-import type { MemoryConfig, AngelEntry } from '../config/schema.js';
+import type { AngelEntry } from '../config/schema.js';
+import { DEFAULT_MEMORY_TARGET_PCT } from '../config/defaults.js';
 import type { DeepDiscoveryContext } from './discovery-enhanced.js';
 import type { WriteMode } from './response.js';
 import type { Chunk } from './discovery-chunker.js';
@@ -404,114 +405,20 @@ export function formatPromptSizeWarning(
 
 /**
  * Check whether the dense template should be used based on memory config.
- * Returns true if target_pct > 5 (indicating a large/full-context angel.md is desired).
- */
-export function useDenseTemplate(memory: MemoryConfig | undefined): boolean {
-  if (!memory) return false;
-  const pct = memory.target_pct ?? 25;
-  return pct > 5;
-}
-
-/**
- * Check whether the dense template should be used based on angel memory config.
- * Unlike `useDenseTemplate`, this accepts a plain config object (not necessarily
- * the full MemoryConfig type) and also checks `max_tokens > 5000`.
+ *
+ * Mirrors `resolveMemoryConfig`: an explicit `max_tokens` overrides
+ * `target_pct`, so the decision is made on whichever value actually
+ * drives the token budget.
  *
  * Returns true if:
- * - target_pct > 5, OR
- * - max_tokens > 5000
+ * - max_tokens is set and > 5000, OR
+ * - max_tokens is unset and target_pct (default 25) > 5
  * Returns false if no config is provided (backward compatible).
  */
-export function shouldUseDenseTemplate(angelMemory?: { target_pct?: number; max_tokens?: number }): boolean {
-  if (!angelMemory) return false;
-  if ((angelMemory.target_pct ?? 0) > 5) return true;
-  if ((angelMemory.max_tokens ?? 0) > 5000) return true;
-  return false;
-}
-
-/**
- * Build a discovery prompt for the DISCOVERY phase.
- *
- * If the memory config indicates a dense template (target_pct > 5),
- * this function switches to the deep discovery context and dense template.
- * Otherwise, it delegates to the standard `buildPrompt()` behavior
- * (backward compatible).
- *
- * @param params - Parameters for building the discovery prompt
- * @returns The complete prompt string
- */
-export function buildDiscoveryPrompt(params: {
-  angel: AngelEntry;
-  context: DeepDiscoveryContext;
-  globalMemoryConfig?: MemoryConfig;
-  responsePath: string;
-  /** When true, instruct the angel to write angel.md directly to the filesystem. */
-  directWrite?: boolean;
-  /** Write mode — 'direct' or 'proposed' (default). Takes precedence over directWrite when set. */
-  writeMode?: WriteMode;
-  /** Absolute path to the angel.md file. Required when directWrite is true. */
-  angelMdPath?: string;
-}): string {
-  const { angel, context, globalMemoryConfig, responsePath, directWrite, writeMode, angelMdPath } = params;
-  const memory = angel.memory ?? globalMemoryConfig;
-
-  if (useDenseTemplate(memory)) {
-    return buildDenseDiscoveryPrompt({
-      angel,
-      context,
-      memoryConfig: context.memoryConfig,
-      responsePath,
-      directWrite,
-      writeMode,
-      angelMdPath,
-    });
-  }
-
-  // Standard (backward compatible) discovery prompt — same structure as buildPrompt
-  const sections: string[] = [];
-
-  sections.push('[PROTOCOL]');
-  sections.push(PROTOCOL_HEADER);
-
-  sections.push('');
-  sections.push(PHASE_INSTRUCTIONS['discovery']);
-
-  sections.push('');
-  sections.push('[ANGEL IDENTITY]');
-  const pathDesc = angel.type === 'root' ? '.' : angel.path;
-  sections.push(`You are the angel for: ${pathDesc}`);
-  sections.push(`Your angel ID is: ${angel.id}`);
-  sections.push(`Your type is: ${angel.type}`);
-  sections.push('');
-  sections.push('## Territory File Listing');
-  sections.push('');
-  const fileLines: string[] = [];
-  for (const cf of context.classifiedFiles) {
-    fileLines.push(`- [${cf.value}] ${cf.path} (${cf.language}, ${cf.sizeBytes} bytes)`);
-  }
-  sections.push(fileLines.join('\n'));
-
-  sections.push('');
-  sections.push('## High Value Files (full content)');
-  sections.push(context.highValueContent || '(none)');
-
-  sections.push('');
-  sections.push('## Medium Value Files (stubs)');
-  sections.push(context.mediumValueStubs || '(none)');
-
-  sections.push('');
-  sections.push('## Low Value Files');
-  sections.push(context.lowValueListing || '(none)');
-
-  sections.push('');
-  sections.push('[OUTPUT INSTRUCTIONS]');
-  sections.push(`Write your response to: ${responsePath}`);
-  sections.push(buildResponseFormat('discovery'));
-  sections.push('');
-  sections.push(CABLE_FORMAT_TEMPLATE);
-  sections.push('When done, exit. Do not loop or wait for input.');
-
-  return sections.join('\n');
+export function shouldUseDenseTemplate(memory?: { target_pct?: number; max_tokens?: number }): boolean {
+  if (!memory) return false;
+  if (memory.max_tokens !== undefined) return memory.max_tokens > 5000;
+  return (memory.target_pct ?? DEFAULT_MEMORY_TARGET_PCT) > 5;
 }
 
 /**

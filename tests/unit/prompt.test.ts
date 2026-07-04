@@ -2,11 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   measurePromptSize,
   buildPrompt,
-  buildDiscoveryPrompt,
   buildDenseDiscoveryPrompt,
   buildChunkPrompt,
   shouldUseDenseTemplate,
-  useDenseTemplate,
   type PromptInput,
   type PromptPhase,
   type InboxEntry,
@@ -388,134 +386,37 @@ describe('buildPrompt memory budget', () => {
   });
 });
 
-// ─── useDenseTemplate ─────────────────────────────────────────────────────────
-
-describe('useDenseTemplate', () => {
-  it('returns false when memory is undefined', () => {
-    expect(useDenseTemplate(undefined)).toBe(false);
-  });
-
-  it('returns true when target_pct is > 5 (default is 25)', () => {
-    expect(useDenseTemplate({ target_pct: 25 })).toBe(true);
-    expect(useDenseTemplate({ target_pct: 100 })).toBe(true);
-    expect(useDenseTemplate({ target_pct: 6 })).toBe(true);
-  });
-
-  it('returns false when target_pct is <= 5', () => {
-    expect(useDenseTemplate({ target_pct: 5 })).toBe(false);
-    expect(useDenseTemplate({ target_pct: 1 })).toBe(false);
-    expect(useDenseTemplate({ target_pct: 0 })).toBe(false);
-  });
-});
-
 // ─── shouldUseDenseTemplate ───────────────────────────────────────────────────
 
 describe('shouldUseDenseTemplate', () => {
-  it('returns false when angelMemory is undefined', () => {
+  it('returns false when memory is undefined', () => {
     expect(shouldUseDenseTemplate(undefined)).toBe(false);
   });
 
-  it('returns true when target_pct > 5', () => {
+  it('returns true when target_pct > 5 and max_tokens is unset', () => {
     expect(shouldUseDenseTemplate({ target_pct: 25 })).toBe(true);
+    expect(shouldUseDenseTemplate({ target_pct: 100 })).toBe(true);
     expect(shouldUseDenseTemplate({ target_pct: 6 })).toBe(true);
   });
 
-  it('returns true when max_tokens > 5000', () => {
+  it('returns false when target_pct <= 5 and max_tokens is unset', () => {
+    expect(shouldUseDenseTemplate({ target_pct: 5 })).toBe(false);
+    expect(shouldUseDenseTemplate({ target_pct: 1 })).toBe(false);
+    expect(shouldUseDenseTemplate({ target_pct: 0 })).toBe(false);
+  });
+
+  it('applies the default target_pct (25) when only an empty config is given', () => {
+    expect(shouldUseDenseTemplate({})).toBe(true);
+  });
+
+  it('lets max_tokens override target_pct, matching resolveMemoryConfig', () => {
     expect(shouldUseDenseTemplate({ max_tokens: 5001 })).toBe(true);
     expect(shouldUseDenseTemplate({ max_tokens: 6000 })).toBe(true);
-  });
-
-  it('returns false when target_pct <= 5 and max_tokens <= 5000', () => {
+    expect(shouldUseDenseTemplate({ max_tokens: 5000 })).toBe(false);
+    expect(shouldUseDenseTemplate({ target_pct: 5, max_tokens: 6000 })).toBe(true);
+    expect(shouldUseDenseTemplate({ target_pct: 25, max_tokens: 1000 })).toBe(false);
     expect(shouldUseDenseTemplate({ target_pct: 5, max_tokens: 5000 })).toBe(false);
     expect(shouldUseDenseTemplate({ target_pct: 0, max_tokens: 0 })).toBe(false);
-    expect(shouldUseDenseTemplate({ target_pct: 5 })).toBe(false);
-    expect(shouldUseDenseTemplate({})).toBe(false);
-  });
-});
-
-// ─── buildDiscoveryPrompt ─────────────────────────────────────────────────────
-
-describe('buildDiscoveryPrompt', () => {
-  const angel = {
-    id: 'src-api',
-    type: 'folder' as const,
-    path: 'src/api',
-    memory: undefined,
-  };
-
-  const context = {
-    territoryPath: 'src/api',
-    fileCount: 3,
-    classifiedFiles: [
-      { path: 'src/api/routes.ts', value: 'high' as const, sizeBytes: 2048, language: 'TypeScript', reason: 'core routes' },
-      { path: 'src/api/middleware.ts', value: 'medium' as const, sizeBytes: 1024, language: 'TypeScript', reason: 'middleware logic' },
-      { path: 'src/api/types.ts', value: 'low' as const, sizeBytes: 256, language: 'TypeScript', reason: 'type definitions' },
-    ],
-    highValueContent: '// routes.ts\nexport const router = ...',
-    mediumValueStubs: '// middleware.ts\nfunction auth() {}',
-    lowValueListing: '- src/api/types.ts (256 bytes)',
-    totalTokens: 5000,
-    budgetUsed: 4000,
-    memoryConfig: { targetPct: 25, maxTokens: 2000 },
-    stats: {
-      totalFiles: 3,
-      highValueFiles: 1,
-      mediumValueFiles: 1,
-      lowValueFiles: 1,
-      boilerplateLinesSkipped: 10,
-      usefulLinesKept: 200,
-      compressionRatio: 85,
-    },
-  };
-
-  it('includes the territory file listing with classified files', () => {
-    const prompt = buildDiscoveryPrompt({
-      angel,
-      context,
-      responsePath: '/responses/discovery.md',
-      writeMode: 'proposed',
-    });
-    expect(prompt).toContain('## Territory File Listing');
-    expect(prompt).toContain('- [high] src/api/routes.ts');
-    expect(prompt).toContain('- [medium] src/api/middleware.ts');
-    expect(prompt).toContain('- [low] src/api/types.ts');
-  });
-
-  it('includes high/medium/low value sections', () => {
-    const prompt = buildDiscoveryPrompt({
-      angel,
-      context,
-      responsePath: '/responses/discovery.md',
-      writeMode: 'proposed',
-    });
-    expect(prompt).toContain('## High Value Files (full content)');
-    expect(prompt).toContain('// routes.ts');
-    expect(prompt).toContain('## Medium Value Files (stubs)');
-    expect(prompt).toContain('// middleware.ts');
-    expect(prompt).toContain('## Low Value Files');
-    expect(prompt).toContain('- src/api/types.ts');
-  });
-
-  it('includes output instructions with response path', () => {
-    const prompt = buildDiscoveryPrompt({
-      angel,
-      context,
-      responsePath: '/responses/discovery.md',
-      writeMode: 'proposed',
-    });
-    expect(prompt).toContain('[OUTPUT INSTRUCTIONS]');
-    expect(prompt).toContain('Write your response to: /responses/discovery.md');
-  });
-
-  it('shows root path correctly for root angel', () => {
-    const rootAngel = { ...angel, type: 'root' as const, path: '.' };
-    const prompt = buildDiscoveryPrompt({
-      angel: rootAngel,
-      context,
-      responsePath: '/responses/discovery.md',
-      writeMode: 'proposed',
-    });
-    expect(prompt).toContain('You are the angel for: .');
   });
 });
 

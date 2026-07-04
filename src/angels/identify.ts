@@ -71,7 +71,7 @@ const GENERIC_NAMES = new Set([
 /**
  * Source file extensions considered when counting files.
  */
-export const SOURCE_EXTENSIONS = new Set([
+const SOURCE_EXTENSIONS = new Set([
   '.ts',
   '.tsx',
   '.js',
