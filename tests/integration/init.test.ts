@@ -215,6 +215,37 @@ describe('angels init', () => {
     expect(result.stderr).toMatch(/Cannot use both --auto and --manual/);
   });
 
+  it('rejects manual paths outside the project root and normalizes accepted ones', async () => {
+    buildSyntheticProject();
+
+    // A real directory outside the project root, reachable via "../<name>"
+    const outsideDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-outside-'));
+    const outsideRel = `../${outsideDir.split('/').pop()}`;
+
+    try {
+      const result = await execaNode(CLI_PATH, ['init', '--manual'], {
+        cwd: tmpDir,
+        nodeOptions: [],
+        input: `${outsideRel}\n/etc\n./src/auth/\n\n`,
+      });
+
+      expect(result.exitCode).toBe(0);
+      const combined = `${result.stdout}\n${result.stderr}`;
+      expect(combined).toContain(`"${outsideRel}" is not a folder inside the project root, skipping.`);
+      expect(combined).toContain('"/etc" is not a folder inside the project root, skipping.');
+
+      const configPath = join(tmpDir, '.angels', '_config.yml');
+      const config = parseYaml(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+      const angels = config.angels as Array<{ id: string; path: string }>;
+      expect(angels.map((a) => a.path).sort()).toEqual(['.', 'src/auth']);
+
+      // Nothing was written outside the project root
+      expect(fs.readdirSync(outsideDir)).toEqual([]);
+    } finally {
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
+
   it('creates only _root angel on empty project with --auto', async () => {
     // tmpDir is empty — no candidates
     const result = await execaNode(CLI_PATH, ['init', '--auto'], {

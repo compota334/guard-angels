@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as readline from 'node:readline';
-import { join } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
 import { identifyCandidates, type FolderCandidate } from '../angels/identify.js';
 import { createAngelDraft } from '../angels/draft.js';
@@ -267,40 +267,52 @@ async function promptManualFolders(cwd: string): Promise<string[]> {
     output: process.stdout,
   });
 
-  const ask = (question: string): Promise<string> =>
-    new Promise((resolve) => {
-      rl.question(question, (answer) => resolve(answer));
-    });
-
   console.log('\nManual mode: enter folder paths to register as angels (relative to project root).');
   console.log('Enter one path per line. Enter an empty line to finish.\n');
 
+  const absoluteRoot = resolve(cwd);
   const paths: string[] = [];
 
-   
-  while (true) {
-    const input = await ask('folder> ');
+  rl.setPrompt('folder> ');
+  rl.prompt();
+
+  // Iterate lines with the async iterator: unlike rl.question() in a loop,
+  // it buffers lines that arrive while previous ones are being processed,
+  // so piped (non-interactive) input is not silently dropped.
+  for await (const input of rl) {
     const trimmed = input.trim();
 
     if (trimmed === '') {
       break;
     }
 
-    // Validate the folder exists
-    const fullPath = `${cwd}/${trimmed}`;
-    try {
-      const stat = fs.statSync(fullPath);
-      if (!stat.isDirectory()) {
-        console.warn(`  "${trimmed}" is not a directory, skipping.`);
-        continue;
-      }
-    } catch {
-      console.warn(`  "${trimmed}" does not exist, skipping.`);
+    // Reject paths that escape the project root (e.g. "../other" or absolute paths)
+    const fullPath = resolve(absoluteRoot, trimmed);
+    if (!fullPath.startsWith(absoluteRoot + '/')) {
+      console.warn(`  "${trimmed}" is not a folder inside the project root, skipping.`);
+      rl.prompt();
       continue;
     }
 
-    paths.push(trimmed);
-    console.log(`  + ${trimmed}`);
+    // Validate the folder exists
+    let isDirectory: boolean;
+    try {
+      isDirectory = fs.statSync(fullPath).isDirectory();
+    } catch {
+      console.warn(`  "${trimmed}" does not exist, skipping.`);
+      rl.prompt();
+      continue;
+    }
+    if (!isDirectory) {
+      console.warn(`  "${trimmed}" is not a directory, skipping.`);
+      rl.prompt();
+      continue;
+    }
+
+    const normalized = relative(absoluteRoot, fullPath);
+    paths.push(normalized);
+    console.log(`  + ${normalized}`);
+    rl.prompt();
   }
 
   rl.close();
