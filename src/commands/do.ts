@@ -5,6 +5,7 @@ import { invoke } from '../protocol/orchestrate.js';
 import { appendNewspaper } from '../messaging/newspaper.js';
 import { handleQuestionsForMain } from '../messaging/questions.js';
 import { executeAngel } from './execute.js';
+import { printResponseSummary } from './response-summary.js';
 import type { ResponseData, ResponseVerdict } from '../protocol/response.js';
 
 const REVIEW_EXIT_CODES: Record<ResponseVerdict, number> = {
@@ -59,7 +60,7 @@ export async function doAngel(
   });
 
   appendReviewNewspaperEntry(cwd, angelId, result.response, task);
-  printReviewSummary(result.response, result.responsePath);
+  printResponseSummary(result.response, result.responsePath);
 
   // Handle questions raised during the review phase (execute phase questions
   // are handled inside executeAngel via execute.ts)
@@ -106,56 +107,3 @@ function appendReviewNewspaperEntry(
   });
 }
 
-function printReviewSummary(
-  response: ResponseData,
-  responsePath: string,
-): void {
-  const verdict = response.response.toUpperCase();
-
-  console.log('');
-  console.log(`=== Angel Response: ${verdict} ===`);
-  console.log('');
-
-  if (response.concerns) {
-    console.log('CONCERNS:');
-    for (const line of response.concerns.split('\n')) {
-      if (line.trim()) {
-        console.log(`  ${line}`);
-      }
-    }
-    console.log('');
-  }
-
-  if (response.proposedPlan) {
-    console.log('PROPOSED PLAN:');
-    for (const line of response.proposedPlan.split('\n')) {
-      if (line.trim()) {
-        console.log(`  ${line}`);
-      }
-    }
-    console.log('');
-  }
-
-  if (response.questionsForMain) {
-    console.log('QUESTIONS FOR MAIN:');
-    for (const line of response.questionsForMain.split('\n')) {
-      if (line.trim()) {
-        console.log(`  ${line}`);
-      }
-    }
-    console.log('');
-  }
-
-  if (response.proceedIf) {
-    console.log('PROCEED IF:');
-    for (const line of response.proceedIf.split('\n')) {
-      if (line.trim()) {
-        console.log(`  ${line}`);
-      }
-    }
-    console.log('');
-  }
-
-  console.log(`Response file: ${responsePath}`);
-  console.log('');
-}
