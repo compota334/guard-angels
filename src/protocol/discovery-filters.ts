@@ -8,7 +8,7 @@
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export interface BoilerplateFilter {
+interface BoilerplateFilter {
   name: string;
   /** Languages this filter applies to (e.g. ['typescript', 'javascript']) */
   language: string[];
@@ -25,22 +25,6 @@ export interface FilterOptions {
   /** When true, also skip repetitive JSDoc and trivial type annotations */
   aggressive?: boolean;
 }
-
-export interface BoilerplateStats {
-  totalLines: number;
-  boilerplateLines: number;
-  usefulLines: number;
-  compressionRatio: number;
-}
-
-// ─── Supported Languages ─────────────────────────────────────────────────────
-
-export const SUPPORTED_LANGUAGES: string[] = [
-  'typescript',
-  'javascript',
-  'python',
-  'rust',
-];
 
 // ─── Language Detection ──────────────────────────────────────────────────────
 
@@ -367,31 +351,4 @@ export function filterBoilerplate(
   }
 
   return filtered.join('\n');
-}
-
-/**
- * Get statistics about boilerplate removal.
- *
- * @param content - Raw file content
- * @param language - Language identifier
- * @returns Statistics about the filtering
- */
-export function getBoilerplateStats(
-  content: string,
-  language: string,
-): BoilerplateStats {
-  const lines = content.split('\n');
-  const totalLines = lines.length;
-  const filteredContent = filterBoilerplate(content, language);
-  const usefulLines = filteredContent === '' ? 0 : filteredContent.split('\n').length;
-  const boilerplateLines = totalLines - usefulLines;
-
-  return {
-    totalLines,
-    boilerplateLines,
-    usefulLines,
-    compressionRatio: totalLines > 0
-      ? Math.round((boilerplateLines / totalLines) * 100)
-      : 0,
-  };
 }

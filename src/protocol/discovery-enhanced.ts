@@ -18,9 +18,9 @@ import { resolveMemoryConfig } from '../config/defaults.js';
 import type { MemoryConfig } from '../config/schema.js';
 import {
   filterBoilerplate,
-  getBoilerplateStats,
   detectLanguage,
 } from './discovery-filters.js';
+import { isBinaryFile, pathHasScaffoldDir } from './discovery-shared.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -53,76 +53,6 @@ export interface DeepDiscoveryContext {
     usefulLinesKept: number;
     compressionRatio: number;
   };
-}
-
-// ─── Scaffold / Binary filters (mirrors discovery.ts for consistency) ────────
-
-const SCAFFOLD_DIRS: ReadonlySet<string> = new Set([
-  'node_modules',
-  '__pycache__',
-  '.git',
-  '.venv',
-  'venv',
-  'env',
-  'dist',
-  'build',
-  'target',
-  '.next',
-  '.nuxt',
-  'out',
-  'coverage',
-  '.mypy_cache',
-  '.pytest_cache',
-  '.tox',
-  '.eggs',
-]);
-
-const BINARY_EXTENSIONS: ReadonlySet<string> = new Set([
-  '.pyc',
-  '.pyo',
-  '.pyd',
-  '.so',
-  '.dylib',
-  '.dll',
-  '.exe',
-  '.bin',
-  '.o',
-  '.a',
-  '.jpg',
-  '.jpeg',
-  '.png',
-  '.gif',
-  '.ico',
-  '.webp',
-  '.bmp',
-  '.woff',
-  '.woff2',
-  '.ttf',
-  '.eot',
-  '.otf',
-  '.mp3',
-  '.mp4',
-  '.avi',
-  '.mov',
-  '.wav',
-  '.zip',
-  '.tar',
-  '.gz',
-  '.bz2',
-  '.xz',
-  '.db',
-  '.sqlite',
-  '.sqlite3',
-  '.pdf',
-]);
-
-function isBinaryFile(name: string): boolean {
-  const dot = name.lastIndexOf('.');
-  return dot >= 0 && BINARY_EXTENSIONS.has(name.slice(dot).toLowerCase());
-}
-
-function pathHasScaffoldDir(rel: string): boolean {
-  return rel.split('/').some((seg) => SCAFFOLD_DIRS.has(seg));
 }
 
 // ─── Classification Patterns ─────────────────────────────────────────────────
@@ -568,9 +498,9 @@ export async function buildDeepDiscoveryContext(
         filtered = filterBoilerplate(content, cf.language, {
           aggressive: true,
         });
-        const stats = getBoilerplateStats(content, cf.language);
-        boilerplateSkipped += stats.boilerplateLines;
-        usefulKept += stats.usefulLines;
+        const keptLines = filtered === '' ? 0 : filtered.split('\n').length;
+        boilerplateSkipped += totalLines - keptLines;
+        usefulKept += keptLines;
       }
 
       const usefulLines = filtered === '' ? 0 : filtered.split('\n').length;
@@ -631,9 +561,10 @@ export async function buildDeepDiscoveryContext(
         filtered = filterBoilerplate(content, cf.language, {
           aggressive: true,
         });
-        const stats = getBoilerplateStats(content, cf.language);
-        boilerplateSkipped += stats.boilerplateLines;
-        usefulKept += stats.usefulLines;
+        const totalLines = content.split('\n').length;
+        const keptLines = filtered === '' ? 0 : filtered.split('\n').length;
+        boilerplateSkipped += totalLines - keptLines;
+        usefulKept += keptLines;
       }
 
       const lines = filtered.split('\n');
