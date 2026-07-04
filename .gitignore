@@ -32,6 +32,9 @@ CLAUDE.md
 AGENTS.md
 .claude/
 .agents/
+sync-hermes.sh
+resync.sh
+HERMES_WORKFLOW.md
 
 # Ralph runtime artifacts (keep prd.json and progress.txt tracked though)
 scripts/ralph/.last-branch
