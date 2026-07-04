@@ -29,6 +29,7 @@ Thumbs.db
 
 # Claude / agent tooling (keep out of repo)
 CLAUDE.md
+docs/informe-dinamica-hermes-claude-*.md
 AGENTS.md
 .claude/
 .agents/
