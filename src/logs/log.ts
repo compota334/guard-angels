@@ -22,7 +22,13 @@ export function createLogStreams(
   const stderrPath = join(dir, `${sanitizedTimestamp}.stderr`);
 
   const stdoutFd = fs.openSync(stdoutPath, 'w');
-  const stderrFd = fs.openSync(stderrPath, 'w');
+  let stderrFd: number;
+  try {
+    stderrFd = fs.openSync(stderrPath, 'w');
+  } catch (err: unknown) {
+    fs.closeSync(stdoutFd);
+    throw err;
+  }
 
   return {
     stdoutPath,
