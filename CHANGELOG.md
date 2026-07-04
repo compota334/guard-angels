@@ -4,6 +4,25 @@ All notable changes to Guard Angels are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`angels init --manual` path traversal**: folder paths that resolve outside the project root (absolute paths or `../` escapes) are now rejected; accepted paths are normalized relative to the root (`./src/auth/` becomes `src/auth`).
+- **`angels init --manual` dropped piped input**: the prompt loop now consumes lines through readline's async iterator instead of chained `rl.question()` calls, so non-interactive input (e.g. `angels init --manual < folders.txt`) no longer silently loses lines.
+- **Boilerplate statistics mismatch in deep discovery**: `boilerplateLinesSkipped` / `usefulLinesKept` are now computed from the actually filtered (aggressive) content. Previously they came from a second non-aggressive filter pass, over-reporting kept lines and doubling the filtering work.
+- **Dense template decision now matches the memory budget**: `shouldUseDenseTemplate` mirrors `resolveMemoryConfig` — an explicit `memory.max_tokens` overrides `target_pct`, so a small absolute budget no longer selects the dense template (and vice versa).
+- **Stale-lock PID probing**: `EPERM` from `kill(pid, 0)` is now treated as "process alive" (only `ESRCH` means gone), so locks owned by processes of another user are not reclaimed while the owner is still running.
+- **Log stream descriptor leak**: `createLogStreams` closes the stdout descriptor if opening the stderr log file fails.
+- **Version alignment**: `package.json` version updated to 0.2.0 to match this changelog.
+
+### Removed
+
+- Dead code: the unused `buildDiscoveryPrompt` wrapper and duplicate `useDenseTemplate` helper, `getBoilerplateStats`, `SUPPORTED_LANGUAGES`, and export-only surface for internal types (`BoilerplateFilter`, `BoilerplateStats`, `SOURCE_EXTENSIONS`).
+- Duplication: scaffold/binary filter constants consolidated into `src/protocol/discovery-shared.ts` (previously copied in `discovery.ts` and `discovery-enhanced.ts`); the response summary printer shared by `brief` and `do` extracted to `src/commands/response-summary.ts`.
+
+### Added
+
+- Unit tests for `handleQuestionsForMain`, `resolveMemoryConfig`, and `GUARD_ANGELS_PROMPT_WARN_BYTES` parsing; integration test for `init --manual` path traversal and input normalization.
+
 ## [0.2.0] - 2026-07-03
 
 ### Added

@@ -1,6 +1,6 @@
 {
   "name": "@guard-angels/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI orchestrator that creates per-folder angel agents for persistent codebase context",
   "type": "module",
   "main": "dist/index.js",
