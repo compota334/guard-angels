@@ -65,6 +65,6 @@ Before requesting review, make sure:
 
 ## Reporting bugs and requesting features
 
-Open an issue at <https://github.com/compota335/guard-angels/issues>. For bugs, include the CLI version (`angels --version`), your Node.js version, and steps to reproduce.
+Open an issue at <https://github.com/compota334/guard-angels/issues>. For bugs, include the CLI version (`angels --version`), your Node.js version, and steps to reproduce.
 
 For security vulnerabilities, do **not** open a public issue — see [SECURITY.md](SECURITY.md).
