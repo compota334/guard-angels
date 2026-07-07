@@ -20,7 +20,7 @@ describe('doctor command', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-doctor-'));
+    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-doctor-'));
   });
 
   afterEach(() => {
@@ -156,7 +156,7 @@ describe('doctor --archive', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-archive-'));
+    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-archive-'));
   });
 
   afterEach(() => {

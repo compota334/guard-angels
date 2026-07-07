@@ -145,7 +145,7 @@ export async function identifyCandidates(
   await walkDir(projectRoot, projectRoot, skipSet, candidates, 0, visited);
   if (candidates.length >= MAX_RESULTS) {
     console.warn(
-      `[guard-angel] identifyCandidates: result cap of ${MAX_RESULTS} reached; some folders may be omitted`,
+      `[guard-angels] identifyCandidates: result cap of ${MAX_RESULTS} reached; some folders may be omitted`,
     );
   }
   return candidates;

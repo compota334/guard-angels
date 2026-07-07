@@ -16,7 +16,7 @@ describe('doAngel', () => {
   let fakeBackendPath: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-do-'));
+    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-do-'));
     fakeBackendPath = copyFakeBackend(tmpDir);
     setupProject(tmpDir, { backendScript: fakeBackendPath });
   });

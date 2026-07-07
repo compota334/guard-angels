@@ -15,7 +15,7 @@ describe('lock', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-lock-'));
+    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-lock-'));
     // Create the .angels directory structure
     fs.mkdirSync(join(tmpDir, '.angels', '_locks'), { recursive: true });
   });
@@ -83,7 +83,7 @@ describe('lock', () => {
 
     it('creates the _locks directory if missing', () => {
       // Use a fresh tmpDir without .angels/_locks
-      const freshDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-lock-fresh-'));
+      const freshDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-lock-fresh-'));
       try {
         const lockPath = acquireLock(freshDir, 60_000);
         expect(fs.existsSync(lockPath)).toBe(true);

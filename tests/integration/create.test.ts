@@ -12,7 +12,7 @@ describe('angels create', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-create-'));
+    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-create-'));
   });
 
   afterEach(() => {

@@ -8,7 +8,7 @@ describe('log', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-log-'));
+    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-log-'));
     // Create the .angels directory structure
     fs.mkdirSync(join(tmpDir, '.angels', '_logs'), { recursive: true });
   });

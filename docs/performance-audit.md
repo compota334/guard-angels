@@ -1,4 +1,4 @@
-# Guard Angel — Auditoría de Performance y Escalabilidad
+# Guard Angels — Auditoría de Performance y Escalabilidad
 
 **Fecha:** 2026-05-12
 **Alcance:** Análisis estático del código fuente (`src/`). No se ejecutaron benchmarks ni pruebas de carga.

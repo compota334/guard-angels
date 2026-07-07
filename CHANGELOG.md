@@ -4,6 +4,10 @@ All notable changes to Guard Angels are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Project name unified to "Guard Angels"**: remaining singular "Guard Angel" references updated across docs, log prefixes (`[guard-angels]`), and test temp-dir prefixes. The agent prompt intentionally keeps "You are a Guard Angel" because it addresses one individual angel.
+
 ### Fixed
 
 - **`angels init --manual` path traversal**: folder paths that resolve outside the project root (absolute paths or `../` escapes) are now rejected; accepted paths are normalized relative to the root (`./src/auth/` becomes `src/auth`).

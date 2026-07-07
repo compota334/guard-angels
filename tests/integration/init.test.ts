@@ -12,7 +12,7 @@ describe('angels init', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-init-'));
+    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-init-'));
   });
 
   afterEach(() => {
@@ -219,7 +219,7 @@ describe('angels init', () => {
     buildSyntheticProject();
 
     // A real directory outside the project root, reachable via "../<name>"
-    const outsideDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-outside-'));
+    const outsideDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-outside-'));
     const outsideRel = `../${outsideDir.split('/').pop()}`;
 
     try {

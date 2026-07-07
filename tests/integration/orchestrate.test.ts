@@ -19,7 +19,7 @@ describe('orchestrate.invoke', () => {
   let echoBackendPath: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-orch-'));
+    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-orch-'));
 
     // Copy fixture scripts into tmpDir (which has no spaces in path)
     // to avoid execa parseCommandString splitting on spaces

@@ -1,4 +1,4 @@
-Guard Angel field report #3 — empty PROPOSED PLAN regression
+Guard Angels field report #3 — empty PROPOSED PLAN regression
 Incremental to reports #1 and #2. Previous categories were addressed in commits up through 61e75ee and confirmed working in production use (verified the NEXT STEP nudge, invariant gate, cable quarantine, retire, sweep --angel, etc. — all great).
 
 What happened

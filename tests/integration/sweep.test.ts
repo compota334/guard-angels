@@ -18,7 +18,7 @@ describe('sweepAngels', () => {
   let fakeBackendPath: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-sweep-'));
+    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-sweep-'));
 
     // Copy consolidated fake-backend.sh to space-free tmpDir
     fakeBackendPath = copyFakeBackend(tmpDir);

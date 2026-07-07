@@ -12,7 +12,7 @@ import { readInbox } from '../../src/messaging/cables.js';
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-msg-cmds-'));
+  tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-msg-cmds-'));
   setupProject(tmpDir);
 });
 
@@ -254,7 +254,7 @@ describe('angels newspaper', () => {
   });
 
   it('throws when project is not initialized', () => {
-    const uninitDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-uninit-'));
+    const uninitDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-uninit-'));
     try {
       expect(() => {
         showNewspaper(uninitDir);

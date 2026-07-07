@@ -1,4 +1,4 @@
-# Design: Guard Angel Support for Pre-Existing Projects
+# Design: Guard Angels Support for Pre-Existing Projects
 
 **Date:** 2026-05-02
 **Status:** IMPLEMENTED (2026-05-04)
@@ -9,13 +9,13 @@
 
 ## Problem Statement [IMPLEMENTED]
 
-Guard Angel's `init` command was designed for greenfield projects: it detects candidate folders and writes blank `angel.md` templates. Three real-world scenarios expose gaps:
+Guard Angels' `init` command was designed for greenfield projects: it detects candidate folders and writes blank `angel.md` templates. Three real-world scenarios expose gaps:
 
-1. **Clone and adopt** — user clones a mature GitHub repo and wants Guard Angel supervision immediately.
-2. **Mid-project adoption** — user adds Guard Angel to a project that already has substantial code, docs, and conventions.
+1. **Clone and adopt** — user clones a mature GitHub repo and wants Guard Angels supervision immediately.
+2. **Mid-project adoption** — user adds Guard Angels to a project that already has substantial code, docs, and conventions.
 3. **Branch-aware context** — user works across git branches where folder structure and concerns differ; angels carry stale context from a different branch.
 
-In all three cases, angels start with zero domain knowledge. The first `sweep` produces generic reports. The user must manually fill in every `angel.md` — the exact work Guard Angel is supposed to automate.
+In all three cases, angels start with zero domain knowledge. The first `sweep` produces generic reports. The user must manually fill in every `angel.md` — the exact work Guard Angels is supposed to automate.
 
 ---
 
@@ -243,7 +243,7 @@ An angel that detects substantial drift in its sweep could self-report with a st
 | `angels onboard --force` | Overwrite active angel.md without prompting |
 | `angels activate --all` | Promote all draft angels to active after reviewing |
 | `angels activate <id>` | Promote one draft angel |
-| `angels create <path>` | Add one angel to an existing Guard Angel project (no DISCOVERY) |
+| `angels create <path>` | Add one angel to an existing Guard Angels project (no DISCOVERY) |
 
 ---
 

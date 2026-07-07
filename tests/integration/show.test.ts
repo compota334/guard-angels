@@ -10,7 +10,7 @@ describe('showAngel', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-show-'));
+    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-show-'));
     const fakeBackendPath = copyFakeBackend(tmpDir);
     setupProject(tmpDir, { backendScript: fakeBackendPath });
   });

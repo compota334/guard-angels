@@ -34,7 +34,7 @@ describe('end-to-end protocol flow', () => {
   let fakeBackendPath: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-e2e-'));
+    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-e2e-'));
 
     // Copy consolidated fake-backend.sh to space-free tmpDir
     fakeBackendPath = copyFakeBackend(tmpDir);

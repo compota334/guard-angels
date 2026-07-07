@@ -1,4 +1,4 @@
-# Análisis Big Picture — Guard Angel
+# Análisis Big Picture — Guard Angels
 
 > **Fecha:** 2026-07-03
 > **Alcance:** Producto, mercado, arquitectura y visión. Basado en lectura completa de README, arquitectura, CHANGELOG, field reports #3/#4, auditoría de performance, historial git y relevamiento del mercado a julio 2026.
@@ -10,11 +10,11 @@
 
 **La idea base:** cada carpeta significativa de un codebase tiene un agente LLM persistente ("angel") que es dueño del *porqué* de esa carpeta. El agente principal (Claude Code, Codex, etc.) no edita código directamente: delega vía un protocolo de dos fases (REVIEW → EXECUTE). Cada angel mantiene su memoria en `angel.md`, se comunica con otros angels vía cables, y todo queda registrado en un event log append-only (newspaper). Todo el estado vive en archivos dentro de `.angels/`, versionado en git. Sin base de datos, sin servicio, sin UI.
 
-**El problema que ataca es real y está bien identificado:** los agentes de código pierden contexto entre sesiones, no tienen noción de ownership territorial, y las decisiones arquitectónicas ("por qué este módulo es así") se evaporan. Guard Angel convierte eso en tres primitivas: memoria persistente por territorio, un gate de revisión con derecho a veto (`proceed`/`concerns`/`refuse`), y un audit trail completo.
+**El problema que ataca es real y está bien identificado:** los agentes de código pierden contexto entre sesiones, no tienen noción de ownership territorial, y las decisiones arquitectónicas ("por qué este módulo es así") se evaporan. Guard Angels convierte eso en tres primitivas: memoria persistente por territorio, un gate de revisión con derecho a veto (`proceed`/`concerns`/`refuse`), y un audit trail completo.
 
 **Público objetivo implícito:** usuarios avanzados de CLIs de coding agents que trabajan en codebases medianos/grandes con loops autónomos (estilo Ralph). Hoy el público real es N=1: el autor. Esto no es un defecto per se — el producto está en fase de dogfooding intensivo y los field reports lo demuestran — pero condiciona todo lo que sigue.
 
-**Lo que Guard Angel NO es (y está bien que no sea):** no es un framework de orquestación general (CrewAI, LangGraph), no es un swarm de agentes efímeros, no es una memoria vectorial. Es una capa de *gobernanza y memoria territorial* sobre CLIs existentes. Esa es su identidad más defendible y debería explicitarse más.
+**Lo que Guard Angels NO es (y está bien que no sea):** no es un framework de orquestación general (CrewAI, LangGraph), no es un swarm de agentes efímeros, no es una memoria vectorial. Es una capa de *gobernanza y memoria territorial* sobre CLIs existentes. Esa es su identidad más defendible y debería explicitarse más.
 
 ---
 
@@ -48,9 +48,9 @@
 
 ## 3. Comparativa con proyectos similares
 
-El espacio se movió muy rápido en 2025-2026. Contexto honesto de dónde está parado Guard Angel:
+El espacio se movió muy rápido en 2025-2026. Contexto honesto de dónde está parado Guard Angels:
 
-| Proyecto | Qué hace | Solapamiento con Guard Angel |
+| Proyecto | Qué hace | Solapamiento con Guard Angels |
 |---|---|---|
 | **Claude Code subagents / Agent Teams ("swarm mode")** | Subagentes nativos con roles, ejecución paralela, coordinación integrada | Alto en orquestación. Cero en memoria territorial persistente y audit trail |
 | **CLAUDE.md anidados / AGENTS.md (estándar)** | Contexto por directorio leído automáticamente por el agente | Es el competidor silencioso de `angel.md` — hace 60% del valor con 5% de la ceremonia |
@@ -61,7 +61,7 @@ El espacio se movió muy rápido en 2025-2026. Contexto honesto de dónde está 
 | **Cline Memory Bank / Cursor rules** | Convenciones de archivos de contexto persistente por proyecto | Misma familia que `angel.md`, sin protocolo ni ownership |
 | **CODEOWNERS (GitHub)** | Ownership territorial para humanos, review obligatorio por path | El ancestro conceptual directo. Nadie lo ha portado bien al mundo agéntico — esa es la oportunidad de GA |
 
-**Lectura honesta del posicionamiento:** en orquestación pura, Guard Angel está por detrás del estado del arte (los subagentes nativos de Claude Code y los agent teams paralelos existen y son gratis). En memoria pura, los knowledge graphs de Cognee y similares son técnicamente superiores al markdown inyectado. **Donde Guard Angel no tiene competidor directo es en la intersección: ownership territorial + derecho a veto basado en invariantes + audit trail en git.** Ningún proyecto relevado tiene un agente que pueda *rechazar* un cambio porque viola las invariantes de su territorio, con el rechazo registrado y auditable. Eso es CODEOWNERS para agentes, y es un espacio vacío.
+**Lectura honesta del posicionamiento:** en orquestación pura, Guard Angels está por detrás del estado del arte (los subagentes nativos de Claude Code y los agent teams paralelos existen y son gratis). En memoria pura, los knowledge graphs de Cognee y similares son técnicamente superiores al markdown inyectado. **Donde Guard Angels no tiene competidor directo es en la intersección: ownership territorial + derecho a veto basado en invariantes + audit trail en git.** Ningún proyecto relevado tiene un agente que pueda *rechazar* un cambio porque viola las invariantes de su territorio, con el rechazo registrado y auditable. Eso es CODEOWNERS para agentes, y es un espacio vacío.
 
 La trayectoria del mercado (memoria estructurada con retrieval, ejecución paralela, workflows deterministas, agentes de larga duración) confirma varias apuestas de GA (archivos + git, determinismo, fail-loud) y contradice dos decisiones (lock global, memoria monolítica inyectada).
 
@@ -109,7 +109,7 @@ La trayectoria del mercado (memoria estructurada con retrieval, ejecución paral
 
 ### La tesis de producto
 
-El mercado 2026 tiene tres capas ya pobladas: orquestación (agent teams nativos, Conductor), memoria (Cognee, mem0, Memorix) y ejecución (los CLIs mismos). La capa vacía es **gobernanza**: quién puede tocar qué, con qué garantías, y con qué registro. A medida que los agentes corren más tiempo sin supervisión (la tendencia dominante del año), la pregunta "¿qué hizo el agente y quién lo autorizó?" pasa de nice-to-have a requisito. Guard Angel ya tiene las tres primitivas de esa capa: territorio, veto, audit trail.
+El mercado 2026 tiene tres capas ya pobladas: orquestación (agent teams nativos, Conductor), memoria (Cognee, mem0, Memorix) y ejecución (los CLIs mismos). La capa vacía es **gobernanza**: quién puede tocar qué, con qué garantías, y con qué registro. A medida que los agentes corren más tiempo sin supervisión (la tendencia dominante del año), la pregunta "¿qué hizo el agente y quién lo autorizó?" pasa de nice-to-have a requisito. Guard Angels ya tiene las tres primitivas de esa capa: territorio, veto, audit trail.
 
 **Pitch de una línea:** *CODEOWNERS para agentes de IA — cada módulo tiene un guardián con memoria, derecho a veto y registro auditable.*
 
@@ -131,7 +131,7 @@ Nichos concretos donde esa propuesta es más fuerte:
 
 ### Riesgo existencial a monitorear
 
-El riesgo principal no es un competidor: es que la plataforma absorba la categoría. Si Claude Code (o Codex) incorpora memoria territorial persistente con enforcement nativo — y los agent teams + CLAUDE.md anidados son dos tercios del camino — Guard Angel queda relegado a los backends que no lo tengan. Las defensas: (a) ser backend-agnostic en serio (ya lo es), (b) ser el estándar del *formato* de memoria territorial y del audit trail (por eso importa abrir el proyecto antes de que la ventana se cierre), y (c) profundizar donde la plataforma no va a ir: veto por invariantes, compliance, cross-backend.
+El riesgo principal no es un competidor: es que la plataforma absorba la categoría. Si Claude Code (o Codex) incorpora memoria territorial persistente con enforcement nativo — y los agent teams + CLAUDE.md anidados son dos tercios del camino — Guard Angels queda relegado a los backends que no lo tengan. Las defensas: (a) ser backend-agnostic en serio (ya lo es), (b) ser el estándar del *formato* de memoria territorial y del audit trail (por eso importa abrir el proyecto antes de que la ventana se cierre), y (c) profundizar donde la plataforma no va a ir: veto por invariantes, compliance, cross-backend.
 
 ---
 

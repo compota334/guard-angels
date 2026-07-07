@@ -14,7 +14,7 @@ import { writeAngelMd } from '../../src/angels/memory.js';
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-errs-'));
+  tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-errs-'));
 });
 
 afterEach(() => {

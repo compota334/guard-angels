@@ -395,9 +395,9 @@ export function formatPromptSizeWarning(
     .map((s) => `${s.name}=${s.bytes}`)
     .join(' ');
   return (
-    `[guard-angel][warn] prompt for angel "${angelId}" (phase=${phase}) is ${report.totalBytes} bytes, ` +
+    `[guard-angels][warn] prompt for angel "${angelId}" (phase=${phase}) is ${report.totalBytes} bytes, ` +
     `exceeds threshold ${thresholdBytes} bytes\n` +
-    `[guard-angel][warn]   breakdown (bytes): ${breakdown}`
+    `[guard-angels][warn]   breakdown (bytes): ${breakdown}`
   );
 }
 

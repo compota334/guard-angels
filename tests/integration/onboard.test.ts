@@ -14,7 +14,7 @@ describe('angels onboard', () => {
   let fakeBackendPath: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angel-onboard-'));
+    tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-onboard-'));
     fakeBackendPath = copyFakeBackend(tmpDir);
   });
 
