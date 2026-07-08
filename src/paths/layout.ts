@@ -14,6 +14,10 @@ export function newspaperFile(projectRoot: string): string {
   return join(projectRoot, ANGELS_DIR, '_newspaper.md');
 }
 
+export function newspaperGenerationFile(projectRoot: string): string {
+  return join(projectRoot, ANGELS_DIR, '_newspaper.generation');
+}
+
 export function briefsDir(projectRoot: string): string {
   return join(projectRoot, ANGELS_DIR, '_briefs');
 }

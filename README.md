@@ -111,7 +111,7 @@ All state lives on disk inside `.angels/`, committed to git. No database, no ser
 Angels operate in five phases:
 
 1. **INIT**: `angels init` bootstraps `.angels/` and writes blank `angel.md` templates. For greenfield projects with no existing code.
-2. **DISCOVERY**: `angels onboard` reads an existing codebase and synthesizes a real `angel.md` per angel. AI-heavy; priority files (READMEs, entry points, type definitions, tests) are pre-read and passed inline. Supports **direct write** (angel writes `angel.md` directly instead of via PROPOSED PLAN) when `memory.target_pct > 5%`, and **chunked writing** (large outputs split into ~50K-token chunks generated sequentially) when estimated `angel.md` exceeds 50 KB.
+2. **DISCOVERY**: `angels onboard` reads an existing codebase and synthesizes a real `angel.md` per angel. AI-heavy; priority files (READMEs, entry points, type definitions, tests) are pre-read and passed inline. Supports **direct write** (angel writes `angel.md` directly instead of via the `proposed_plan` response field) when `memory.target_pct > 5%`, and **chunked writing** (large outputs split into ~50K-token chunks generated sequentially) when estimated `angel.md` exceeds 50 KB.
 3. **REVIEW**: `angels brief <angel-id> "<task>"` sends the task to the angel. The angel reads its charter, the code, and the brief, then responds with `proceed`, `concerns`, or `refuse`. No files are modified.
 4. **EXECUTE**: `angels execute <angel-id> <brief-path>` re-invokes the angel with approval. The angel makes the changes, updates its `angel.md`, sends cables to affected angels, and reports what it did.
 5. **SWEEP**: `angels sweep` wakes every active angel in maintenance mode. Angels review their territory for drift and may send cables. Report-only in v1.
@@ -183,17 +183,17 @@ angels doctor --archive --older-than=30
 | Command | Description |
 |---|---|
 | `angels init [--auto\|--manual]` | Bootstrap `.angels/` in current project. Walks the tree, identifies significant folders, creates angel.md drafts. |
-| `angels onboard [--angel <id>] [--force] [--auto-activate] [--target-pct <n>] [--max-tokens <n>]` | Bootstrap angel context from existing codebase (runs DISCOVERY phase). `--target-pct` overrides `memory.target_pct` (1-100); `--max-tokens` overrides `memory.max_tokens`. |
+| `angels onboard [--angel <id>] [--force] [--auto-activate] [--target-pct <n>] [--max-tokens <n>] [--parallel <n>]` | Bootstrap angel context from existing codebase (runs DISCOVERY phase). `--target-pct` overrides `memory.target_pct` (1-100); `--max-tokens` overrides `memory.max_tokens`; `--parallel` onboards up to N angels concurrently (1-8, default 4). |
 | `angels activate [<angel-id>] [--all]` | Promote draft angels to active after reviewing. |
 | `angels list` | List all registered angels with their status. |
 | `angels create <path>` | Create an angel for a specific folder. |
 | `angels brief <angel-id> "<task>"` | Phase 1: send a review brief to an angel. Does NOT execute. |
-| `angels execute <angel-id> <brief-path>` | Phase 2: re-invoke angel with approval to execute changes. |
-| `angels do <angel-id> "<task>"` | Brief and execute in a single step. Aborts if angel raises concerns or refuses. |
+| `angels execute <angel-id> <brief-path> [--no-strict-territory]` | Phase 2: re-invoke angel with approval to execute changes. Out-of-territory writes are blocked and rolled back by default; `--no-strict-territory` downgrades them to warnings. |
+| `angels do <angel-id> "<task>" [--no-strict-territory]` | Brief and execute in a single step. Aborts if angel raises concerns or refuses. |
 | `angels cable <to> <type> "<body>"` | Send a cable (inter-angel message). Types: `breaking_change`, `fyi`, `review_request`, `invariant_violation`. |
 | `angels inbox <angel-id>` | Show pending cables for an angel. |
 | `angels newspaper [--since=<iso>]` | Print newspaper entries (append-only log). Records cable, brief, execute, and sweep events. |
-| `angels sweep [--since=<iso>] [--timeout=<seconds>]` | Wake every angel in maintenance mode. `--timeout` caps each angel invocation; default from config. Report-only in v1. |
+| `angels sweep [--since=<iso>] [--timeout=<seconds>] [--parallel <n>]` | Wake every angel in maintenance mode. `--timeout` caps each angel invocation; `--parallel` sweeps up to N angels concurrently (1-8, default 4). Also rotates an oversized newspaper and archives old briefs/responses before starting. Report-only in v1. |
 | `angels doctor [--archive] [--older-than=N]` | Health check: orphaned angels, missing angels, stale locks, stale drafts. `--archive` moves old files to `_archive/`. |
 | `angels retire <angel-id>` | Archive and remove an angel from the project. |
 | `angels ask <angel-id> "<question>"` | Ask an angel a read-only question (no brief file, no execute path). |
@@ -203,30 +203,49 @@ angels doctor --archive --older-than=30
 
 ## Response format
 
-`angels brief` prints the brief path, then the angel's structured response:
+Angels answer with a **structured JSON file** (since 0.3.0; validated against a strict schema, so malformed or invented fields fail loudly instead of being half-parsed). A response looks like:
+
+```json
+{
+  "format_version": 1,
+  "from": "src-auth",
+  "timestamp": "2026-05-12T14:32:00Z",
+  "verdict": "proceed",
+  "proposed_plan": "1. Add a token-bucket middleware in src/auth/rateLimit.ts\n2. Wire it into the login route",
+  "questions_for_main": "Should the limit be configurable per tenant?",
+  "cables_sent": [{ "to": "src-api", "type": "fyi" }],
+  "files_changed": ["src/auth/rateLimit.ts", "src/auth/login.ts"],
+  "angel_md_updated": true
+}
+```
+
+`angels brief` prints the brief path and a human-readable summary of that response:
 
 ```
-Brief written to: .angels/_briefs/src-auth/2026-05-12T1432-001.md
+Brief written to: .angels/_briefs/src-auth/2026-05-12T1432-0001.md
 
 === Angel Response: PROCEED ===
 
 PROPOSED PLAN:
   1. Add a token-bucket middleware in src/auth/rateLimit.ts
   2. Wire it into the login route
-  ...
 
 QUESTIONS FOR MAIN:
   Should the limit be configurable per tenant?
 
-Response file: .angels/_responses/src-auth/2026-05-12T1432-001.md
+Response file: .angels/_responses/src-auth/2026-05-12T1432-0001.json
 ```
 
-Possible verdicts: `PROCEED` (exit 0), `CONCERNS` (exit 1), `REFUSE` (exit 2). When the angel raises concerns the response includes a `CONCERNS` block; when it refuses it explains why in `CONCERNS`.
+Possible verdicts: `PROCEED` (exit 0), `CONCERNS` (exit 2), `REFUSE` (exit 3). When the angel raises concerns the response includes its concerns and a proposed plan; when it refuses it cites the violated invariant IDs (see [Invariant IDs](#invariant-ids)).
 
-`angels execute` prints the execution result:
+`angels execute` prints the execution result, runs the territory's [proof-of-done checks](#proof-of-done-checks), and reports:
 
 ```
-Execute brief written to: .angels/_briefs/src-auth/2026-05-12T1433-001.md
+Execute brief written to: .angels/_briefs/src-auth/2026-05-12T1433-0001.md
+
+Running 1 proof-of-done check(s)...
+  PASS  tests: npm test
+  Check output: .angels/_logs/src-auth/2026-05-12T14-33-00.000Z-checks.log
 
 === Execute Result: DONE ===
 
@@ -238,10 +257,33 @@ angel.md was updated.
 CABLES SENT:
   src-api: fyi
 
-Response file: .angels/_responses/src-auth/2026-05-12T1433-001.md
+Response file: .angels/_responses/src-auth/2026-05-12T1433-0001.json
 ```
 
-If the angel wrote files outside its territory, a `WARNING: Out-of-territory writes detected` block appears and is also logged to the newspaper.
+**Territory enforcement is strict by default**: if the angel wrote files outside its territory, new files are deleted (rolled back), the execute fails with exit 1, and the violation is recorded in the newspaper. Pass `--no-strict-territory` (or set `execute.strict_territory: false` in `_config.yml`) to downgrade violations to warnings.
+
+## Proof-of-done checks
+
+An EXECUTE only counts as done when the territory's configured checks pass. Checks are shell commands run by the orchestrator (never by the angel) after the angel reports done; their output is stored under `.angels/_logs/` as evidence.
+
+```yaml
+angels:
+  - id: src-auth
+    type: folder
+    path: src/auth
+    checks:
+      - name: tests
+        cmd: "npm test"
+      - name: lint
+        cmd: "npx eslint src/auth --quiet"
+checks_timeout_seconds: 300   # per-check timeout (default 300)
+```
+
+If any check fails, `angels execute` exits 1, prints the failing output, and the newspaper records `EXECUTE failed proof-of-done checks`. Changes are NOT rolled back — the evidence tells you what to fix.
+
+## Invariant IDs
+
+Invariants in `angel.md` carry stable IDs (`INV-001`, `INV-002`, ...). IDs are never reused; when an angel refuses a brief it cites the violated IDs, which makes refusals auditable in the newspaper and response files.
 
 ## Angel memory system
 
@@ -253,7 +295,7 @@ DISCOVERY reads priority files from each angel's territory (READMEs, entry point
 
 ### Direct write
 
-When the memory target is ambitious (`memory.target_pct > 5%`), the angel writes `angel.md` **directly** to disk instead of embedding it inside a `PROPOSED PLAN` field in the response file. This eliminates the response-file throughput bottleneck and allows much larger outputs. The orchestrator verifies the file was written and updates frontmatter after the invocation completes.
+When the memory target is ambitious (`memory.target_pct > 5%`), the angel writes `angel.md` **directly** to disk instead of embedding it inside the `proposed_plan` field of the response JSON. This eliminates the response-file throughput bottleneck and allows much larger outputs. The orchestrator verifies the file was written and updates frontmatter after the invocation completes.
 
 ### Chunked writing
 
@@ -277,7 +319,7 @@ memory:
   # max_tokens: 250000     # absolute token budget; overrides target_pct
 ```
 
-- `target_pct`: percentage of the estimated context window (default: 25%). At `≤ 5%`, direct write is disabled and the legacy PROPOSED PLAN path is used.
+- `target_pct`: percentage of the estimated context window (default: 25%). At `≤ 5%`, direct write is disabled and the body travels in the `proposed_plan` response field.
 - `max_tokens`: absolute token budget. Takes priority over `target_pct` when both are set.
 
 Per-angel overrides are also supported:
@@ -307,15 +349,25 @@ angels:
   - id: src-auth
     type: folder
     path: "src/auth"
+    checks:                        # optional proof-of-done checks
+      - name: tests
+        cmd: "npm test"
 sweep:
   autonomy: report-only   # v1 always report-only
+execute:
+  strict_territory: true  # default: block + roll back out-of-territory writes
+checks_timeout_seconds: 300        # per-check timeout (default 300)
+newspaper:
+  max_bytes: 5242880      # rotate the newspaper beyond this size (default 5 MB)
+housekeeping:
+  archive_after_days: 30  # sweep/doctor archive briefs/responses older than this
 ```
 
 Supported backends (auto-detected from the first token of `angel_cmd`):
 
 | Backend | Command example | Notes |
 |---|---|---|
-| Claude Code | `claude -p --dangerously-skip-permissions` | Default. Extracts session ID from stdout. |
+| Claude Code | `claude -p --dangerously-skip-permissions` | Default. Guard Angels appends `--output-format json` and reads session ID, token usage, and cost from the JSON envelope into `.meta.json`. |
 | Codex | `codex exec` | Extracts thread ID. |
 | Droid | `droid exec` | No session ID extraction. |
 | Generic | any command | Fallback. Pipes prompt via stdin. |
@@ -326,18 +378,20 @@ Supported backends (auto-detected from the first token of `angel_cmd`):
 .angels/
 ├── .gitignore           # Auto-created by init; excludes ephemeral dirs
 ├── _config.yml          # Project configuration
-├── _newspaper.md        # Append-only event log
+├── _newspaper.md        # Append-only event log (current generation)
+├── _newspaper.generation # Rotation counter for the newspaper
 ├── _briefs/             # Outgoing briefs (main → angels)
 │   └── <angel-id>/
-├── _responses/          # Responses (angels → main)
+├── _responses/          # Responses (angels → main, JSON)
 │   └── <angel-id>/
 ├── _inbox/              # Cables awaiting angel processing
 │   └── <angel-id>/
 ├── _outbox/             # Cables sent (audit trail)
-├── _locks/              # Active lock during execution
-├── _logs/               # Raw stdout/stderr per invocation
-├── _cursors/            # Per-angel newspaper byte-offset
-├── _archive/            # Archived old files (by month)
+├── _locks/              # Per-angel locks during invocations
+├── _logs/               # Raw stdout/stderr + check evidence per invocation
+├── _cursors/            # Per-angel newspaper cursor (generation + byte offset)
+├── _archive/            # Archived old files (by month) + rotated newspapers
+│   └── newspaper/
 ├── _root/               # Root angel
 │   └── angel.md
 └── src/
@@ -379,8 +433,8 @@ Every command returns a meaningful exit code:
 | | 1 | Error during review or execute |
 | | 2 | Angel responded with concerns |
 | | 3 | Angel refused |
-| `execute` | 0 | Angel responds: done |
-| | 1 | Error or non-done response |
+| `execute` | 0 | Angel responds: done (and all proof-of-done checks passed) |
+| | 1 | Error, non-done response, failed checks, or blocked by strict territory |
 | `cable` | 0 | Cable sent |
 | | 1 | Error (invalid type, urgency, unknown angel) |
 | `inbox` | 0 | Inbox displayed |

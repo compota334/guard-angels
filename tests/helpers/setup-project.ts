@@ -51,6 +51,8 @@ interface AngelEntry {
   id: string;
   type: 'root' | 'folder';
   path: string;
+  /** Proof-of-done checks run by execute after a done verdict. */
+  checks?: { name: string; cmd: string }[];
 }
 
 /**

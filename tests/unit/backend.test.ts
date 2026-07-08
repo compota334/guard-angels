@@ -33,25 +33,57 @@ function makeConfig(angelCmd: string): Config {
 
 // --- ClaudeAdapter ---
 
+const CLAUDE_JSON_BACKEND = resolve(FIXTURES, 'claude-json-backend.sh');
+
 describe('ClaudeAdapter', () => {
-  it('passes prompt as positional arg and captures stdout', async () => {
-    const adapter = new ClaudeAdapter(ARG_ECHO_BACKEND, []);
+  it('appends --output-format json and parses the envelope', async () => {
+    const adapter = new ClaudeAdapter(CLAUDE_JSON_BACKEND, ['-p']);
+    const result = await adapter.invoke(baseOpts);
+
+    expect(result.code).toBe(0);
+    const envelope = JSON.parse(result.stdout);
+    expect(envelope.argv).toContain('--output-format');
+    expect(envelope.argv).toContain('json');
+    expect(envelope.argv[envelope.argv.length - 1]).toBe('hello world');
+
+    expect(result.sessionId).toBe('sess-fake-123');
+    expect(result.costUsd).toBe(0.42);
+    expect(result.usage).toEqual({
+      inputTokens: 100,
+      outputTokens: 10,
+      cacheCreationInputTokens: 50,
+      cacheReadInputTokens: 25,
+    });
+  });
+
+  it('passes extra args before the prompt', async () => {
+    const adapter = new ClaudeAdapter(CLAUDE_JSON_BACKEND, ['-p', '--dangerously-skip-permissions']);
+    const result = await adapter.invoke({ ...baseOpts, extraArgs: ['--model', 'opus'] });
+
+    const envelope = JSON.parse(result.stdout);
+    expect(envelope.argv).toContain('--model');
+    expect(envelope.argv).toContain('opus');
+    expect(envelope.argv[envelope.argv.length - 1]).toBe('hello world');
+  });
+
+  it('respects an explicit --output-format and skips envelope parsing', async () => {
+    const adapter = new ClaudeAdapter(ARG_ECHO_BACKEND, ['--output-format', 'text']);
     const result = await adapter.invoke(baseOpts);
 
     expect(result.stdout).toBe('hello world');
-    expect(result.code).toBe(0);
-    expect(result.stderr).toBe('');
+    expect(result.sessionId).toBeUndefined();
+    expect(result.usage).toBeUndefined();
   });
 
-  it('passes extra args to the subprocess', async () => {
-    const adapter = new ClaudeAdapter(ARG_ECHO_BACKEND, ['-p', '--dangerously-skip-permissions']);
-    const result = await adapter.invoke({ ...baseOpts, extraArgs: ['--model', 'opus'] });
+  it('recognizes the --output-format=<value> single-arg form', async () => {
+    const adapter = new ClaudeAdapter(ARG_ECHO_BACKEND, ['--output-format=text']);
+    const result = await adapter.invoke(baseOpts);
 
     expect(result.stdout).toBe('hello world');
-    expect(result.code).toBe(0);
+    expect(result.sessionId).toBeUndefined();
   });
 
-  it('captures non-zero exit code', async () => {
+  it('captures non-zero exit code without parsing the envelope', async () => {
     const adapter = new ClaudeAdapter(ARG_STDERR_BACKEND, []);
     const result = await adapter.invoke(baseOpts);
 
@@ -59,30 +91,26 @@ describe('ClaudeAdapter', () => {
     expect(result.stderr).toContain('something went wrong');
   });
 
-  it('extracts session ID from stdout', () => {
-    const adapter = new ClaudeAdapter(ARG_ECHO_BACKEND, []);
-
-    expect(adapter.extractSessionId('session_id: abc123')).toBe('abc123');
-    expect(adapter.extractSessionId('Session-ID: xyz-789')).toBe('xyz-789');
-    expect(adapter.extractSessionId('SessionId: sess_001')).toBe('sess_001');
-    expect(adapter.extractSessionId('no id here')).toBeNull();
+  it('omits sessionId when the envelope lacks it', async () => {
+    process.env.CLAUDE_FAKE_NO_SESSION = 'true';
+    try {
+      const adapter = new ClaudeAdapter(CLAUDE_JSON_BACKEND, []);
+      const result = await adapter.invoke(baseOpts);
+      expect(result.sessionId).toBeUndefined();
+      expect(result.usage).toBeDefined();
+    } finally {
+      delete process.env.CLAUDE_FAKE_NO_SESSION;
+    }
   });
 
-  it('includes sessionId in result when present in stdout', async () => {
-    const adapter = new ClaudeAdapter(ARG_ECHO_BACKEND, []);
-    const result = await adapter.invoke({
-      ...baseOpts,
-      prompt: 'session_id: test-session-42',
-    });
-
-    expect(result.sessionId).toBe('test-session-42');
-  });
-
-  it('omits sessionId from result when not in stdout', async () => {
-    const adapter = new ClaudeAdapter(ARG_ECHO_BACKEND, []);
-    const result = await adapter.invoke(baseOpts);
-
-    expect(result.sessionId).toBeUndefined();
+  it('throws when exit is 0 but stdout is not the JSON envelope', async () => {
+    process.env.CLAUDE_FAKE_BAD_JSON = 'true';
+    try {
+      const adapter = new ClaudeAdapter(CLAUDE_JSON_BACKEND, []);
+      await expect(adapter.invoke(baseOpts)).rejects.toThrow(/JSON envelope/);
+    } finally {
+      delete process.env.CLAUDE_FAKE_BAD_JSON;
+    }
   });
 });
 

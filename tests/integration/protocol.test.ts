@@ -20,7 +20,7 @@ import { showNewspaper } from '../../src/commands/newspaper.js';
 import { sweepAngels } from '../../src/commands/sweep.js';
 import { runDoctor } from '../../src/commands/doctor.js';
 import { writeBrief } from '../../src/protocol/brief.js';
-import { readNewspaperSince, getNewspaperSize } from '../../src/messaging/newspaper.js';
+import { readNewspaperSince, getNewspaperSize, getNewspaperGeneration } from '../../src/messaging/newspaper.js';
 import { getCursor } from '../../src/messaging/cursors.js';
 import { lockFilePath } from '../../src/locks/lock.js';
 import {
@@ -270,7 +270,7 @@ describe('end-to-end protocol flow', () => {
     expect(sweepNewspaper).toContain('SWEEP');
 
     // Verify cursors were advanced
-    const rootCursor = getCursor(tmpDir, '_root');
+    const rootCursor = getCursor(tmpDir, '_root', getNewspaperGeneration(tmpDir));
     expect(rootCursor).toBeGreaterThan(0);
 
     // ────────────────────────────────────────────────────────
@@ -369,9 +369,11 @@ describe('end-to-end protocol flow', () => {
     );
     updateConfig(tmpDir, ootWrapper, angels as Array<{id: string; type: 'root' | 'folder'; path: string}>, 30);
 
-    const exitCode = await executeAngel(tmpDir, 'src-auth', reviewBriefPath);
+    const exitCode = await executeAngel(tmpDir, 'src-auth', reviewBriefPath, {
+      strictTerritory: false,
+    });
 
-    // Still exits 0 — territory violation is a warning, not a failure
+    // Exits 0 — with strict explicitly disabled the violation is a warning
     expect(exitCode).toBe(0);
 
     // Verify both files were created

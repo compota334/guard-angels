@@ -58,18 +58,17 @@ describe('sweepAngels', () => {
     expect(newspaper).toContain('[src-auth]');
     expect(newspaper).toContain('SWEEP completed');
 
-    // Verify cursors were advanced for both angels
-    const rootCursor = fs.readFileSync(
-      join(tmpDir, '.angels', '_cursors', '_root'),
-      'utf-8',
-    ).trim();
-    expect(parseInt(rootCursor, 10)).toBeGreaterThan(0);
+    // Verify cursors were advanced for both angels (generation-stamped JSON)
+    const rootCursor = JSON.parse(
+      fs.readFileSync(join(tmpDir, '.angels', '_cursors', '_root'), 'utf-8'),
+    ) as { generation: number; offset: number };
+    expect(rootCursor.offset).toBeGreaterThan(0);
+    expect(rootCursor.generation).toBe(1);
 
-    const authCursor = fs.readFileSync(
-      join(tmpDir, '.angels', '_cursors', 'src-auth'),
-      'utf-8',
-    ).trim();
-    expect(parseInt(authCursor, 10)).toBeGreaterThan(0);
+    const authCursor = JSON.parse(
+      fs.readFileSync(join(tmpDir, '.angels', '_cursors', 'src-auth'), 'utf-8'),
+    ) as { generation: number; offset: number };
+    expect(authCursor.offset).toBeGreaterThan(0);
 
     // Verify lock was released
     expect(fs.existsSync(lockFilePath(tmpDir))).toBe(false);
@@ -131,7 +130,7 @@ describe('sweepAngels', () => {
       angelId: '_root',
       summary: 'Pre-existing entry the angel must consume.',
     });
-    setCursor(tmpDir, 'src-auth', 0);
+    setCursor(tmpDir, 'src-auth', 0, 1);
 
     const wrapperPath = createBackendWrapper(
       tmpDir,
@@ -148,11 +147,10 @@ describe('sweepAngels', () => {
 
     // The src-auth cursor must still be 0 — the angel did not consume the
     // delta successfully, so the next sweep needs to re-present it.
-    const authCursor = parseInt(
-      fs.readFileSync(join(tmpDir, '.angels', '_cursors', 'src-auth'), 'utf-8').trim(),
-      10,
-    );
-    expect(authCursor).toBe(0);
+    const authCursor = JSON.parse(
+      fs.readFileSync(join(tmpDir, '.angels', '_cursors', 'src-auth'), 'utf-8'),
+    ) as { generation: number; offset: number };
+    expect(authCursor.offset).toBe(0);
   });
 
   it('passes --since filter to scope newspaper delta', async () => {
@@ -170,8 +168,8 @@ describe('sweepAngels', () => {
     });
 
     // Set cursors to 0 so both entries are in the delta
-    setCursor(tmpDir, '_root', 0);
-    setCursor(tmpDir, 'src-auth', 0);
+    setCursor(tmpDir, '_root', 0, 1);
+    setCursor(tmpDir, 'src-auth', 0, 1);
 
     const exitCode = await sweepAngels(tmpDir, { since: '2026-04-28T00:00:00Z' });
 

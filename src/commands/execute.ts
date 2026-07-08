@@ -1,14 +1,17 @@
 import * as fs from 'node:fs';
 import { join, resolve, relative } from 'node:path';
+import { execa } from 'execa';
 import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
 import { writeBrief, parseBrief } from '../protocol/brief.js';
 import { invoke } from '../protocol/orchestrate.js';
 import { angelIdToPath } from '../paths/resolve.js';
+import { angelLogsDir } from '../paths/layout.js';
 import { appendNewspaper } from '../messaging/newspaper.js';
 import { archiveProcessedInbox } from '../messaging/cables.js';
 import { handleQuestionsForMain } from '../messaging/questions.js';
 import type { ResponseData } from '../protocol/response.js';
+import type { CheckEntry } from '../config/schema.js';
 
 /**
  * A snapshot entry for a single file: modification time + size.
@@ -19,6 +22,7 @@ interface FileSnapshot {
 }
 
 export interface ExecuteOptions {
+  /** Tri-state: undefined = use config `execute.strict_territory` (default true). */
   strictTerritory?: boolean;
 }
 
@@ -40,7 +44,10 @@ export async function executeAngel(
   // 1. Load config and validate angel exists
   const config = loadConfig(cwd);
   const registry = AngelRegistry.fromConfig(config);
-  registry.getById(angelId); // throws if not found
+  const angel = registry.getById(angelId); // throws if not found
+
+  // Strict territory: CLI flag wins; otherwise config (default: strict).
+  const strictTerritory = options.strictTerritory ?? config.execute.strict_territory;
 
   // 2. Parse the original brief to extract the task
   let originalBrief;
@@ -103,9 +110,9 @@ export async function executeAngel(
   const outOfTerritory = [...outOfTerritoryAdded, ...outOfTerritoryModified];
 
   // 8a. Strict territory: rollback new files and fail
-  if (options.strictTerritory && outOfTerritory.length > 0) {
+  if (strictTerritory && outOfTerritory.length > 0) {
     const rolledBack = rollbackAddedFiles(cwd, outOfTerritoryAdded);
-    appendNewspaperEntry(cwd, angelId, result.response, outOfTerritory, true);
+    appendNewspaperEntry(cwd, angelId, result.response, outOfTerritory, true, []);
     printStrictTerritoryViolation(
       outOfTerritoryAdded,
       outOfTerritoryModified,
@@ -113,6 +120,30 @@ export async function executeAngel(
       result.responsePath,
     );
     return 1;
+  }
+
+  // 8b. Proof-of-done checks: a done verdict only counts once the territory's
+  // configured checks pass. Output is captured to _logs/ as evidence.
+  let checkResults: CheckResult[] = [];
+  if (result.response.response === 'done' && (angel.checks?.length ?? 0) > 0) {
+    const checks = angel.checks as CheckEntry[];
+    console.log('');
+    console.log(`Running ${checks.length} proof-of-done check(s)...`);
+    checkResults = await runChecks(cwd, checks, config.checks_timeout_seconds);
+    const checksLogPath = writeChecksLog(cwd, angelId, timestamp, checkResults);
+
+    for (const check of checkResults) {
+      const status = check.passed ? 'PASS' : `FAIL (exit ${check.exitCode})`;
+      console.log(`  ${status}  ${check.name}: ${check.cmd}`);
+    }
+    console.log(`  Check output: ${checksLogPath}`);
+
+    const failed = checkResults.filter((c) => !c.passed);
+    if (failed.length > 0) {
+      appendNewspaperEntry(cwd, angelId, result.response, outOfTerritory, false, checkResults);
+      printChecksFailure(failed, checksLogPath, result.responsePath);
+      return 1;
+    }
   }
 
   // 9. Archive inbox cables the angel saw during execution
@@ -126,7 +157,7 @@ export async function executeAngel(
   }
 
   // 10. Append newspaper entry
-  appendNewspaperEntry(cwd, angelId, result.response, outOfTerritory, false);
+  appendNewspaperEntry(cwd, angelId, result.response, outOfTerritory, false, checkResults);
 
   // 11. Print summary
   printExecuteSummary(result.response, result.responsePath, outOfTerritory);
@@ -355,6 +386,7 @@ function appendNewspaperEntry(
   response: ResponseData,
   outOfTerritory: string[],
   strictViolation: boolean,
+  checkResults: CheckResult[],
 ): void {
   const timestamp = new Date().toISOString();
 
@@ -363,10 +395,10 @@ function appendNewspaperEntry(
 
   if (response.response === 'done') {
     summary = 'EXECUTE completed successfully.';
-    if (response.filesChanged) {
-      detailLines.push(`Files changed: ${response.filesChanged}`);
+    if (response.filesChanged.length > 0) {
+      detailLines.push(`Files changed: ${response.filesChanged.join(', ')}`);
     }
-    if (response.angelMdUpdated === 'true') {
+    if (response.angelMdUpdated) {
       detailLines.push('angel.md was updated.');
     }
   } else {
@@ -390,12 +422,113 @@ function appendNewspaperEntry(
     summary = `EXECUTE blocked by --strict-territory: out-of-territory writes detected.`;
   }
 
+  const failedChecks = checkResults.filter((c) => !c.passed);
+  if (failedChecks.length > 0) {
+    summary = 'EXECUTE failed proof-of-done checks.';
+    detailLines.push(
+      `Checks FAILED: ${failedChecks.map((c) => `${c.name} (exit ${c.exitCode})`).join(', ')}`,
+    );
+  } else if (checkResults.length > 0) {
+    detailLines.push(`Checks: ${checkResults.length} passed`);
+  }
+
   appendNewspaper(projectRoot, {
     timestamp,
     angelId,
     summary,
     details: detailLines.length > 0 ? detailLines.join('\n') : undefined,
   });
+}
+
+// ─── Proof-of-done checks ─────────────────────────────────────────────────────
+
+interface CheckResult {
+  name: string;
+  cmd: string;
+  exitCode: number;
+  output: string;
+  passed: boolean;
+}
+
+/**
+ * Run the territory's proof-of-done checks sequentially in the project root.
+ * A check passes iff its command exits 0 within the timeout.
+ */
+async function runChecks(
+  projectRoot: string,
+  checks: CheckEntry[],
+  timeoutSeconds: number,
+): Promise<CheckResult[]> {
+  const results: CheckResult[] = [];
+  for (const check of checks) {
+    const result = await execa(check.cmd, {
+      shell: true,
+      cwd: projectRoot,
+      timeout: timeoutSeconds * 1000,
+      reject: false,
+      all: true,
+    });
+    const timedOut = result.timedOut === true;
+    const exitCode = result.exitCode ?? (timedOut ? 124 : 1);
+    results.push({
+      name: check.name,
+      cmd: check.cmd,
+      exitCode,
+      output: timedOut
+        ? `${result.all ?? ''}\n[check timed out after ${timeoutSeconds}s]`
+        : (result.all ?? ''),
+      passed: exitCode === 0,
+    });
+  }
+  return results;
+}
+
+/**
+ * Write the raw output of every check to _logs/<angel-id>/<ts>-checks.log
+ * so the evidence survives next to the invocation logs.
+ */
+function writeChecksLog(
+  projectRoot: string,
+  angelId: string,
+  isoTimestamp: string,
+  results: CheckResult[],
+): string {
+  const dir = angelLogsDir(projectRoot, angelId);
+  fs.mkdirSync(dir, { recursive: true });
+  const logPath = join(dir, `${isoTimestamp.replace(/:/g, '-')}-checks.log`);
+
+  const sections = results.map((r) =>
+    [`=== check: ${r.name} (${r.cmd}) exit=${r.exitCode} ===`, r.output, ''].join('\n'),
+  );
+  fs.writeFileSync(logPath, sections.join('\n'), 'utf-8');
+  return logPath;
+}
+
+/**
+ * Print a blocking failure message when proof-of-done checks fail.
+ * Shows the tail of each failing check's output.
+ */
+function printChecksFailure(
+  failed: CheckResult[],
+  checksLogPath: string,
+  responsePath: string,
+): void {
+  console.error('');
+  console.error('ERROR: EXECUTE failed proof-of-done checks. The angel reported done,');
+  console.error('but the territory checks did not pass. Changes were NOT rolled back.');
+  console.error('');
+
+  for (const check of failed) {
+    console.error(`FAILED: ${check.name} (${check.cmd}) — exit ${check.exitCode}`);
+    const tail = check.output.trim().split('\n').slice(-20);
+    for (const line of tail) {
+      console.error(`  ${line}`);
+    }
+    console.error('');
+  }
+
+  console.error(`Full check output: ${checksLogPath}`);
+  console.error(`Response file: ${responsePath}`);
 }
 
 /**
@@ -413,20 +546,20 @@ function printExecuteSummary(
   console.log('');
 
   if (response.response === 'done') {
-    if (response.filesChanged) {
+    if (response.filesChanged.length > 0) {
       console.log('FILES CHANGED:');
-      console.log(`  ${response.filesChanged}`);
+      console.log(`  ${response.filesChanged.join(', ')}`);
       console.log('');
     }
 
-    if (response.angelMdUpdated === 'true') {
+    if (response.angelMdUpdated) {
       console.log('angel.md was updated.');
       console.log('');
     }
 
-    if (response.cablesSent && response.cablesSent !== 'none') {
+    if (response.cablesSent.length > 0) {
       console.log('CABLES SENT:');
-      console.log(`  ${response.cablesSent}`);
+      console.log(`  ${response.cablesSent.map((c) => `${c.to}: ${c.type}`).join(', ')}`);
       console.log('');
     }
   }

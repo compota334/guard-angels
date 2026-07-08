@@ -4,6 +4,21 @@ All notable changes to Guard Angels are documented here.
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+
+- **Angel responses are JSON**: angels now write a single JSON object (`format_version: 1`) validated against a strict Zod schema; the markdown `FIELD:` format is gone (hard cutover, no dual parser). Response files use the `.json` extension. `cables_sent` / `files_changed` are real arrays, `angel_md_updated` is a boolean, and `write_mode` (`proposed`/`direct`/`chunk`/`chunk_final`) replaces the `WRITE_MODE:` header. Malformed responses fail the invocation with the offending field named.
+- **Strict territory is the default**: out-of-territory writes now block the execute (exit 1) and roll back new files. Opt out per invocation with `--no-strict-territory` on `execute`/`do`, or with `execute.strict_territory: false` in `_config.yml`.
+- **Newspaper cursors are generation-stamped JSON** (`{"generation": N, "offset": B}`). Pre-0.3 plain-number cursor files are treated as stale and reset to 0 with a printed notice (entries get re-presented once, never silently skipped).
+
+### Added
+
+- **Proof-of-done checks**: per-angel `checks: [{name, cmd}]` in `_config.yml`. After a done EXECUTE, the orchestrator runs each command in the project root; any failure turns the execute into exit 1 and the output is stored under `_logs/<angel-id>/<ts>-checks.log` as evidence. Global `checks_timeout_seconds` (default 300).
+- **Parallel onboard and sweep**: `--parallel <n>` (1-8, default 4) with a sliding-window pool; onboarding N angels now takes roughly the time of the slowest one. Cable filenames gained a collision guard (exclusive create + suffix) and newspaper entries are capped at 3800 bytes so concurrent appends stay atomic.
+- **Newspaper rotation**: when `_newspaper.md` exceeds `newspaper.max_bytes` (default 5 MB), sweep/doctor rotate it to `_archive/newspaper/<YYYY-MM>-gen<N>.md` and bump `_newspaper.generation`. `readNewspaperSince` now reads from the byte offset instead of the whole file.
+- **Housekeeping**: sweep archives briefs/responses/logs older than `housekeeping.archive_after_days` (default 30) before starting; `doctor --archive` uses the same config default and also rotates an oversized newspaper.
+- **Claude backend telemetry**: the adapter appends `--output-format json` and records `session_id`, token usage, and cost per invocation into `.meta.json` (replaces fragile regex extraction).
+- **Invariant IDs**: angel.md templates number invariants as `INV-001, INV-002, ...` and angels cite the violated IDs when refusing a brief.
+
 ### Changed
 
 - **Project name unified to "Guard Angels"**: remaining singular "Guard Angel" references updated across docs, log prefixes (`[guard-angels]`), and test temp-dir prefixes. The agent prompt intentionally keeps "You are a Guard Angel" because it addresses one individual angel.

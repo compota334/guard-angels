@@ -22,7 +22,10 @@ export function generateBlankTemplate(entry: AngelEntry): string {
 <!-- What this folder exposes to the rest of the codebase. -->
 
 ## Invariants
-<!-- Rules that must never be violated. -->
+<!-- Rules that must never be violated. Number each one with a stable ID
+     (INV-001, INV-002, ...). IDs are never reused; cite them when refusing
+     a brief in REVIEW. -->
+- INV-001:
 
 ## Decision log
 <!-- Append-only. Each entry: date, decision, reason, alternatives rejected. -->
@@ -104,7 +107,7 @@ Based on this content, generate the body of an angel.md file (WITHOUT the YAML f
 <What this folder exposes to the rest of the codebase, extracted from the memory content>
 
 ## Invariants
-<Rules that must never be violated, extracted from the memory content>
+<Rules that must never be violated, extracted from the memory content. Number each with a stable ID: INV-001, INV-002, ...>
 
 ## Decision log
 <Any decisions mentioned in the memory content, or leave a placeholder>

@@ -60,19 +60,33 @@ export function writeCable(
   validateCableData(data);
 
   const formatted = formatCable(data);
-  const filename = buildCableFilename(data);
+  const baseFilename = buildCableFilename(data);
 
-  // 1. Write to outbox (audit trail — always persisted first)
   const outDir = angelOutboxDir(projectRoot, data.from);
   mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, filename), formatted, 'utf-8');
-
-  // 2. Copy to inbox of the recipient
   const inDir = angelInboxDir(projectRoot, data.to);
   mkdirSync(inDir, { recursive: true });
-  writeFileSync(join(inDir, filename), formatted, 'utf-8');
 
-  return filename;
+  // Timestamps have second precision, so two cables from the same sender in
+  // the same second would collide. The outbox write (audit trail, always
+  // persisted first) uses exclusive create (wx) and retries with a numeric
+  // suffix; the inbox copy reuses the same final name.
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    const filename =
+      attempt === 0 ? baseFilename : baseFilename.replace(/\.md$/, `-${attempt}.md`);
+    try {
+      writeFileSync(join(outDir, filename), formatted, { encoding: 'utf-8', flag: 'wx' });
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === 'EEXIST') continue;
+      throw err;
+    }
+    writeFileSync(join(inDir, filename), formatted, 'utf-8');
+    return filename;
+  }
+
+  throw new Error(
+    `Could not find a free cable filename for ${baseFilename} after 1000 attempts`,
+  );
 }
 
 /**

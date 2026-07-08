@@ -7,6 +7,7 @@ import { identifyCandidates } from '../angels/identify.js';
 import { readLock, isStale, lockFilePath, type LockInfo } from '../locks/lock.js';
 import { readAngelMd } from '../angels/memory.js';
 import { angelMdFile, briefsDir, responsesDir, logsDir, outboxDir, inboxDir, archiveDir } from '../paths/layout.js';
+import { rotateNewspaperIfOver } from '../messaging/newspaper.js';
 import type { Config } from '../config/schema.js';
 
 // --- Report types ---
@@ -461,10 +462,15 @@ export async function runDoctor(
   console.log(output);
 
   if (options?.archive) {
-    const thresholdDays = options.olderThanDays ?? 30;
+    const thresholdDays = options.olderThanDays ?? config.housekeeping.archive_after_days;
     const archiveResult = archiveOldFiles(cwd, thresholdDays);
     const archiveOutput = formatArchiveResult(archiveResult);
     console.log(archiveOutput);
+
+    const rotation = rotateNewspaperIfOver(cwd, config.newspaper.max_bytes);
+    if (rotation.rotated) {
+      console.log(`Newspaper rotated to ${rotation.archivePath}`);
+    }
   }
 
   const totalFindings =

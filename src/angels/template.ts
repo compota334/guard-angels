@@ -95,6 +95,9 @@ SALTAR: exports estándar de framework, re-exports obvios.
 <!--
 Reglas que NUNCA deben violarse.
 - **Invariantes**: validación estricta, condiciones que siempre deben cumplirse.
+  Numerar cada invariante con un ID estable INV-NNN (INV-001, INV-002, ...).
+  Los IDs nunca se reutilizan: si una invariante muere, su ID muere con ella.
+  Al rechazar un brief en REVIEW, citar el ID de la invariante violada.
 - **Business rules**: reglas de negocio que DEBEN cumplirse.
 - **Precondiciones**: qué debe ser verdad antes de llamar a X.
 - **Postcondiciones**: qué debe ser verdad después de llamar a X.
@@ -103,7 +106,7 @@ SALTAR: reglas genéricas de TypeScript/JavaScript, obviedades.
 -->
 
 - **Invariantes**:
-  -
+  - INV-001:
 - **Business rules**:
   -
 - **Precondiciones**:

@@ -7,6 +7,8 @@ import {
   readNewspaperSince,
   formatNewspaperEntry,
   getNewspaperSize,
+  getNewspaperGeneration,
+  rotateNewspaperIfOver,
 } from '../../src/messaging/newspaper.js';
 import type { NewspaperEntry } from '../../src/messaging/newspaper.js';
 
@@ -107,6 +109,31 @@ describe('appendNewspaper', () => {
     const content = fs.readFileSync(newspaperPath(), 'utf-8');
     expect(content).toContain('[existing]');
     expect(content).toContain('[src-auth]');
+  });
+
+  it('truncates oversized details to keep the append atomic (< 4096 bytes)', () => {
+    appendNewspaper(tmpDir, {
+      timestamp: '2026-04-28T14:00:00Z',
+      angelId: 'src-auth',
+      summary: 'EXECUTE completed successfully.',
+      details: 'x'.repeat(10_000),
+    });
+
+    const content = fs.readFileSync(newspaperPath(), 'utf-8');
+    expect(Buffer.byteLength(content, 'utf-8')).toBeLessThan(4096);
+    expect(content).toContain('[details truncated');
+
+    // The entry must still parse as a single well-formed entry
+    const entries = readNewspaperSince(tmpDir, 0);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].angelId).toBe('src-auth');
+  });
+
+  it('leaves normal-sized details untouched', () => {
+    appendNewspaper(tmpDir, entry3);
+    const content = fs.readFileSync(newspaperPath(), 'utf-8');
+    expect(content).toContain('All invariants hold.');
+    expect(content).not.toContain('[details truncated');
   });
 });
 
@@ -277,5 +304,65 @@ describe('cursor-based reading workflow', () => {
     const latestEntries = readNewspaperSince(tmpDir, cursorAfterSecond);
     expect(latestEntries).toHaveLength(1);
     expect(latestEntries[0].angelId).toBe('_root');
+  });
+});
+
+describe('newspaper rotation', () => {
+  it('generation defaults to 1 when no generation file exists', () => {
+    expect(getNewspaperGeneration(tmpDir)).toBe(1);
+  });
+
+  it('does not rotate below the size threshold', () => {
+    appendNewspaper(tmpDir, entry1);
+    const result = rotateNewspaperIfOver(tmpDir, 1_000_000);
+    expect(result.rotated).toBe(false);
+    expect(getNewspaperGeneration(tmpDir)).toBe(1);
+  });
+
+  it('does not rotate an empty newspaper even with force', () => {
+    fs.writeFileSync(newspaperPath(), '', 'utf-8');
+    const result = rotateNewspaperIfOver(tmpDir, 10, true);
+    expect(result.rotated).toBe(false);
+  });
+
+  it('rotates when the newspaper exceeds the threshold', () => {
+    appendNewspaper(tmpDir, entry1);
+    appendNewspaper(tmpDir, entry2);
+    const sizeBefore = getNewspaperSize(tmpDir);
+    expect(sizeBefore).toBeGreaterThan(10);
+
+    const result = rotateNewspaperIfOver(tmpDir, 10);
+
+    expect(result.rotated).toBe(true);
+    expect(result.archivePath).toMatch(/_archive\/newspaper\/\d{4}-\d{2}-gen1\.md$/);
+    expect(fs.existsSync(result.archivePath!)).toBe(true);
+
+    // Archived content is the old newspaper
+    const archived = fs.readFileSync(result.archivePath!, 'utf-8');
+    expect(archived).toContain('[src-auth]');
+
+    // Fresh newspaper + bumped generation
+    expect(getNewspaperSize(tmpDir)).toBe(0);
+    expect(getNewspaperGeneration(tmpDir)).toBe(2);
+  });
+
+  it('subsequent rotations use increasing generations', () => {
+    appendNewspaper(tmpDir, entry1);
+    const first = rotateNewspaperIfOver(tmpDir, 1);
+    appendNewspaper(tmpDir, entry2);
+    const second = rotateNewspaperIfOver(tmpDir, 1);
+
+    expect(first.archivePath).toMatch(/gen1\.md$/);
+    expect(second.archivePath).toMatch(/gen2\.md$/);
+    expect(getNewspaperGeneration(tmpDir)).toBe(3);
+  });
+
+  it('throws on a malformed generation file', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.angels', '_newspaper.generation'),
+      'garbage',
+      'utf-8',
+    );
+    expect(() => getNewspaperGeneration(tmpDir)).toThrow(/Malformed newspaper generation/);
   });
 });

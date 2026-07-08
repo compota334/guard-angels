@@ -1,63 +1,50 @@
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import * as z from 'zod';
 import { angelResponsesDir } from '../paths/layout.js';
+import { extractDatePrefix, computeNextSeq } from './parser-utils.js';
 import {
-  extractRequiredField,
-  extractOptionalField,
-  extractSection,
-  extractDatePrefix,
-  computeNextSeq,
-} from './parser-utils.js';
+  RESPONSE_FORMAT_VERSION,
+  ResponseJsonSchema,
+  formatSchemaIssues,
+  type CableSent,
+  type ResponseJson,
+} from './response-schema.js';
 
-export type WriteMode = 'proposed' | 'direct';
+export type WriteMode = 'proposed' | 'direct' | 'chunk' | 'chunk_final';
 
 export type ResponseVerdict = 'proceed' | 'concerns' | 'refuse' | 'done' | 'error';
 
-const VALID_VERDICTS: ReadonlySet<string> = new Set([
-  'proceed',
-  'concerns',
-  'refuse',
-  'done',
-  'error',
-]);
+export type { CableSent } from './response-schema.js';
 
-const DONE_ONLY_FIELDS = ['CABLES SENT', 'FILES CHANGED', 'ANGEL_MD_UPDATED'] as const;
-
+/**
+ * Internal camelCase view of an angel response. The on-disk format is the
+ * snake_case JSON defined in `response-schema.ts`.
+ */
 export interface ResponseData {
   from: string;
   timestamp: string;
   response: ResponseVerdict;
+  writeMode: WriteMode;
   concerns: string;
   proposedPlan: string;
   questionsForMain: string;
   proceedIf: string;
   testResults: string;
   driftReport: string;
-  cablesSent: string;
-  filesChanged: string;
-  angelMdUpdated: string;
+  cablesSent: CableSent[];
+  filesChanged: string[];
+  angelMdUpdated: boolean;
 }
 
 /**
- * Result of parsing a response file when the angel used direct write mode.
- * Instead of embedding the full angel.md body in PROPOSED PLAN, the angel
- * wrote angel.md directly to the filesystem and the response file only
- * carries a short status message.
- */
-export interface ParseResult {
-  status: 'done' | 'error' | 'partial';
-  body: string;            // angel.md body if using PROPOSED PLAN (legacy)
-  writeMode: WriteMode;    // 'direct' or 'proposed'
-  message: string;         // mensaje corto del angel ("done", "error: ...")
-  /** @deprecated Use writeMode instead — kept for backward compat */
-  directWrite: boolean;    // true si el angel usó direct write
-}
-
-/**
- * Write a response file to _responses/<angel-id>/<date>T<time>-<seq>.md
+ * Write a response file to _responses/<angel-id>/<date>T<time>-<seq>.json
  *
  * Sequence numbering: scans existing same-day files in the target dir
- * and picks max(seq)+1, zero-padded to 3 digits.
+ * and picks max(seq)+1, zero-padded.
+ *
+ * Production responses are written by the angels themselves; this helper is
+ * used by tests and tooling that need to fabricate a valid response file.
  *
  * Returns the full path of the written file.
  */
@@ -70,17 +57,39 @@ export function writeResponse(
 
   const datePrefix = extractDatePrefix(data.timestamp, 'response');
   const seq = computeNextSeq(dir, datePrefix);
-  const filename = `${datePrefix}-${seq}.md`;
+  const filename = `${datePrefix}-${seq}.json`;
   const filePath = join(dir, filename);
 
-  const content = formatResponse(data);
-  writeFileSync(filePath, content, 'utf-8');
+  writeFileSync(filePath, formatResponse(data), 'utf-8');
   return filePath;
 }
 
 /**
+ * Serialize a ResponseData into the canonical on-disk JSON document.
+ */
+export function formatResponse(data: ResponseData): string {
+  const json: ResponseJson = {
+    format_version: RESPONSE_FORMAT_VERSION,
+    from: data.from,
+    timestamp: data.timestamp,
+    verdict: data.response,
+    write_mode: data.writeMode,
+    concerns: data.concerns,
+    proposed_plan: data.proposedPlan,
+    questions_for_main: data.questionsForMain,
+    proceed_if: data.proceedIf,
+    test_results: data.testResults,
+    drift_report: data.driftReport,
+    cables_sent: data.cablesSent,
+    files_changed: data.filesChanged,
+    angel_md_updated: data.angelMdUpdated,
+  };
+  return JSON.stringify(json, null, 2) + '\n';
+}
+
+/**
  * Parse a response file back into structured data.
- * Validates all required fields and throws on malformed input.
+ * Validates the JSON document and throws on malformed input.
  */
 export function parseResponse(filePath: string): ResponseData {
   const raw = readFileSync(filePath, 'utf-8');
@@ -89,181 +98,82 @@ export function parseResponse(filePath: string): ResponseData {
 
 /**
  * Parse response content from a string (useful for testing without files).
+ *
+ * Fail-loud contract: any deviation from the schema throws with a message
+ * naming the offending field. There is no fallback format.
  */
 export function parseResponseContent(raw: string): ResponseData {
-  const from = extractRequiredField(raw, 'FROM');
-  const timestamp = extractRequiredField(raw, 'TIMESTAMP');
-  const response = extractRequiredField(raw, 'RESPONSE');
-
-  if (!VALID_VERDICTS.has(response)) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err: unknown) {
     throw new Error(
-      `Invalid RESPONSE value: "${response}". Must be one of: proceed, concerns, refuse, done, error`,
+      `Response file is not valid JSON: ${(err as Error).message}. ` +
+        `Angels must write a single JSON object matching the response schema ` +
+        `(format_version ${RESPONSE_FORMAT_VERSION}).`,
+      { cause: err },
     );
   }
 
-  const verdict = response as ResponseVerdict;
-
-  const concerns = extractSection(raw, 'CONCERNS') ?? '';
-  const proposedPlan = extractSection(raw, 'PROPOSED PLAN') ?? '';
-  const questionsForMain = extractSection(raw, 'QUESTIONS FOR MAIN') ?? '';
-  const proceedIf = extractSection(raw, 'PROCEED IF') ?? '';
-  const testResults = extractSection(raw, 'TEST_RESULTS') ?? '';
-  const driftReport = extractSection(raw, 'DRIFT REPORT') ?? '';
-
-  const cablesSent = extractOptionalField(raw, 'CABLES SENT') ?? '';
-  const filesChanged = extractOptionalField(raw, 'FILES CHANGED') ?? '';
-  const angelMdUpdated = extractOptionalField(raw, 'ANGEL_MD_UPDATED') ?? '';
-
-  // Validate contextual invariants
-  if (verdict === 'concerns' && proposedPlan.trim() === '') {
+  const result = ResponseJsonSchema.safeParse(parsed);
+  if (!result.success) {
     throw new Error(
-      'RESPONSE is "concerns" but PROPOSED PLAN is empty. ' +
-      'An angel that raises concerns must include a proposed plan. ' +
-      'This is almost certainly a bug in the angel response.',
+      `Response JSON does not match the schema: ${formatSchemaIssues(result.error)}`,
     );
   }
 
-  // Validate done-only fields: they must not appear on non-done responses
-  if (verdict !== 'done') {
-    for (const field of DONE_ONLY_FIELDS) {
-      const value = field === 'CABLES SENT' ? cablesSent
-        : field === 'FILES CHANGED' ? filesChanged
-        : angelMdUpdated;
-      if (value !== '') {
-        throw new Error(
-          `Field "${field}" is only valid when RESPONSE is "done", but RESPONSE is "${verdict}"`,
-        );
-      }
+  return validateCrossFieldRules(result.data);
+}
+
+/**
+ * Contextual invariants that the flat schema cannot express.
+ */
+function validateCrossFieldRules(json: ResponseJson): ResponseData {
+  if (json.verdict === 'concerns' && json.proposed_plan.trim() === '') {
+    throw new Error(
+      'verdict is "concerns" but proposed_plan is empty. ' +
+        'An angel that raises concerns must include a proposed plan. ' +
+        'This is almost certainly a bug in the angel response.',
+    );
+  }
+
+  if (json.verdict !== 'done') {
+    if (json.cables_sent.length > 0) {
+      throw new Error(
+        `cables_sent is only valid when verdict is "done", but verdict is "${json.verdict}"`,
+      );
+    }
+    if (json.files_changed.length > 0) {
+      throw new Error(
+        `files_changed is only valid when verdict is "done", but verdict is "${json.verdict}"`,
+      );
+    }
+    if (json.angel_md_updated) {
+      throw new Error(
+        `angel_md_updated is only valid when verdict is "done", but verdict is "${json.verdict}"`,
+      );
     }
   }
 
   return {
-    from,
-    timestamp,
-    response: verdict,
-    concerns,
-    proposedPlan,
-    questionsForMain,
-    proceedIf,
-    testResults,
-    driftReport,
-    cablesSent,
-    filesChanged,
-    angelMdUpdated,
+    from: json.from,
+    timestamp: json.timestamp,
+    response: json.verdict,
+    writeMode: json.write_mode,
+    concerns: json.concerns,
+    proposedPlan: json.proposed_plan,
+    questionsForMain: json.questions_for_main,
+    proceedIf: json.proceed_if,
+    testResults: json.test_results,
+    driftReport: json.drift_report,
+    cablesSent: json.cables_sent,
+    filesChanged: json.files_changed,
+    angelMdUpdated: json.angel_md_updated,
   };
 }
 
-export function formatResponse(data: ResponseData): string {
-  const lines: string[] = [
-    `FROM: ${data.from}`,
-    `TIMESTAMP: ${data.timestamp}`,
-    `RESPONSE: ${data.response}`,
-    '',
-    'CONCERNS:',
-    data.concerns,
-    '',
-    'PROPOSED PLAN:',
-    data.proposedPlan,
-    '',
-    'QUESTIONS FOR MAIN:',
-    data.questionsForMain,
-    '',
-    'PROCEED IF:',
-    data.proceedIf,
-    '',
-    'TEST_RESULTS:',
-    data.testResults,
-    '',
-    'DRIFT REPORT:',
-    data.driftReport,
-    '',
-  ];
+// Re-exported so error messages elsewhere can reference the same constant.
+export { RESPONSE_FORMAT_VERSION } from './response-schema.js';
 
-  if (data.response === 'done') {
-    lines.push(`CABLES SENT: ${data.cablesSent}`);
-    lines.push(`FILES CHANGED: ${data.filesChanged}`);
-    lines.push(`ANGEL_MD_UPDATED: ${data.angelMdUpdated}`);
-    lines.push('');
-  }
-
-  return lines.join('\n');
-}
-
-// ─── Direct Write Mode Detection ──────────────────────────────────────────────
-
-/**
- * Detect which write mode the angel used based on the response text.
- *
- * - 'direct': response contains "WRITE_MODE: DIRECT" header
- * - 'proposed': response contains "PROPOSED PLAN:" section header
- *   (backward compatible default)
- */
-export function detectWriteMode(responseText: string): 'proposed' | 'direct' {
-  if (/^WRITE_MODE:\s*DIRECT$/m.test(responseText)) {
-    return 'direct';
-  }
-  return 'proposed';
-}
-
-// ─── Chunk Mode Detection ─────────────────────────────────────────────────────
-
-/**
- * Detect the chunk write mode from the response text.
- *
- * - 'chunk': response contains "WRITE_MODE: CHUNK" (more chunks coming)
- * - 'chunk_final': response contains "WRITE_MODE: CHUNK_FINAL" (last chunk)
- * - 'direct': response contains "WRITE_MODE: DIRECT"
- * - 'proposed': default (no write mode header found)
- */
-export function detectChunkMode(responseText: string): 'direct' | 'chunk' | 'chunk_final' | 'proposed' {
-  if (/^WRITE_MODE:\s*CHUNK_FINAL$/m.test(responseText)) {
-    return 'chunk_final';
-  }
-  if (/^WRITE_MODE:\s*CHUNK$/m.test(responseText)) {
-    return 'chunk';
-  }
-  if (/^WRITE_MODE:\s*DIRECT$/m.test(responseText)) {
-    return 'direct';
-  }
-  return 'proposed';
-}
-
-/**
- * Parse a direct-write response into a ParseResult.
- *
- * In direct-write mode, the response file does NOT carry the full angel.md
- * body in PROPOSED PLAN. Instead it has:
- *   WRITE_MODE: DIRECT
- *   RESPONSE: done  |  error
- *
- * The `message` is the value of the RESPONSE field ("done" or "error").
- * If RESPONSE is "error", any PROPOSED PLAN content (if present) is
- * captured in `body` for diagnostic purposes.
- */
-export function parseDirectWriteResponse(raw: string): ParseResult {
-  const responseValue = extractRequiredField(raw, 'RESPONSE').toLowerCase();
-  const message = responseValue;
-  const isError = responseValue === 'error';
-
-  let status: 'done' | 'error' | 'partial';
-  if (responseValue === 'done') {
-    status = 'done';
-  } else if (isError || responseValue === '') {
-    status = 'error';
-  } else {
-    status = 'partial';
-  }
-
-  // In direct-write mode, PROPOSED PLAN is usually empty. If the angel
-  // included it for error diagnostics, capture it.
-  const body = extractSection(raw, 'PROPOSED PLAN') ?? '';
-
-  return {
-    status,
-    body,
-    writeMode: 'direct',
-    directWrite: true,
-    message,
-  };
-}
-
+// Narrow re-export used by callers that only need to know the Zod error type.
+export type ResponseSchemaError = z.ZodError;

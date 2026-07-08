@@ -91,7 +91,8 @@ export function extractDatePrefix(isoTimestamp: string, kind: string): string {
 
 /**
  * Compute the next zero-padded sequence number for a same-day file in `dir`.
- * Filenames are expected to look like "<YYYY-MM-DD>T<HHMM>-<NNNN>.md".
+ * Filenames are expected to look like "<YYYY-MM-DD>T<HHMM>-<NNNN>.md" (briefs,
+ * cables) or ".json" (responses); both extensions count toward the sequence.
  *
  * The sequence matcher is `(\d+)` (not a fixed width): a fixed `\d{3}` made
  * the 1000th same-day file invisible to the scanner, so `computeNextSeq`
@@ -112,7 +113,7 @@ export function computeNextSeq(dir: string, datePrefix: string): string {
   }
 
   for (const entry of entries) {
-    const match = entry.match(/^(\d{4}-\d{2}-\d{2})T\d{4}-(\d+)\.md$/);
+    const match = entry.match(/^(\d{4}-\d{2}-\d{2})T\d{4}-(\d+)\.(?:md|json)$/);
     if (match && match[1] === dateOnly) {
       const seq = parseInt(match[2], 10);
       if (seq > maxSeq) {

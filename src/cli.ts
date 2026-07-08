@@ -97,7 +97,8 @@ program
   .option('--depth <n>', 'Recursion depth for file listing (default: 3)')
   .option('--target-pct <n>', 'Memory target percentage for angel.md density (1-100, overrides config)')
   .option('--max-tokens <n>', 'Max tokens for angel.md (overrides config)')
-  .action(async (options: { angel?: string; force?: boolean; autoActivate?: boolean; depth?: string; targetPct?: string; maxTokens?: string }) => {
+  .option('--parallel <n>', 'Concurrent angel onboards (1-8, default: 4)')
+  .action(async (options: { angel?: string; force?: boolean; autoActivate?: boolean; depth?: string; targetPct?: string; maxTokens?: string; parallel?: string }) => {
     try {
       const depth =
         options.depth !== undefined ? parseInt(options.depth, 10) : 3;
@@ -112,6 +113,8 @@ program
         options.targetPct !== undefined ? parseInt(options.targetPct, 10) : undefined;
       const maxTokens =
         options.maxTokens !== undefined ? parseInt(options.maxTokens, 10) : undefined;
+      const parallel =
+        options.parallel !== undefined ? parseInt(options.parallel, 10) : undefined;
       await onboardAngels(process.cwd(), {
         angel: options.angel,
         force: options.force,
@@ -119,6 +122,7 @@ program
         depth,
         targetPct,
         maxTokens,
+        parallel,
       });
     } catch (err: unknown) {
       handleError(err, 1);
@@ -183,11 +187,15 @@ program
   .argument('<angel-id>', 'Angel identifier')
   .argument('<brief>', 'Path to brief file')
   .description('Phase 2: Re-invoke angel with approval in execute mode')
-  .option('--strict-territory', 'Block and rollback out-of-territory writes instead of warning')
-  .action(async (angelId: string, briefPath: string, options: { strictTerritory?: boolean }) => {
+  .option('--strict-territory', 'Block and rollback out-of-territory writes (default)')
+  .option('--no-strict-territory', 'Warn about out-of-territory writes instead of blocking')
+  .action(async (angelId: string, briefPath: string, options: { strictTerritory?: boolean }, command: Command) => {
     try {
+      // Tri-state: only forward the flag when the user typed it, so the
+      // config default (execute.strict_territory) applies otherwise.
+      const explicit = command.getOptionValueSource('strictTerritory') === 'cli';
       const exitCode = await executeAngel(process.cwd(), angelId, briefPath, {
-        strictTerritory: options.strictTerritory,
+        strictTerritory: explicit ? options.strictTerritory : undefined,
       });
       process.exit(exitCode);
     } catch (err: unknown) {
@@ -200,9 +208,14 @@ program
   .argument('<angel-id>', 'Angel identifier')
   .argument('<task>', 'Task description')
   .description('Brief angel (review) then auto-execute if approved; exit 1/2 on concerns/refuse')
-  .action(async (angelId: string, task: string) => {
+  .option('--strict-territory', 'Block and rollback out-of-territory writes (default)')
+  .option('--no-strict-territory', 'Warn about out-of-territory writes instead of blocking')
+  .action(async (angelId: string, task: string, options: { strictTerritory?: boolean }, command: Command) => {
     try {
-      const exitCode = await doAngel(process.cwd(), angelId, task);
+      const explicit = command.getOptionValueSource('strictTerritory') === 'cli';
+      const exitCode = await doAngel(process.cwd(), angelId, task, {
+        strictTerritory: explicit ? options.strictTerritory : undefined,
+      });
       process.exit(exitCode);
     } catch (err: unknown) {
       handleError(err, 3);
@@ -257,7 +270,8 @@ program
   .option('--since <ref>', 'ISO timestamp to scope the newspaper delta')
   .option('--timeout <seconds>', 'Per-angel timeout in seconds (overrides config default)')
   .option('--angel <id>', 'Sweep only this angel (by ID)')
-  .action(async (options: { since?: string; timeout?: string; angel?: string }) => {
+  .option('--parallel <n>', 'Concurrent angel sweeps (1-8, default: 4)')
+  .action(async (options: { since?: string; timeout?: string; angel?: string; parallel?: string }) => {
     try {
       let timeoutSeconds: number | undefined;
       if (options.timeout !== undefined) {
@@ -268,7 +282,9 @@ program
           return;
         }
       }
-      const exitCode = await sweepAngels(process.cwd(), { since: options.since, timeoutSeconds, angel: options.angel });
+      const parallel =
+        options.parallel !== undefined ? parseInt(options.parallel, 10) : undefined;
+      const exitCode = await sweepAngels(process.cwd(), { since: options.since, timeoutSeconds, angel: options.angel, parallel });
       process.exit(exitCode);
     } catch (err: unknown) {
       handleError(err, 1);

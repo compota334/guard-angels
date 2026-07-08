@@ -1,1031 +1,462 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import {
   writeResponse,
   parseResponse,
   parseResponseContent,
-  detectWriteMode,
-  detectChunkMode,
-  parseDirectWriteResponse,
+  formatResponse,
+  type ResponseData,
 } from '../../src/protocol/response.js';
-import type { ResponseData } from '../../src/protocol/response.js';
 
-function makeResponseData(overrides: Partial<ResponseData> = {}): ResponseData {
+let tmpDir: string;
+
+beforeEach(() => {
+  tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'guard-angels-response-'));
+});
+
+afterEach(() => {
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+function baseData(overrides: Partial<ResponseData> = {}): ResponseData {
   return {
     from: 'src-auth',
     timestamp: '2026-04-28T14:32:00Z',
     response: 'proceed',
+    writeMode: 'proposed',
     concerns: '',
-    proposedPlan: '1. Update session.ts\n2. Add expiration check',
+    proposedPlan: 'Add rate limiting middleware.',
     questionsForMain: '',
     proceedIf: '',
     testResults: '',
     driftReport: '',
-    cablesSent: '',
-    filesChanged: '',
-    angelMdUpdated: '',
+    cablesSent: [],
+    filesChanged: [],
+    angelMdUpdated: false,
     ...overrides,
   };
 }
 
-function makeDoneResponseData(overrides: Partial<ResponseData> = {}): ResponseData {
+/** A minimal valid response JSON document (as an object, stringified by tests). */
+function baseJson(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
+    format_version: 1,
     from: 'src-auth',
-    timestamp: '2026-04-28T14:45:00Z',
-    response: 'done',
-    concerns: '',
-    proposedPlan: '',
-    questionsForMain: '',
-    proceedIf: '',
-    testResults: 'npm test: 12 passed, 0 failed',
-    driftReport: '',
-    cablesSent: '.angels/_outbox/src-auth/2026-04-28T1445-cable-to-api.md',
-    filesChanged: 'src/auth/session.ts, src/auth/middleware.ts',
-    angelMdUpdated: 'true',
+    timestamp: '2026-04-28T14:32:00Z',
+    verdict: 'proceed',
     ...overrides,
   };
 }
 
 describe('writeResponse', () => {
-  let tmpDir: string;
+  it('creates a .json response file and returns its path', () => {
+    const filePath = writeResponse(tmpDir, baseData());
 
-  beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'response-test-'));
-    mkdirSync(join(tmpDir, '.angels', '_responses'), { recursive: true });
-  });
-
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('creates a response file and returns its path', () => {
-    const data = makeResponseData();
-    const filePath = writeResponse(tmpDir, data);
-
-    expect(filePath).toContain('.angels/_responses/src-auth/');
-    expect(filePath).toMatch(/2026-04-28T1432-0001\.md$/);
-
-    const content = readFileSync(filePath, 'utf-8');
-    expect(content).toContain('FROM: src-auth');
-    expect(content).toContain('TIMESTAMP: 2026-04-28T14:32:00Z');
-    expect(content).toContain('RESPONSE: proceed');
-    expect(content).toContain('PROPOSED PLAN:');
-    expect(content).toContain('1. Update session.ts');
+    expect(fs.existsSync(filePath)).toBe(true);
+    expect(filePath).toMatch(/2026-04-28T1432-\d{4}\.json$/);
+    expect(filePath).toContain(join('_responses', 'src-auth'));
   });
 
   it('creates the angel responses directory if it does not exist', () => {
-    const data = makeResponseData({ from: 'src-api' });
-    const filePath = writeResponse(tmpDir, data);
-
-    expect(filePath).toContain('src-api');
-    expect(readFileSync(filePath, 'utf-8')).toContain('FROM: src-api');
+    const filePath = writeResponse(tmpDir, baseData({ from: 'src-new' }));
+    expect(fs.existsSync(filePath)).toBe(true);
   });
 
   it('increments sequence number for same-day responses', () => {
-    const data = makeResponseData();
+    const path1 = writeResponse(tmpDir, baseData());
+    const path2 = writeResponse(tmpDir, baseData({ timestamp: '2026-04-28T15:00:00Z' }));
+    const path3 = writeResponse(tmpDir, baseData({ timestamp: '2026-04-28T16:30:00Z' }));
 
-    const path1 = writeResponse(tmpDir, data);
-    expect(path1).toMatch(/-0001\.md$/);
-
-    const path2 = writeResponse(tmpDir, { ...data, timestamp: '2026-04-28T15:00:00Z' });
-    expect(path2).toMatch(/-0002\.md$/);
-
-    const path3 = writeResponse(tmpDir, { ...data, timestamp: '2026-04-28T16:30:00Z' });
-    expect(path3).toMatch(/-0003\.md$/);
+    expect(path1).toMatch(/-0001\.json$/);
+    expect(path2).toMatch(/-0002\.json$/);
+    expect(path3).toMatch(/-0003\.json$/);
   });
 
   it('resets sequence number for a different day', () => {
-    const data = makeResponseData();
+    const path1 = writeResponse(tmpDir, baseData());
+    const path2 = writeResponse(tmpDir, baseData({ timestamp: '2026-04-29T10:00:00Z' }));
 
-    const path1 = writeResponse(tmpDir, data);
-    expect(path1).toMatch(/-0001\.md$/);
-
-    const path2 = writeResponse(tmpDir, {
-      ...data,
-      timestamp: '2026-04-29T10:00:00Z',
-    });
-    expect(path2).toMatch(/-0001\.md$/);
+    expect(path1).toMatch(/2026-04-28T1432-0001\.json$/);
+    expect(path2).toMatch(/2026-04-29T1000-0001\.json$/);
   });
 
-  it('includes done-only fields when response is done', () => {
-    const data = makeDoneResponseData();
-    const filePath = writeResponse(tmpDir, data);
+  it('serializes the full schema including arrays and flags', () => {
+    const filePath = writeResponse(
+      tmpDir,
+      baseData({
+        response: 'done',
+        cablesSent: [{ to: 'src-api', type: 'fyi' }],
+        filesChanged: ['src/auth/login.ts'],
+        angelMdUpdated: true,
+      }),
+    );
 
-    const content = readFileSync(filePath, 'utf-8');
-    expect(content).toContain('CABLES SENT: .angels/_outbox/src-auth/2026-04-28T1445-cable-to-api.md');
-    expect(content).toContain('FILES CHANGED: src/auth/session.ts, src/auth/middleware.ts');
-    expect(content).toContain('ANGEL_MD_UPDATED: true');
-  });
-
-  it('omits done-only fields when response is not done', () => {
-    const data = makeResponseData({ response: 'proceed' });
-    const filePath = writeResponse(tmpDir, data);
-
-    const content = readFileSync(filePath, 'utf-8');
-    expect(content).not.toContain('CABLES SENT:');
-    expect(content).not.toContain('FILES CHANGED:');
-    expect(content).not.toContain('ANGEL_MD_UPDATED:');
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    expect(parsed.format_version).toBe(1);
+    expect(parsed.verdict).toBe('done');
+    expect(parsed.cables_sent).toEqual([{ to: 'src-api', type: 'fyi' }]);
+    expect(parsed.files_changed).toEqual(['src/auth/login.ts']);
+    expect(parsed.angel_md_updated).toBe(true);
   });
 
   it('throws on invalid ISO timestamp', () => {
-    const data = makeResponseData({ timestamp: 'bad-timestamp' });
-    expect(() => writeResponse(tmpDir, data)).toThrow('Invalid ISO timestamp');
+    expect(() => writeResponse(tmpDir, baseData({ timestamp: 'not-a-date' }))).toThrow(
+      /Invalid ISO timestamp/,
+    );
   });
 
   it('handles sequence gaps', () => {
-    const data = makeResponseData();
     const dir = join(tmpDir, '.angels', '_responses', 'src-auth');
-    mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(join(dir, '2026-04-28T1000-0007.json'), '{}');
 
-    // Legacy 3-digit names still parse
-    writeFileSync(join(dir, '2026-04-28T1200-001.md'), 'placeholder');
-    writeFileSync(join(dir, '2026-04-28T1300-007.md'), 'placeholder');
+    const filePath = writeResponse(tmpDir, baseData());
+    expect(filePath).toMatch(/-0008\.json$/);
+  });
 
-    const filePath = writeResponse(tmpDir, data);
-    expect(filePath).toMatch(/-0008\.md$/);
+  it('counts legacy .md files toward the sequence', () => {
+    const dir = join(tmpDir, '.angels', '_responses', 'src-auth');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(join(dir, '2026-04-28T1000-0003.md'), 'old');
+
+    const filePath = writeResponse(tmpDir, baseData());
+    expect(filePath).toMatch(/-0004\.json$/);
   });
 });
 
 describe('parseResponseContent', () => {
-  it('parses a proceed response', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: proceed',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '1. Update session.ts',
-      '2. Add expiration check',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-    ].join('\n');
+  it('parses a proceed response with defaults for omitted fields', () => {
+    const data = parseResponseContent(JSON.stringify(baseJson()));
 
-    const parsed = parseResponseContent(content);
-    expect(parsed.from).toBe('src-auth');
-    expect(parsed.timestamp).toBe('2026-04-28T14:32:00Z');
-    expect(parsed.response).toBe('proceed');
-    expect(parsed.concerns).toBe('');
-    expect(parsed.proposedPlan).toBe('1. Update session.ts\n2. Add expiration check');
-    expect(parsed.questionsForMain).toBe('');
-    expect(parsed.proceedIf).toBe('');
-    expect(parsed.testResults).toBe('');
-    expect(parsed.cablesSent).toBe('');
-    expect(parsed.filesChanged).toBe('');
-    expect(parsed.angelMdUpdated).toBe('');
+    expect(data.from).toBe('src-auth');
+    expect(data.timestamp).toBe('2026-04-28T14:32:00Z');
+    expect(data.response).toBe('proceed');
+    expect(data.writeMode).toBe('proposed');
+    expect(data.concerns).toBe('');
+    expect(data.proposedPlan).toBe('');
+    expect(data.cablesSent).toEqual([]);
+    expect(data.filesChanged).toEqual([]);
+    expect(data.angelMdUpdated).toBe(false);
   });
 
   it('parses a concerns response', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: concerns',
-      '',
-      'CONCERNS:',
-      '- Session expiration may break active users',
-      '- Need to verify token refresh flow',
-      '',
-      'PROPOSED PLAN:',
-      '1. Add TTL to sessions',
-      '2. Implement refresh mechanism',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '- What should the default TTL be?',
-      '- Should we force-logout or silently refresh?',
-      '',
-      'PROCEED IF:',
-      'Default TTL is specified and refresh behavior is clarified',
-      '',
-      'TEST_RESULTS:',
-      '',
-    ].join('\n');
+    const data = parseResponseContent(
+      JSON.stringify(
+        baseJson({
+          verdict: 'concerns',
+          concerns: 'The endpoint lacks tests.',
+          proposed_plan: 'Add tests first, then apply the change.',
+          proceed_if: 'Tests are added',
+        }),
+      ),
+    );
 
-    const parsed = parseResponseContent(content);
-    expect(parsed.response).toBe('concerns');
-    expect(parsed.concerns).toContain('Session expiration may break active users');
-    expect(parsed.concerns).toContain('Need to verify token refresh flow');
-    expect(parsed.proposedPlan).toContain('Add TTL to sessions');
-    expect(parsed.questionsForMain).toContain('What should the default TTL be?');
-    expect(parsed.proceedIf).toBe('Default TTL is specified and refresh behavior is clarified');
+    expect(data.response).toBe('concerns');
+    expect(data.concerns).toBe('The endpoint lacks tests.');
+    expect(data.proposedPlan).toBe('Add tests first, then apply the change.');
+    expect(data.proceedIf).toBe('Tests are added');
   });
 
   it('parses a refuse response', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: refuse',
-      '',
-      'CONCERNS:',
-      '- This change violates the security invariant in angel.md',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      'The invariant is updated first with a valid justification',
-      '',
-      'TEST_RESULTS:',
-      '',
-    ].join('\n');
+    const data = parseResponseContent(
+      JSON.stringify(
+        baseJson({
+          verdict: 'refuse',
+          concerns: 'This violates INV-002: tokens must never be logged.',
+        }),
+      ),
+    );
 
-    const parsed = parseResponseContent(content);
-    expect(parsed.response).toBe('refuse');
-    expect(parsed.concerns).toContain('security invariant');
-    expect(parsed.proceedIf).toContain('invariant is updated first');
+    expect(data.response).toBe('refuse');
+    expect(data.concerns).toContain('INV-002');
   });
 
   it('parses a done response with done-only fields', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:45:00Z',
-      'RESPONSE: done',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      'npm test: 12 passed, 0 failed',
-      '',
-      'CABLES SENT: .angels/_outbox/src-auth/2026-04-28T1445-cable.md',
-      'FILES CHANGED: src/auth/session.ts, src/auth/middleware.ts',
-      'ANGEL_MD_UPDATED: true',
-    ].join('\n');
+    const data = parseResponseContent(
+      JSON.stringify(
+        baseJson({
+          verdict: 'done',
+          proposed_plan: 'Applied the changes.',
+          test_results: '12 passed, 0 failed',
+          cables_sent: [
+            { to: 'src-api', type: 'fyi' },
+            { to: 'src-db', type: 'breaking_change' },
+          ],
+          files_changed: ['src/auth/login.ts', 'src/auth/rateLimit.ts'],
+          angel_md_updated: true,
+        }),
+      ),
+    );
 
-    const parsed = parseResponseContent(content);
-    expect(parsed.response).toBe('done');
-    expect(parsed.testResults).toBe('npm test: 12 passed, 0 failed');
-    expect(parsed.cablesSent).toBe('.angels/_outbox/src-auth/2026-04-28T1445-cable.md');
-    expect(parsed.filesChanged).toBe('src/auth/session.ts, src/auth/middleware.ts');
-    expect(parsed.angelMdUpdated).toBe('true');
+    expect(data.response).toBe('done');
+    expect(data.testResults).toBe('12 passed, 0 failed');
+    expect(data.cablesSent).toEqual([
+      { to: 'src-api', type: 'fyi' },
+      { to: 'src-db', type: 'breaking_change' },
+    ]);
+    expect(data.filesChanged).toEqual(['src/auth/login.ts', 'src/auth/rateLimit.ts']);
+    expect(data.angelMdUpdated).toBe(true);
   });
 
   it('parses a done response with no cables sent', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:45:00Z',
-      'RESPONSE: done',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-      'CABLES SENT: none',
-      'FILES CHANGED: src/auth/session.ts',
-      'ANGEL_MD_UPDATED: false',
-    ].join('\n');
+    const data = parseResponseContent(
+      JSON.stringify(baseJson({ verdict: 'done', files_changed: ['a.ts'] })),
+    );
 
-    const parsed = parseResponseContent(content);
-    expect(parsed.response).toBe('done');
-    expect(parsed.cablesSent).toBe('none');
-    expect(parsed.filesChanged).toBe('src/auth/session.ts');
-    expect(parsed.angelMdUpdated).toBe('false');
+    expect(data.cablesSent).toEqual([]);
+    expect(data.filesChanged).toEqual(['a.ts']);
   });
 
   it('parses an error response', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: error',
-      '',
-      'CONCERNS:',
-      '- Failed to read the target file: ENOENT',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-    ].join('\n');
-
-    const parsed = parseResponseContent(content);
-    expect(parsed.response).toBe('error');
-    expect(parsed.concerns).toContain('Failed to read the target file');
-  });
-
-  it('throws on invalid RESPONSE value', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: approved',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-    ].join('\n');
-
-    expect(() => parseResponseContent(content)).toThrow(
-      'Invalid RESPONSE value: "approved". Must be one of: proceed, concerns, refuse, done, error',
+    const data = parseResponseContent(
+      JSON.stringify(baseJson({ verdict: 'error', concerns: 'Could not read the folder.' })),
     );
+
+    expect(data.response).toBe('error');
+    expect(data.concerns).toBe('Could not read the folder.');
   });
 
-  it('throws on missing FROM field', () => {
-    const content = [
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: proceed',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-    ].join('\n');
-
-    expect(() => parseResponseContent(content)).toThrow('Missing required field "FROM"');
+  it('parses write_mode direct', () => {
+    const data = parseResponseContent(
+      JSON.stringify(baseJson({ verdict: 'done', write_mode: 'direct', angel_md_updated: true })),
+    );
+    expect(data.writeMode).toBe('direct');
   });
 
-  it('throws on missing TIMESTAMP field', () => {
-    const content = [
-      'FROM: src-auth',
-      'RESPONSE: proceed',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-    ].join('\n');
-
-    expect(() => parseResponseContent(content)).toThrow('Missing required field "TIMESTAMP"');
+  it('parses write_mode chunk and chunk_final', () => {
+    const chunk = parseResponseContent(
+      JSON.stringify(baseJson({ verdict: 'done', write_mode: 'chunk' })),
+    );
+    const chunkFinal = parseResponseContent(
+      JSON.stringify(baseJson({ verdict: 'done', write_mode: 'chunk_final' })),
+    );
+    expect(chunk.writeMode).toBe('chunk');
+    expect(chunkFinal.writeMode).toBe('chunk_final');
   });
 
-  it('throws on missing RESPONSE field', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-    ].join('\n');
+  it('throws on invalid verdict value', () => {
+    expect(() =>
+      parseResponseContent(JSON.stringify(baseJson({ verdict: 'approved' }))),
+    ).toThrow(/verdict/);
+  });
 
-    expect(() => parseResponseContent(content)).toThrow('Missing required field "RESPONSE"');
+  it('throws on missing from field', () => {
+    const json = baseJson();
+    delete json.from;
+    expect(() => parseResponseContent(JSON.stringify(json))).toThrow(/from/);
+  });
+
+  it('throws on missing timestamp field', () => {
+    const json = baseJson();
+    delete json.timestamp;
+    expect(() => parseResponseContent(JSON.stringify(json))).toThrow(/timestamp/);
+  });
+
+  it('throws on missing verdict field', () => {
+    const json = baseJson();
+    delete json.verdict;
+    expect(() => parseResponseContent(JSON.stringify(json))).toThrow(/verdict/);
+  });
+
+  it('throws on missing format_version', () => {
+    const json = baseJson();
+    delete json.format_version;
+    expect(() => parseResponseContent(JSON.stringify(json))).toThrow(/format_version/);
+  });
+
+  it('throws on wrong format_version', () => {
+    expect(() =>
+      parseResponseContent(JSON.stringify(baseJson({ format_version: 2 }))),
+    ).toThrow(/format_version/);
+  });
+
+  it('rejects unknown fields (strict schema)', () => {
+    expect(() =>
+      parseResponseContent(JSON.stringify(baseJson({ invented_field: 'x' }))),
+    ).toThrow(/invented_field|unrecognized/i);
+  });
+
+  it('rejects malformed cables_sent entries', () => {
+    expect(() =>
+      parseResponseContent(
+        JSON.stringify(baseJson({ verdict: 'done', cables_sent: [{ to: 'src-api' }] })),
+      ),
+    ).toThrow(/cables_sent/);
+  });
+
+  it('rejects non-string files_changed entries', () => {
+    expect(() =>
+      parseResponseContent(
+        JSON.stringify(baseJson({ verdict: 'done', files_changed: [42] })),
+      ),
+    ).toThrow(/files_changed/);
   });
 
   it('rejects done-only fields on proceed response', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: proceed',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-      'FILES CHANGED: src/auth/session.ts',
-    ].join('\n');
-
-    expect(() => parseResponseContent(content)).toThrow(
-      'Field "FILES CHANGED" is only valid when RESPONSE is "done", but RESPONSE is "proceed"',
-    );
+    expect(() =>
+      parseResponseContent(
+        JSON.stringify(baseJson({ verdict: 'proceed', files_changed: ['a.ts'] })),
+      ),
+    ).toThrow(/files_changed.*done/);
   });
 
-  it('rejects CABLES SENT on concerns response', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: concerns',
-      '',
-      'CONCERNS:',
-      '- Something',
-      '',
-      'PROPOSED PLAN:',
-      '- Proposed fix here',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-      'CABLES SENT: some-cable.md',
-    ].join('\n');
-
-    expect(() => parseResponseContent(content)).toThrow(
-      'Field "CABLES SENT" is only valid when RESPONSE is "done", but RESPONSE is "concerns"',
-    );
+  it('rejects cables_sent on concerns response', () => {
+    expect(() =>
+      parseResponseContent(
+        JSON.stringify(
+          baseJson({
+            verdict: 'concerns',
+            proposed_plan: 'a plan',
+            cables_sent: [{ to: 'src-api', type: 'fyi' }],
+          }),
+        ),
+      ),
+    ).toThrow(/cables_sent.*done/);
   });
 
-  it('rejects ANGEL_MD_UPDATED on refuse response', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: refuse',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-      'ANGEL_MD_UPDATED: true',
-    ].join('\n');
-
-    expect(() => parseResponseContent(content)).toThrow(
-      'Field "ANGEL_MD_UPDATED" is only valid when RESPONSE is "done", but RESPONSE is "refuse"',
-    );
+  it('rejects angel_md_updated on refuse response', () => {
+    expect(() =>
+      parseResponseContent(
+        JSON.stringify(baseJson({ verdict: 'refuse', angel_md_updated: true })),
+      ),
+    ).toThrow(/angel_md_updated.*done/);
   });
 
   it('rejects done-only fields on error response', () => {
-    const content = [
+    expect(() =>
+      parseResponseContent(
+        JSON.stringify(baseJson({ verdict: 'error', files_changed: ['a.ts'] })),
+      ),
+    ).toThrow(/files_changed.*done/);
+  });
+
+  it('throws when verdict is concerns but proposed_plan is empty', () => {
+    expect(() =>
+      parseResponseContent(JSON.stringify(baseJson({ verdict: 'concerns' }))),
+    ).toThrow(/concerns.*proposed_plan/);
+  });
+
+  it('throws on invalid JSON with a descriptive message', () => {
+    expect(() => parseResponseContent('this is not json')).toThrow(/not valid JSON/);
+  });
+
+  it('throws on the old markdown response format', () => {
+    const legacy = [
       'FROM: src-auth',
       'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: error',
+      'RESPONSE: proceed',
       '',
       'CONCERNS:',
       '',
       'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-      'FILES CHANGED: src/auth/session.ts',
+      'No changes needed.',
     ].join('\n');
+    expect(() => parseResponseContent(legacy)).toThrow(/not valid JSON/);
+  });
 
-    expect(() => parseResponseContent(content)).toThrow(
-      'Field "FILES CHANGED" is only valid when RESPONSE is "done", but RESPONSE is "error"',
+  it('throws on a JSON document that is not an object', () => {
+    expect(() => parseResponseContent('["array"]')).toThrow();
+    expect(() => parseResponseContent('"string"')).toThrow();
+  });
+
+  it('preserves multi-line text fields', () => {
+    const data = parseResponseContent(
+      JSON.stringify(
+        baseJson({ concerns: 'line one\nline two\nline three' }),
+      ),
     );
-  });
-
-  it('handles trailing whitespace in field values', () => {
-    const content = [
-      'FROM: src-auth   ',
-      'TIMESTAMP: 2026-04-28T14:32:00Z   ',
-      'RESPONSE: proceed   ',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-    ].join('\n');
-
-    const parsed = parseResponseContent(content);
-    expect(parsed.from).toBe('src-auth');
-    expect(parsed.timestamp).toBe('2026-04-28T14:32:00Z');
-    expect(parsed.response).toBe('proceed');
-  });
-
-  it('handles CRLF line endings', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: proceed',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '1. Do the thing',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-    ].join('\r\n');
-
-    const parsed = parseResponseContent(content);
-    expect(parsed.from).toBe('src-auth');
-    expect(parsed.response).toBe('proceed');
-    expect(parsed.proposedPlan).toBe('1. Do the thing');
-  });
-
-  it('throws on completely invalid content', () => {
-    const content = 'this is not a valid response at all';
-    expect(() => parseResponseContent(content)).toThrow('Missing required field');
-  });
-
-  it('handles optional TEST_RESULTS section', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: proceed',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '1. Step one',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      'vitest run: 5 passed',
-      'npm run build: success',
-      '',
-    ].join('\n');
-
-    const parsed = parseResponseContent(content);
-    expect(parsed.testResults).toBe('vitest run: 5 passed\nnpm run build: success');
+    expect(data.concerns.split('\n')).toHaveLength(3);
   });
 });
 
-describe('parseResponse (file-based)', () => {
-  let tmpDir: string;
+describe('parseResponse (file-based round trips)', () => {
+  function roundTrip(data: ResponseData): ResponseData {
+    const filePath = writeResponse(tmpDir, data);
+    return parseResponse(filePath);
+  }
 
-  beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'response-parse-'));
-    mkdirSync(join(tmpDir, '.angels', '_responses'), { recursive: true });
+  it('round-trips a proceed response', () => {
+    const data = baseData();
+    expect(roundTrip(data)).toEqual(data);
   });
 
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
+  it('round-trips a done response with all fields', () => {
+    const data = baseData({
+      response: 'done',
+      proposedPlan: 'Applied.',
+      testResults: 'npm test: 12 passed, 0 failed',
+      cablesSent: [{ to: 'src-api', type: 'fyi' }],
+      filesChanged: ['src/auth/login.ts'],
+      angelMdUpdated: true,
+    });
+    expect(roundTrip(data)).toEqual(data);
   });
 
-  it('round-trips writeResponse -> parseResponse for proceed', () => {
-    const original = makeResponseData();
-    const filePath = writeResponse(tmpDir, original);
-    const parsed = parseResponse(filePath);
-
-    expect(parsed.from).toBe(original.from);
-    expect(parsed.timestamp).toBe(original.timestamp);
-    expect(parsed.response).toBe(original.response);
-    expect(parsed.proposedPlan).toBe(original.proposedPlan);
-    expect(parsed.concerns).toBe('');
-    expect(parsed.questionsForMain).toBe('');
-    expect(parsed.proceedIf).toBe('');
-    expect(parsed.testResults).toBe('');
-    expect(parsed.cablesSent).toBe('');
-    expect(parsed.filesChanged).toBe('');
-    expect(parsed.angelMdUpdated).toBe('');
-  });
-
-  it('round-trips writeResponse -> parseResponse for done', () => {
-    const original = makeDoneResponseData();
-    const filePath = writeResponse(tmpDir, original);
-    const parsed = parseResponse(filePath);
-
-    expect(parsed.from).toBe(original.from);
-    expect(parsed.timestamp).toBe(original.timestamp);
-    expect(parsed.response).toBe('done');
-    expect(parsed.testResults).toBe(original.testResults);
-    expect(parsed.cablesSent).toBe(original.cablesSent);
-    expect(parsed.filesChanged).toBe(original.filesChanged);
-    expect(parsed.angelMdUpdated).toBe(original.angelMdUpdated);
-  });
-
-  it('round-trips writeResponse -> parseResponse for concerns', () => {
-    const original = makeResponseData({
+  it('round-trips a concerns response', () => {
+    const data = baseData({
       response: 'concerns',
-      concerns: '- Performance may degrade\n- Missing migration plan',
-      proposedPlan: '- Add caching layer\n- Benchmark before and after',
-      questionsForMain: '- What is the acceptable latency?',
-      proceedIf: 'Latency threshold is defined',
+      concerns: 'Risky change.',
+      proposedPlan: 'Split into two steps.',
+      proceedIf: 'Step one lands first',
     });
-    const filePath = writeResponse(tmpDir, original);
-    const parsed = parseResponse(filePath);
-
-    expect(parsed.response).toBe('concerns');
-    expect(parsed.concerns).toBe(original.concerns);
-    expect(parsed.proposedPlan).toBe(original.proposedPlan);
-    expect(parsed.questionsForMain).toBe(original.questionsForMain);
-    expect(parsed.proceedIf).toBe(original.proceedIf);
+    expect(roundTrip(data)).toEqual(data);
   });
 
-  it('throws when RESPONSE is concerns but PROPOSED PLAN is empty', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: concerns',
-      '',
-      'CONCERNS:',
-      '- Something looks wrong',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-    ].join('\n');
-
-    expect(() => parseResponseContent(content)).toThrow(
-      /RESPONSE is "concerns" but PROPOSED PLAN is empty/,
-    );
+  it('round-trips an error response', () => {
+    const data = baseData({ response: 'error', concerns: 'boom', proposedPlan: '' });
+    expect(roundTrip(data)).toEqual(data);
   });
 
-  it('round-trips writeResponse -> parseResponse for error', () => {
-    const original = makeResponseData({
-      response: 'error',
-      concerns: '- Backend process crashed',
-    });
-    const filePath = writeResponse(tmpDir, original);
-    const parsed = parseResponse(filePath);
-
-    expect(parsed.response).toBe('error');
-    expect(parsed.concerns).toBe(original.concerns);
-  });
-
-  it('round-trips writeResponse -> parseResponse for refuse', () => {
-    const original = makeResponseData({
+  it('round-trips a refuse response', () => {
+    const data = baseData({
       response: 'refuse',
-      concerns: '- Violates security invariant',
-      proceedIf: 'Invariant is updated with justification',
+      concerns: 'Violates INV-001.',
+      proposedPlan: '',
     });
-    const filePath = writeResponse(tmpDir, original);
-    const parsed = parseResponse(filePath);
+    expect(roundTrip(data)).toEqual(data);
+  });
 
-    expect(parsed.response).toBe('refuse');
-    expect(parsed.concerns).toBe(original.concerns);
-    expect(parsed.proceedIf).toBe(original.proceedIf);
+  it('round-trips a direct write_mode response', () => {
+    const data = baseData({
+      response: 'done',
+      writeMode: 'direct',
+      angelMdUpdated: true,
+      proposedPlan: '',
+    });
+    expect(roundTrip(data)).toEqual(data);
   });
 
   it('handles _root angel', () => {
-    const data = makeResponseData({ from: '_root' });
-    const filePath = writeResponse(tmpDir, data);
-    const parsed = parseResponse(filePath);
-    expect(parsed.from).toBe('_root');
+    const filePath = writeResponse(tmpDir, baseData({ from: '_root' }));
+    expect(filePath).toContain(join('_responses', '_root'));
+    expect(parseResponse(filePath).from).toBe('_root');
   });
 
-  it('round-trips writeResponse -> parseResponse for sweep done with drift report', () => {
-    const original = makeDoneResponseData({
-      driftReport: '- Charter section mentions deprecated API endpoint /v1/users\n- Invariant #3 references removed config key',
-      angelMdUpdated: 'true',
-      filesChanged: '.angels/src/auth/angel.md',
-      cablesSent: 'none',
+  it('round-trips a sweep done response with drift report', () => {
+    const data = baseData({
+      response: 'done',
+      driftReport: 'src/auth/session.ts exports changed since last sweep.',
     });
-    const filePath = writeResponse(tmpDir, original);
-    const parsed = parseResponse(filePath);
-
-    expect(parsed.response).toBe('done');
-    expect(parsed.driftReport).toBe(original.driftReport);
-    expect(parsed.angelMdUpdated).toBe('true');
-    expect(parsed.filesChanged).toBe('.angels/src/auth/angel.md');
+    expect(roundTrip(data)).toEqual(data);
   });
 
-  it('round-trips writeResponse -> parseResponse for sweep concerns with drift report', () => {
-    const original = makeResponseData({
+  it('round-trips a sweep concerns response with drift report', () => {
+    const data = baseData({
       response: 'concerns',
-      concerns: '- Detected significant drift in public contract',
-      proposedPlan: '- Update angel.md charter and dependencies sections',
-      driftReport: '- Function createSession() was removed from session.ts but angel.md still lists it as exported\n- New dependency on src/api not reflected in Dependencies section',
+      concerns: 'Charter drift.',
+      proposedPlan: 'Update the charter section.',
+      driftReport: 'Two new files are undocumented.',
     });
-    const filePath = writeResponse(tmpDir, original);
-    const parsed = parseResponse(filePath);
-
-    expect(parsed.response).toBe('concerns');
-    expect(parsed.concerns).toBe(original.concerns);
-    expect(parsed.proposedPlan).toBe(original.proposedPlan);
-    expect(parsed.driftReport).toBe(original.driftReport);
+    expect(roundTrip(data)).toEqual(data);
   });
 
-  it('round-trips empty drift report', () => {
-    const original = makeResponseData({ driftReport: '' });
-    const filePath = writeResponse(tmpDir, original);
-    const parsed = parseResponse(filePath);
-
-    expect(parsed.driftReport).toBe('');
-  });
-});
-
-describe('sweep response parsing', () => {
-  it('parses a sweep done response with drift report content', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T16:00:00Z',
-      'RESPONSE: done',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-      'DRIFT REPORT:',
-      '- Charter mentions deprecated endpoint /v1/users (removed in commit abc123)',
-      '- Invariant #3 references config key that no longer exists',
-      '- New export validateToken() not documented in Public contract',
-      '',
-      'CABLES SENT: none',
-      'FILES CHANGED: .angels/src/auth/angel.md',
-      'ANGEL_MD_UPDATED: true',
-    ].join('\n');
-
-    const parsed = parseResponseContent(content);
-    expect(parsed.response).toBe('done');
-    expect(parsed.driftReport).toContain('Charter mentions deprecated endpoint');
-    expect(parsed.driftReport).toContain('Invariant #3 references config key');
-    expect(parsed.driftReport).toContain('New export validateToken()');
-    expect(parsed.angelMdUpdated).toBe('true');
-    expect(parsed.filesChanged).toBe('.angels/src/auth/angel.md');
+  it('round-trips an empty drift report', () => {
+    expect(roundTrip(baseData()).driftReport).toBe('');
   });
 
-  it('parses a sweep concerns response with drift report', () => {
-    const content = [
-      'FROM: src-api',
-      'TIMESTAMP: 2026-04-28T16:05:00Z',
-      'RESPONSE: concerns',
-      '',
-      'CONCERNS:',
-      '- Significant drift detected between angel.md and actual folder state',
-      '',
-      'PROPOSED PLAN:',
-      '- Update angel.md charter to reflect routes.ts split and new auth.ts middleware',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '- Should I update angel.md to reflect the current state?',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-      'DRIFT REPORT:',
-      '- routes.ts was split into userRoutes.ts and adminRoutes.ts',
-      '- New middleware auth.ts added but not in charter',
-      '',
-    ].join('\n');
-
-    const parsed = parseResponseContent(content);
-    expect(parsed.response).toBe('concerns');
-    expect(parsed.driftReport).toContain('routes.ts was split');
-    expect(parsed.driftReport).toContain('New middleware auth.ts');
-    expect(parsed.concerns).toContain('Significant drift detected');
-  });
-
-  it('parses a sweep response with empty drift report', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T16:10:00Z',
-      'RESPONSE: done',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-      'DRIFT REPORT:',
-      '',
-      'CABLES SENT: none',
-      'FILES CHANGED: none',
-      'ANGEL_MD_UPDATED: false',
-    ].join('\n');
-
-    const parsed = parseResponseContent(content);
-    expect(parsed.response).toBe('done');
-    expect(parsed.driftReport).toBe('');
-    expect(parsed.angelMdUpdated).toBe('false');
-  });
-
-  it('parses a sweep response without drift report section (backward-compatible)', () => {
-    const content = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T16:10:00Z',
-      'RESPONSE: proceed',
-      '',
-      'CONCERNS:',
-      '',
-      'PROPOSED PLAN:',
-      '',
-      'QUESTIONS FOR MAIN:',
-      '',
-      'PROCEED IF:',
-      '',
-      'TEST_RESULTS:',
-      '',
-    ].join('\n');
-
-    const parsed = parseResponseContent(content);
-    expect(parsed.driftReport).toBe('');
-  });
-});
-
-// ─── detectWriteMode ──────────────────────────────────────────────────────────
-
-describe('detectWriteMode', () => {
-  it('returns "direct" when WRITE_MODE: DIRECT is present', () => {
-    const text = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'WRITE_MODE: DIRECT',
-      'RESPONSE: done',
-    ].join('\n');
-
-    expect(detectWriteMode(text)).toBe('direct');
-  });
-
-  it('returns "proposed" for normal text without WRITE_MODE header', () => {
-    const text = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: proceed',
-      '',
-      'PROPOSED PLAN:',
-      '1. Do the thing',
-    ].join('\n');
-
-    expect(detectWriteMode(text)).toBe('proposed');
-  });
-
-  it('returns "direct" when WRITE_MODE: DIRECT and RESPONSE: done are both present', () => {
-    const text = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'WRITE_MODE: DIRECT',
-      'RESPONSE: done',
-    ].join('\n');
-
-    expect(detectWriteMode(text)).toBe('direct');
-  });
-});
-
-// ─── detectChunkMode ──────────────────────────────────────────────────────────
-
-describe('detectChunkMode', () => {
-  it('returns "chunk" when WRITE_MODE: CHUNK is present', () => {
-    const text = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'WRITE_MODE: CHUNK',
-      'RESPONSE: proceed',
-    ].join('\n');
-
-    expect(detectChunkMode(text)).toBe('chunk');
-  });
-
-  it('returns "chunk_final" when WRITE_MODE: CHUNK_FINAL is present', () => {
-    const text = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'WRITE_MODE: CHUNK_FINAL',
-      'RESPONSE: done',
-    ].join('\n');
-
-    expect(detectChunkMode(text)).toBe('chunk_final');
-  });
-
-  it('returns "direct" when WRITE_MODE: DIRECT is present', () => {
-    const text = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'WRITE_MODE: DIRECT',
-      'RESPONSE: done',
-    ].join('\n');
-
-    expect(detectChunkMode(text)).toBe('direct');
-  });
-
-  it('returns "proposed" for normal text without any WRITE_MODE header', () => {
-    const text = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'RESPONSE: proceed',
-      '',
-      'PROPOSED PLAN:',
-      '1. Something',
-    ].join('\n');
-
-    expect(detectChunkMode(text)).toBe('proposed');
-  });
-});
-
-// ─── parseDirectWriteResponse ─────────────────────────────────────────────────
-
-describe('parseDirectWriteResponse', () => {
-  it('returns status "done" when RESPONSE: done', () => {
-    const text = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'WRITE_MODE: DIRECT',
-      'RESPONSE: done',
-    ].join('\n');
-
-    const result = parseDirectWriteResponse(text);
-    expect(result.status).toBe('done');
-    expect(result.message).toContain('done');
-    expect(result.writeMode).toBe('direct');
-    expect(result.directWrite).toBe(true);
-  });
-
-  it('returns message containing extra text when RESPONSE: done with a message', () => {
-    const text = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'WRITE_MODE: DIRECT',
-      'RESPONSE: done',
-      '',
-      'CONCERNS:',
-      'All files updated successfully',
-    ].join('\n');
-
-    const result = parseDirectWriteResponse(text);
-    expect(result.status).toBe('done');
-    expect(result.message).toContain('done');
-  });
-
-  it('returns status "error" when RESPONSE: error', () => {
-    const text = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'WRITE_MODE: DIRECT',
-      'RESPONSE: error',
-    ].join('\n');
-
-    const result = parseDirectWriteResponse(text);
-    expect(result.status).toBe('error');
-    expect(result.message).toContain('error');
-  });
-
-  it('returns status "error" with specific error text when RESPONSE: error and PROPOSED PLAN has details', () => {
-    const text = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'WRITE_MODE: DIRECT',
-      'RESPONSE: error',
-      '',
-      'PROPOSED PLAN:',
-      'Failed to write angel.md: EACCES permission denied',
-    ].join('\n');
-
-    const result = parseDirectWriteResponse(text);
-    expect(result.status).toBe('error');
-    expect(result.message).toContain('error');
-    expect(result.body).toContain('Failed to write angel.md');
-  });
-
-  it('throws when RESPONSE field is missing', () => {
-    const text = [
-      'FROM: src-auth',
-      'TIMESTAMP: 2026-04-28T14:32:00Z',
-      'WRITE_MODE: DIRECT',
-    ].join('\n');
-
-    expect(() => parseDirectWriteResponse(text)).toThrow(/missing.*RESPONSE/i);
+  it('formatResponse output ends with a newline', () => {
+    expect(formatResponse(baseData()).endsWith('\n')).toBe(true);
   });
 });

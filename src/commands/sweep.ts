@@ -2,9 +2,17 @@ import { loadConfig } from '../config/load.js';
 import { AngelRegistry } from '../angels/registry.js';
 import { writeBrief } from '../protocol/brief.js';
 import { invoke, OrchestrationError } from '../protocol/orchestrate.js';
-import { readNewspaperSince, getNewspaperSize, appendNewspaper } from '../messaging/newspaper.js';
+import {
+  readNewspaperSince,
+  getNewspaperSize,
+  appendNewspaper,
+  getNewspaperGeneration,
+  rotateNewspaperIfOver,
+} from '../messaging/newspaper.js';
 import { getCursor, setCursor } from '../messaging/cursors.js';
 import { readInbox, archiveProcessedInbox } from '../messaging/cables.js';
+import { archiveOldFiles, formatArchiveResult } from './doctor.js';
+import { mapWithConcurrency, clampParallel } from '../util/concurrency.js';
 import type { InboxEntry } from '../protocol/prompt.js';
 import type { ResponseData } from '../protocol/response.js';
 
@@ -31,7 +39,7 @@ interface AngelSweepResult {
  */
 export async function sweepAngels(
   cwd: string,
-  options: { since?: string; timeoutSeconds?: number; angel?: string } = {},
+  options: { since?: string; timeoutSeconds?: number; angel?: string; parallel?: number } = {},
 ): Promise<number> {
   const config = loadConfig(cwd);
   const registry = AngelRegistry.fromConfig(config);
@@ -44,13 +52,24 @@ export async function sweepAngels(
     allAngels = registry.listAll();
   }
 
+  // Housekeeping before any angel wakes (single-writer moment): rotate an
+  // oversized newspaper and archive old briefs/responses/logs.
+  const rotation = rotateNewspaperIfOver(cwd, config.newspaper.max_bytes);
+  if (rotation.rotated) {
+    console.log(`Newspaper exceeded ${config.newspaper.max_bytes} bytes — rotated to ${rotation.archivePath}`);
+  }
+  const archived = archiveOldFiles(cwd, config.housekeeping.archive_after_days);
+  if (archived.movedFiles.length > 0) {
+    console.log(formatArchiveResult(archived));
+  }
+
   console.log(`Starting sweep for ${allAngels.length} angel(s)...`);
   console.log('');
 
   const results: AngelSweepResult[] = [];
   let hasError = false;
 
-  const SWEEP_CONCURRENCY = 5;
+  const parallel = clampParallel(options.parallel, 4);
 
   const sweepOne = async (angel: { id: string }): Promise<void> => {
     console.log(`--- Sweeping: ${angel.id} ---`);
@@ -71,9 +90,9 @@ export async function sweepAngels(
     console.log('');
   };
 
-  for (let i = 0; i < allAngels.length; i += SWEEP_CONCURRENCY) {
-    await Promise.allSettled(allAngels.slice(i, i + SWEEP_CONCURRENCY).map(sweepOne));
-  }
+  // Sliding-window pool: no batch barrier — a slow angel doesn't hold back
+  // the rest of its batch. sweepOne captures its own errors.
+  await mapWithConcurrency(allAngels, parallel, sweepOne);
 
   // Print summary
   printSweepSummary(results);
@@ -99,7 +118,8 @@ async function sweepSingleAngel(
   // cursor, we'd advance past those entries — which this angel never saw —
   // and silently skip them on its next sweep. The snapshot bounds the cursor
   // to exactly what this angel was shown.
-  const cursor = getCursor(cwd, angelId);
+  const generation = getNewspaperGeneration(cwd);
+  const cursor = getCursor(cwd, angelId, generation);
   const newspaperSizeAtRead = getNewspaperSize(cwd);
   const newspaperDelta = computeNewspaperDelta(cwd, cursor, options.since);
 
@@ -154,7 +174,7 @@ async function sweepSingleAngel(
     result.response.response === 'done' ||
     result.response.response === 'concerns'
   ) {
-    setCursor(cwd, angelId, newspaperSizeAtRead);
+    setCursor(cwd, angelId, newspaperSizeAtRead, generation);
   }
 
   // 7. Print per-angel result
@@ -211,11 +231,13 @@ function appendSweepNewspaperEntry(
   let summary: string;
   if (response.response === 'done') {
     summary = 'SWEEP completed.';
-    if (response.angelMdUpdated === 'true') {
+    if (response.angelMdUpdated) {
       detailLines.push('angel.md was updated.');
     }
-    if (response.cablesSent && response.cablesSent !== 'none') {
-      detailLines.push(`Cables sent: ${response.cablesSent}`);
+    if (response.cablesSent.length > 0) {
+      detailLines.push(
+        `Cables sent: ${response.cablesSent.map((c) => `${c.to}: ${c.type}`).join(', ')}`,
+      );
     }
   } else if (response.response === 'concerns') {
     summary = 'SWEEP raised concerns.';
@@ -270,16 +292,14 @@ function printAngelSweepResult(
     }
   }
 
-  if (response.response === 'done' && response.angelMdUpdated === 'true') {
+  if (response.response === 'done' && response.angelMdUpdated) {
     console.log('  angel.md was updated.');
   }
 
-  if (
-    response.response === 'done' &&
-    response.cablesSent &&
-    response.cablesSent !== 'none'
-  ) {
-    console.log(`  Cables sent: ${response.cablesSent}`);
+  if (response.response === 'done' && response.cablesSent.length > 0) {
+    console.log(
+      `  Cables sent: ${response.cablesSent.map((c) => `${c.to}: ${c.type}`).join(', ')}`,
+    );
   }
 }
 

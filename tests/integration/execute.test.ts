@@ -111,9 +111,12 @@ describe('executeAngel', () => {
     );
     updateConfig(tmpDir, wrapperPath);
 
-    const exitCode = await executeAngel(tmpDir, 'src-auth', briefPath);
+    // Warn-only mode is now an explicit opt-out (strict is the default)
+    const exitCode = await executeAngel(tmpDir, 'src-auth', briefPath, {
+      strictTerritory: false,
+    });
 
-    // Still exits 0 (done) — territory violation is a warning, not a failure
+    // Exits 0 (done) — with strict disabled the violation is a warning
     expect(exitCode).toBe(0);
 
     // Verify both files were created
@@ -127,6 +130,47 @@ describe('executeAngel', () => {
     );
     expect(newspaper).toContain('WARNING: Out-of-territory writes detected');
     expect(newspaper).toContain('src/utils/shared.ts');
+  });
+
+  it('blocks out-of-territory writes by default (strict is the default)', async () => {
+    const briefPath = writeBrief(tmpDir, {
+      to: 'src-auth',
+      from: 'main',
+      timestamp: new Date().toISOString(),
+      phase: 'review',
+      type: 'change_request',
+      task: 'Add shared utility',
+      context: '',
+      expectedScope: '',
+      priorResponse: 'none',
+    });
+
+    const outOfTerritoryFile = join(tmpDir, 'src', 'utils', 'default-strict.ts');
+    const wrapperPath = createBackendWrapper(
+      tmpDir,
+      fakeBackendPath,
+      {
+        FAKE_BACKEND_VERDICT: 'done',
+        FAKE_BACKEND_FILES_CHANGED: 'src/utils/default-strict.ts',
+        FAKE_BACKEND_WRITE_FILES: outOfTerritoryFile,
+        FAKE_BACKEND_ANGEL_MD_UPDATED: 'false',
+      },
+      'execute-default-strict-wrapper.sh',
+    );
+    updateConfig(tmpDir, wrapperPath);
+
+    // No options: config default (strict) applies
+    const exitCode = await executeAngel(tmpDir, 'src-auth', briefPath);
+
+    expect(exitCode).toBe(1);
+    // The new out-of-territory file was rolled back
+    expect(fs.existsSync(outOfTerritoryFile)).toBe(false);
+
+    const newspaper = fs.readFileSync(
+      join(tmpDir, '.angels', '_newspaper.md'),
+      'utf-8',
+    );
+    expect(newspaper).toContain('EXECUTE blocked by --strict-territory');
   });
 
   it('returns exit code 1 for RESPONSE: error from fake backend', async () => {
@@ -262,7 +306,9 @@ describe('executeAngel', () => {
     );
     updateConfig(tmpDir, wrapperPath);
 
-    const exitCode = await executeAngel(tmpDir, 'src-auth', briefPath);
+    const exitCode = await executeAngel(tmpDir, 'src-auth', briefPath, {
+      strictTerritory: false,
+    });
 
     expect(exitCode).toBe(0);
 

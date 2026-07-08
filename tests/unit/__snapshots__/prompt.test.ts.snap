@@ -8,10 +8,10 @@ You operate under the following protocol:
 1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
-4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
-5. Your final action in either phase is to write a structured response file at the path specified.
+4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to report "cables_sent", "files_changed" and "angel_md_updated" in your response JSON.
+5. Your final action in either phase is to write a structured JSON response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
-7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW and cite the invariant by its ID (e.g. INV-002). Do not silently comply.
 8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
 [CURRENT PHASE: REVIEW]
@@ -20,7 +20,7 @@ Read the brief below and evaluate the proposed change against your charter, inva
 You must respond with one of:
 - "proceed": The change is safe. You have no concerns.
 - "concerns": You have specific concerns. List them. Suggest mitigations in PROCEED IF.
-- "refuse": The change fundamentally violates your invariants. Explain why.
+- "refuse": The change fundamentally violates your invariants. Explain why, citing the violated invariant IDs (e.g. INV-002).
 
 Do NOT modify any code or files during REVIEW. Only write the response file.
 
@@ -87,40 +87,37 @@ PRIOR RESPONSE: none
 
 [OUTPUT INSTRUCTIONS]
 Write your response to: /project/.angels/_responses/src-auth/2026-04-28T1500-001.md
-Write your response file at the path above. Use EXACTLY this format — no markdown headers (no #, ##, **), no invented fields. Parser is strict; any deviation causes parse failure.
+Write your response file at the path above. It MUST be a single JSON object — UTF-8, no markdown code fences, no commentary before or after the object. The parser is strict: an unknown field, a missing required field, or invalid JSON fails the whole invocation.
 
-FROM: <your angel ID>
-TIMESTAMP: <ISO-8601, e.g. 2026-05-12T14:32:00.000Z>
-RESPONSE: <exactly one of: proceed | concerns | refuse | done | error>
+Fields (required: format_version, from, timestamp, verdict; all others optional and default to empty):
+- "format_version": the literal number 1.
+- "from": your angel ID (string).
+- "timestamp": ISO-8601 timestamp (string).
+- "verdict": exactly one of "proceed" | "concerns" | "refuse" | "done" | "error". Any other string fails the parser. Phase guide: review → proceed | concerns | refuse; discovery / init / execute / sweep / ask → done (or error on failure).
+- "write_mode": "proposed" (default) unless your brief explicitly tells you to use "direct", "chunk" or "chunk_final".
+- "concerns": string. Your concerns, or why you refuse.
+- "proposed_plan": string. <the plan you propose for executing the brief>
+- "questions_for_main": string. Questions for the main agent, if any.
+- "proceed_if": string. Conditions under which concerns would be resolved.
+- "test_results": string. Test results if you ran tests.
+- "drift_report": string. Drift findings (sweep).
+- "cables_sent": array of {"to": "<angel-id>", "type": "<cable type>"} objects.
+- "files_changed": array of project-relative path strings.
+- "angel_md_updated": boolean.
 
-CONCERNS:
-<body — leave blank if none>
+Rules:
+- "cables_sent", "files_changed" and "angel_md_updated" are only valid when verdict is "done". On any other verdict they must be [] / [] / false (or omitted).
+- verdict "concerns" requires a non-empty "proposed_plan".
+- Multi-line text goes INSIDE the JSON strings (use \\n); do not add fields.
 
-PROPOSED PLAN:
-<the plan you propose for executing the brief>
-
-QUESTIONS FOR MAIN:
-<body — leave blank if none>
-
-PROCEED IF:
-<body — leave blank if none>
-
-TEST_RESULTS:
-<body — leave blank if none>
-
-DRIFT REPORT:
-<body — leave blank if none>
-
-Include the following three lines ONLY when RESPONSE is "done":
-CABLES SENT: <none | comma-separated angel IDs>
-FILES CHANGED: <none | comma-separated relative paths>
-ANGEL_MD_UPDATED: <yes | no>
-
-Format rules:
-- FROM / TIMESTAMP / RESPONSE / CABLES SENT / FILES CHANGED / ANGEL_MD_UPDATED: single-line "FIELD: value" — value on the same line as the field name.
-- CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
-- RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or any other string will fail the parser.
-- Phase guide: discovery / init / execute / sweep / ask → RESPONSE: done. review → RESPONSE: proceed | concerns | refuse.
+Minimal valid example:
+{
+  "format_version": 1,
+  "from": "<your angel ID>",
+  "timestamp": "<ISO-8601, e.g. 2026-05-12T14:32:00.000Z>",
+  "verdict": "proceed",
+  "proposed_plan": "..."
+}
 
 When sending cables to other angels, write .md files directly to .angels/_inbox/<receiver-angel-id>/. Do NOT use markdown headers (# ##). Use EXACTLY this format — deviations will break the receiver's inbox:
 
@@ -149,10 +146,10 @@ You operate under the following protocol:
 1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
-4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
-5. Your final action in either phase is to write a structured response file at the path specified.
+4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to report "cables_sent", "files_changed" and "angel_md_updated" in your response JSON.
+5. Your final action in either phase is to write a structured JSON response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
-7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW and cite the invariant by its ID (e.g. INV-002). Do not silently comply.
 8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
 [CURRENT PHASE: REVIEW]
@@ -161,7 +158,7 @@ Read the brief below and evaluate the proposed change against your charter, inva
 You must respond with one of:
 - "proceed": The change is safe. You have no concerns.
 - "concerns": You have specific concerns. List them. Suggest mitigations in PROCEED IF.
-- "refuse": The change fundamentally violates your invariants. Explain why.
+- "refuse": The change fundamentally violates your invariants. Explain why, citing the violated invariant IDs (e.g. INV-002).
 
 Do NOT modify any code or files during REVIEW. Only write the response file.
 
@@ -228,40 +225,37 @@ PRIOR RESPONSE: none
 
 [OUTPUT INSTRUCTIONS]
 Write your response to: /project/.angels/_responses/src-auth/2026-04-28T1500-001.md
-Write your response file at the path above. Use EXACTLY this format — no markdown headers (no #, ##, **), no invented fields. Parser is strict; any deviation causes parse failure.
+Write your response file at the path above. It MUST be a single JSON object — UTF-8, no markdown code fences, no commentary before or after the object. The parser is strict: an unknown field, a missing required field, or invalid JSON fails the whole invocation.
 
-FROM: <your angel ID>
-TIMESTAMP: <ISO-8601, e.g. 2026-05-12T14:32:00.000Z>
-RESPONSE: <exactly one of: proceed | concerns | refuse | done | error>
+Fields (required: format_version, from, timestamp, verdict; all others optional and default to empty):
+- "format_version": the literal number 1.
+- "from": your angel ID (string).
+- "timestamp": ISO-8601 timestamp (string).
+- "verdict": exactly one of "proceed" | "concerns" | "refuse" | "done" | "error". Any other string fails the parser. Phase guide: review → proceed | concerns | refuse; discovery / init / execute / sweep / ask → done (or error on failure).
+- "write_mode": "proposed" (default) unless your brief explicitly tells you to use "direct", "chunk" or "chunk_final".
+- "concerns": string. Your concerns, or why you refuse.
+- "proposed_plan": string. <the plan you propose for executing the brief>
+- "questions_for_main": string. Questions for the main agent, if any.
+- "proceed_if": string. Conditions under which concerns would be resolved.
+- "test_results": string. Test results if you ran tests.
+- "drift_report": string. Drift findings (sweep).
+- "cables_sent": array of {"to": "<angel-id>", "type": "<cable type>"} objects.
+- "files_changed": array of project-relative path strings.
+- "angel_md_updated": boolean.
 
-CONCERNS:
-<body — leave blank if none>
+Rules:
+- "cables_sent", "files_changed" and "angel_md_updated" are only valid when verdict is "done". On any other verdict they must be [] / [] / false (or omitted).
+- verdict "concerns" requires a non-empty "proposed_plan".
+- Multi-line text goes INSIDE the JSON strings (use \\n); do not add fields.
 
-PROPOSED PLAN:
-<the plan you propose for executing the brief>
-
-QUESTIONS FOR MAIN:
-<body — leave blank if none>
-
-PROCEED IF:
-<body — leave blank if none>
-
-TEST_RESULTS:
-<body — leave blank if none>
-
-DRIFT REPORT:
-<body — leave blank if none>
-
-Include the following three lines ONLY when RESPONSE is "done":
-CABLES SENT: <none | comma-separated angel IDs>
-FILES CHANGED: <none | comma-separated relative paths>
-ANGEL_MD_UPDATED: <yes | no>
-
-Format rules:
-- FROM / TIMESTAMP / RESPONSE / CABLES SENT / FILES CHANGED / ANGEL_MD_UPDATED: single-line "FIELD: value" — value on the same line as the field name.
-- CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
-- RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or any other string will fail the parser.
-- Phase guide: discovery / init / execute / sweep / ask → RESPONSE: done. review → RESPONSE: proceed | concerns | refuse.
+Minimal valid example:
+{
+  "format_version": 1,
+  "from": "<your angel ID>",
+  "timestamp": "<ISO-8601, e.g. 2026-05-12T14:32:00.000Z>",
+  "verdict": "proceed",
+  "proposed_plan": "..."
+}
 
 When sending cables to other angels, write .md files directly to .angels/_inbox/<receiver-angel-id>/. Do NOT use markdown headers (# ##). Use EXACTLY this format — deviations will break the receiver's inbox:
 
@@ -290,10 +284,10 @@ You operate under the following protocol:
 1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
-4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
-5. Your final action in either phase is to write a structured response file at the path specified.
+4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to report "cables_sent", "files_changed" and "angel_md_updated" in your response JSON.
+5. Your final action in either phase is to write a structured JSON response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
-7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW and cite the invariant by its ID (e.g. INV-002). Do not silently comply.
 8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
 [CURRENT PHASE: EXECUTE]
@@ -303,7 +297,7 @@ After making changes:
 1. Update your angel.md (path listed in your identity section) if the change affects your charter, contracts, invariants, or dependencies. This is the one write exception outside your designated folder — see rule 1.
 2. If the change impacts other angels, send cables to notify them.
 3. If you run tests, report the results.
-4. Write the response file with RESPONSE: done and list all files changed.
+4. Write the response JSON with "verdict": "done" and list every changed file in "files_changed".
 
 You may only write files inside your designated folder, plus your angel.md at the path in your identity section.
 
@@ -359,40 +353,37 @@ PRIOR RESPONSE: none
 
 [OUTPUT INSTRUCTIONS]
 Write your response to: /project/.angels/_responses/src-auth/2026-04-28T1500-001.md
-Write your response file at the path above. Use EXACTLY this format — no markdown headers (no #, ##, **), no invented fields. Parser is strict; any deviation causes parse failure.
+Write your response file at the path above. It MUST be a single JSON object — UTF-8, no markdown code fences, no commentary before or after the object. The parser is strict: an unknown field, a missing required field, or invalid JSON fails the whole invocation.
 
-FROM: <your angel ID>
-TIMESTAMP: <ISO-8601, e.g. 2026-05-12T14:32:00.000Z>
-RESPONSE: <exactly one of: proceed | concerns | refuse | done | error>
+Fields (required: format_version, from, timestamp, verdict; all others optional and default to empty):
+- "format_version": the literal number 1.
+- "from": your angel ID (string).
+- "timestamp": ISO-8601 timestamp (string).
+- "verdict": exactly one of "proceed" | "concerns" | "refuse" | "done" | "error". Any other string fails the parser. Phase guide: review → proceed | concerns | refuse; discovery / init / execute / sweep / ask → done (or error on failure).
+- "write_mode": "proposed" (default) unless your brief explicitly tells you to use "direct", "chunk" or "chunk_final".
+- "concerns": string. Your concerns, or why you refuse.
+- "proposed_plan": string. <summary of what was actually done>
+- "questions_for_main": string. Questions for the main agent, if any.
+- "proceed_if": string. Conditions under which concerns would be resolved.
+- "test_results": string. Test results if you ran tests.
+- "drift_report": string. Drift findings (sweep).
+- "cables_sent": array of {"to": "<angel-id>", "type": "<cable type>"} objects.
+- "files_changed": array of project-relative path strings.
+- "angel_md_updated": boolean.
 
-CONCERNS:
-<body — leave blank if none>
+Rules:
+- "cables_sent", "files_changed" and "angel_md_updated" are only valid when verdict is "done". On any other verdict they must be [] / [] / false (or omitted).
+- verdict "concerns" requires a non-empty "proposed_plan".
+- Multi-line text goes INSIDE the JSON strings (use \\n); do not add fields.
 
-PROPOSED PLAN:
-<summary of what was actually done>
-
-QUESTIONS FOR MAIN:
-<body — leave blank if none>
-
-PROCEED IF:
-<body — leave blank if none>
-
-TEST_RESULTS:
-<body — leave blank if none>
-
-DRIFT REPORT:
-<body — leave blank if none>
-
-Include the following three lines ONLY when RESPONSE is "done":
-CABLES SENT: <none | comma-separated angel IDs>
-FILES CHANGED: <none | comma-separated relative paths>
-ANGEL_MD_UPDATED: <yes | no>
-
-Format rules:
-- FROM / TIMESTAMP / RESPONSE / CABLES SENT / FILES CHANGED / ANGEL_MD_UPDATED: single-line "FIELD: value" — value on the same line as the field name.
-- CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
-- RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or any other string will fail the parser.
-- Phase guide: discovery / init / execute / sweep / ask → RESPONSE: done. review → RESPONSE: proceed | concerns | refuse.
+Minimal valid example:
+{
+  "format_version": 1,
+  "from": "<your angel ID>",
+  "timestamp": "<ISO-8601, e.g. 2026-05-12T14:32:00.000Z>",
+  "verdict": "done",
+  "proposed_plan": "..."
+}
 
 When sending cables to other angels, write .md files directly to .angels/_inbox/<receiver-angel-id>/. Do NOT use markdown headers (# ##). Use EXACTLY this format — deviations will break the receiver's inbox:
 
@@ -421,10 +412,10 @@ You operate under the following protocol:
 1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
-4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
-5. Your final action in either phase is to write a structured response file at the path specified.
+4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to report "cables_sent", "files_changed" and "angel_md_updated" in your response JSON.
+5. Your final action in either phase is to write a structured JSON response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
-7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW and cite the invariant by its ID (e.g. INV-002). Do not silently comply.
 8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
 [CURRENT PHASE: INIT]
@@ -479,40 +470,37 @@ PRIOR RESPONSE: none
 
 [OUTPUT INSTRUCTIONS]
 Write your response to: /project/.angels/_responses/src-auth/2026-04-28T1500-001.md
-Write your response file at the path above. Use EXACTLY this format — no markdown headers (no #, ##, **), no invented fields. Parser is strict; any deviation causes parse failure.
+Write your response file at the path above. It MUST be a single JSON object — UTF-8, no markdown code fences, no commentary before or after the object. The parser is strict: an unknown field, a missing required field, or invalid JSON fails the whole invocation.
 
-FROM: <your angel ID>
-TIMESTAMP: <ISO-8601, e.g. 2026-05-12T14:32:00.000Z>
-RESPONSE: <exactly one of: proceed | concerns | refuse | done | error>
+Fields (required: format_version, from, timestamp, verdict; all others optional and default to empty):
+- "format_version": the literal number 1.
+- "from": your angel ID (string).
+- "timestamp": ISO-8601 timestamp (string).
+- "verdict": exactly one of "proceed" | "concerns" | "refuse" | "done" | "error". Any other string fails the parser. Phase guide: review → proceed | concerns | refuse; discovery / init / execute / sweep / ask → done (or error on failure).
+- "write_mode": "proposed" (default) unless your brief explicitly tells you to use "direct", "chunk" or "chunk_final".
+- "concerns": string. Your concerns, or why you refuse.
+- "proposed_plan": string. <THE COMPLETE angel.md BODY — Charter, Public contract, Invariants, Decision log, Open questions, Dependencies. No YAML frontmatter. No surrounding code fences. This entire field is COPIED VERBATIM into your angel.md by the orchestrator. Do NOT write angel.md directly — put it here.>
+- "questions_for_main": string. Questions for the main agent, if any.
+- "proceed_if": string. Conditions under which concerns would be resolved.
+- "test_results": string. Test results if you ran tests.
+- "drift_report": string. Drift findings (sweep).
+- "cables_sent": array of {"to": "<angel-id>", "type": "<cable type>"} objects.
+- "files_changed": array of project-relative path strings.
+- "angel_md_updated": boolean.
 
-CONCERNS:
-<body — leave blank if none>
+Rules:
+- "cables_sent", "files_changed" and "angel_md_updated" are only valid when verdict is "done". On any other verdict they must be [] / [] / false (or omitted).
+- verdict "concerns" requires a non-empty "proposed_plan".
+- Multi-line text goes INSIDE the JSON strings (use \\n); do not add fields.
 
-PROPOSED PLAN:
-<THE COMPLETE angel.md BODY — Charter, Public contract, Invariants, Decision log, Open questions, Dependencies. No YAML frontmatter. No surrounding code fences. This entire field is COPIED VERBATIM into your angel.md by the orchestrator. Do NOT write angel.md directly — put it here.>
-
-QUESTIONS FOR MAIN:
-<body — leave blank if none>
-
-PROCEED IF:
-<body — leave blank if none>
-
-TEST_RESULTS:
-<body — leave blank if none>
-
-DRIFT REPORT:
-<body — leave blank if none>
-
-Include the following three lines ONLY when RESPONSE is "done":
-CABLES SENT: <none | comma-separated angel IDs>
-FILES CHANGED: <none | comma-separated relative paths>
-ANGEL_MD_UPDATED: <yes | no>
-
-Format rules:
-- FROM / TIMESTAMP / RESPONSE / CABLES SENT / FILES CHANGED / ANGEL_MD_UPDATED: single-line "FIELD: value" — value on the same line as the field name.
-- CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
-- RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or any other string will fail the parser.
-- Phase guide: discovery / init / execute / sweep / ask → RESPONSE: done. review → RESPONSE: proceed | concerns | refuse.
+Minimal valid example:
+{
+  "format_version": 1,
+  "from": "<your angel ID>",
+  "timestamp": "<ISO-8601, e.g. 2026-05-12T14:32:00.000Z>",
+  "verdict": "done",
+  "proposed_plan": "..."
+}
 
 When sending cables to other angels, write .md files directly to .angels/_inbox/<receiver-angel-id>/. Do NOT use markdown headers (# ##). Use EXACTLY this format — deviations will break the receiver's inbox:
 
@@ -541,10 +529,10 @@ You operate under the following protocol:
 1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
-4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
-5. Your final action in either phase is to write a structured response file at the path specified.
+4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to report "cables_sent", "files_changed" and "angel_md_updated" in your response JSON.
+5. Your final action in either phase is to write a structured JSON response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
-7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW and cite the invariant by its ID (e.g. INV-002). Do not silently comply.
 8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
 [CURRENT PHASE: REVIEW]
@@ -553,7 +541,7 @@ Read the brief below and evaluate the proposed change against your charter, inva
 You must respond with one of:
 - "proceed": The change is safe. You have no concerns.
 - "concerns": You have specific concerns. List them. Suggest mitigations in PROCEED IF.
-- "refuse": The change fundamentally violates your invariants. Explain why.
+- "refuse": The change fundamentally violates your invariants. Explain why, citing the violated invariant IDs (e.g. INV-002).
 
 Do NOT modify any code or files during REVIEW. Only write the response file.
 
@@ -609,40 +597,37 @@ PRIOR RESPONSE: none
 
 [OUTPUT INSTRUCTIONS]
 Write your response to: /project/.angels/_responses/src-auth/2026-04-28T1500-001.md
-Write your response file at the path above. Use EXACTLY this format — no markdown headers (no #, ##, **), no invented fields. Parser is strict; any deviation causes parse failure.
+Write your response file at the path above. It MUST be a single JSON object — UTF-8, no markdown code fences, no commentary before or after the object. The parser is strict: an unknown field, a missing required field, or invalid JSON fails the whole invocation.
 
-FROM: <your angel ID>
-TIMESTAMP: <ISO-8601, e.g. 2026-05-12T14:32:00.000Z>
-RESPONSE: <exactly one of: proceed | concerns | refuse | done | error>
+Fields (required: format_version, from, timestamp, verdict; all others optional and default to empty):
+- "format_version": the literal number 1.
+- "from": your angel ID (string).
+- "timestamp": ISO-8601 timestamp (string).
+- "verdict": exactly one of "proceed" | "concerns" | "refuse" | "done" | "error". Any other string fails the parser. Phase guide: review → proceed | concerns | refuse; discovery / init / execute / sweep / ask → done (or error on failure).
+- "write_mode": "proposed" (default) unless your brief explicitly tells you to use "direct", "chunk" or "chunk_final".
+- "concerns": string. Your concerns, or why you refuse.
+- "proposed_plan": string. <the plan you propose for executing the brief>
+- "questions_for_main": string. Questions for the main agent, if any.
+- "proceed_if": string. Conditions under which concerns would be resolved.
+- "test_results": string. Test results if you ran tests.
+- "drift_report": string. Drift findings (sweep).
+- "cables_sent": array of {"to": "<angel-id>", "type": "<cable type>"} objects.
+- "files_changed": array of project-relative path strings.
+- "angel_md_updated": boolean.
 
-CONCERNS:
-<body — leave blank if none>
+Rules:
+- "cables_sent", "files_changed" and "angel_md_updated" are only valid when verdict is "done". On any other verdict they must be [] / [] / false (or omitted).
+- verdict "concerns" requires a non-empty "proposed_plan".
+- Multi-line text goes INSIDE the JSON strings (use \\n); do not add fields.
 
-PROPOSED PLAN:
-<the plan you propose for executing the brief>
-
-QUESTIONS FOR MAIN:
-<body — leave blank if none>
-
-PROCEED IF:
-<body — leave blank if none>
-
-TEST_RESULTS:
-<body — leave blank if none>
-
-DRIFT REPORT:
-<body — leave blank if none>
-
-Include the following three lines ONLY when RESPONSE is "done":
-CABLES SENT: <none | comma-separated angel IDs>
-FILES CHANGED: <none | comma-separated relative paths>
-ANGEL_MD_UPDATED: <yes | no>
-
-Format rules:
-- FROM / TIMESTAMP / RESPONSE / CABLES SENT / FILES CHANGED / ANGEL_MD_UPDATED: single-line "FIELD: value" — value on the same line as the field name.
-- CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
-- RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or any other string will fail the parser.
-- Phase guide: discovery / init / execute / sweep / ask → RESPONSE: done. review → RESPONSE: proceed | concerns | refuse.
+Minimal valid example:
+{
+  "format_version": 1,
+  "from": "<your angel ID>",
+  "timestamp": "<ISO-8601, e.g. 2026-05-12T14:32:00.000Z>",
+  "verdict": "proceed",
+  "proposed_plan": "..."
+}
 
 When sending cables to other angels, write .md files directly to .angels/_inbox/<receiver-angel-id>/. Do NOT use markdown headers (# ##). Use EXACTLY this format — deviations will break the receiver's inbox:
 
@@ -671,10 +656,10 @@ You operate under the following protocol:
 1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
-4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
-5. Your final action in either phase is to write a structured response file at the path specified.
+4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to report "cables_sent", "files_changed" and "angel_md_updated" in your response JSON.
+5. Your final action in either phase is to write a structured JSON response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
-7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW and cite the invariant by its ID (e.g. INV-002). Do not silently comply.
 8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
 [CURRENT PHASE: SWEEP]
@@ -744,40 +729,37 @@ PRIOR RESPONSE: none
 
 [OUTPUT INSTRUCTIONS]
 Write your response to: /project/.angels/_responses/src-auth/2026-04-28T1500-001.md
-Write your response file at the path above. Use EXACTLY this format — no markdown headers (no #, ##, **), no invented fields. Parser is strict; any deviation causes parse failure.
+Write your response file at the path above. It MUST be a single JSON object — UTF-8, no markdown code fences, no commentary before or after the object. The parser is strict: an unknown field, a missing required field, or invalid JSON fails the whole invocation.
 
-FROM: <your angel ID>
-TIMESTAMP: <ISO-8601, e.g. 2026-05-12T14:32:00.000Z>
-RESPONSE: <exactly one of: proceed | concerns | refuse | done | error>
+Fields (required: format_version, from, timestamp, verdict; all others optional and default to empty):
+- "format_version": the literal number 1.
+- "from": your angel ID (string).
+- "timestamp": ISO-8601 timestamp (string).
+- "verdict": exactly one of "proceed" | "concerns" | "refuse" | "done" | "error". Any other string fails the parser. Phase guide: review → proceed | concerns | refuse; discovery / init / execute / sweep / ask → done (or error on failure).
+- "write_mode": "proposed" (default) unless your brief explicitly tells you to use "direct", "chunk" or "chunk_final".
+- "concerns": string. Your concerns, or why you refuse.
+- "proposed_plan": string. <body — leave blank if none>
+- "questions_for_main": string. Questions for the main agent, if any.
+- "proceed_if": string. Conditions under which concerns would be resolved.
+- "test_results": string. Test results if you ran tests.
+- "drift_report": string. Drift findings (sweep).
+- "cables_sent": array of {"to": "<angel-id>", "type": "<cable type>"} objects.
+- "files_changed": array of project-relative path strings.
+- "angel_md_updated": boolean.
 
-CONCERNS:
-<body — leave blank if none>
+Rules:
+- "cables_sent", "files_changed" and "angel_md_updated" are only valid when verdict is "done". On any other verdict they must be [] / [] / false (or omitted).
+- verdict "concerns" requires a non-empty "proposed_plan".
+- Multi-line text goes INSIDE the JSON strings (use \\n); do not add fields.
 
-PROPOSED PLAN:
-<body — leave blank if none>
-
-QUESTIONS FOR MAIN:
-<body — leave blank if none>
-
-PROCEED IF:
-<body — leave blank if none>
-
-TEST_RESULTS:
-<body — leave blank if none>
-
-DRIFT REPORT:
-<body — leave blank if none>
-
-Include the following three lines ONLY when RESPONSE is "done":
-CABLES SENT: <none | comma-separated angel IDs>
-FILES CHANGED: <none | comma-separated relative paths>
-ANGEL_MD_UPDATED: <yes | no>
-
-Format rules:
-- FROM / TIMESTAMP / RESPONSE / CABLES SENT / FILES CHANGED / ANGEL_MD_UPDATED: single-line "FIELD: value" — value on the same line as the field name.
-- CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: header alone on its own line (nothing after the colon), multi-line body on subsequent lines.
-- RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or any other string will fail the parser.
-- Phase guide: discovery / init / execute / sweep / ask → RESPONSE: done. review → RESPONSE: proceed | concerns | refuse.
+Minimal valid example:
+{
+  "format_version": 1,
+  "from": "<your angel ID>",
+  "timestamp": "<ISO-8601, e.g. 2026-05-12T14:32:00.000Z>",
+  "verdict": "done",
+  "proposed_plan": "..."
+}
 
 When sending cables to other angels, write .md files directly to .angels/_inbox/<receiver-angel-id>/. Do NOT use markdown headers (# ##). Use EXACTLY this format — deviations will break the receiver's inbox:
 

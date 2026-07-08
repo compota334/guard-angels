@@ -7,7 +7,7 @@ import { pickAdapter } from '../backend/factory.js';
 import { acquireLock, releaseLock } from '../locks/lock.js';
 import { createLogStreams, writeLogMeta } from '../logs/log.js';
 import { buildPrompt, measurePromptSize, formatPromptSizeWarning } from './prompt.js';
-import { parseResponseContent, detectWriteMode, parseDirectWriteResponse } from './response.js';
+import { parseResponseContent } from './response.js';
 import { parseBrief } from './brief.js';
 import { DEFAULT_PROMPT_WARN_BYTES, resolveMemoryConfig } from '../config/defaults.js';
 import { angelMdFile, angelResponsesDir, angelChatFile } from '../paths/layout.js';
@@ -177,6 +177,8 @@ export async function invoke(
     let spawnError: unknown;
     let exitCode = 1;
     let sessionId: string | undefined;
+    let usage: LogMeta['usage'];
+    let costUsd: number | undefined;
     let stdout = '';
     let stderr = '';
 
@@ -193,6 +195,8 @@ export async function invoke(
       stderr = result.stderr ?? '';
       exitCode = result.code;
       sessionId = result.sessionId;
+      usage = result.usage;
+      costUsd = result.costUsd;
 
       // Write to log files
       logs.appendStdout(stdout);
@@ -241,6 +245,8 @@ export async function invoke(
       responsePath,
       exitCode,
       ...(sessionId != null && { sessionId }),
+      ...(usage != null && { usage }),
+      ...(costUsd != null && { costUsd }),
       startedAt: timestamp,
       finishedAt: new Date().toISOString(),
       timedOut,
@@ -288,50 +294,33 @@ export async function invoke(
       );
     }
 
-    // 11a. Detect write mode and parse accordingly
-    const writeMode = detectWriteMode(rawResponseText);
+    // 11a. Parse and validate the JSON response (fail-loud, no fallback format)
     let response: ResponseData;
+    try {
+      response = parseResponseContent(rawResponseText);
+    } catch (err: unknown) {
+      throw new OrchestrationError(
+        `Angel "${input.angelId}" did not produce a valid response file at ${responsePath}: ` +
+          `${(err as Error).message} Logs: ${logs.stderrPath}`,
+        'missing_response',
+        logs.stdoutPath,
+        logs.stderrPath,
+        logMetaPath,
+        { cause: err },
+      );
+    }
 
-    if (writeMode === 'direct') {
-      const directResult = parseDirectWriteResponse(rawResponseText);
-      if (directResult.status === 'error') {
-        throw new OrchestrationError(
-          `Angel "${input.angelId}" direct write failed: ${directResult.message}. Logs: ${logs.stderrPath}`,
-          'direct_write_failed',
-          logs.stdoutPath,
-          logs.stderrPath,
-          logMetaPath,
-        );
-      }
-      // Direct write: angel wrote angel.md directly, response is minimal
-      response = {
-        from: '',
-        timestamp: '',
-        response: 'done',
-        concerns: '',
-        proposedPlan: '',
-        questionsForMain: '',
-        proceedIf: '',
-        testResults: '',
-        driftReport: '',
-        cablesSent: '',
-        filesChanged: '',
-        angelMdUpdated: '',
-      };
-    } else {
-      // Legacy: proposed plan mode — parse full response structure
-      try {
-        response = parseResponseContent(rawResponseText);
-      } catch (err: unknown) {
-        throw new OrchestrationError(
-          `Angel "${input.angelId}" did not produce a valid response file at ${responsePath}. Logs: ${logs.stderrPath}`,
-          'missing_response',
-          logs.stdoutPath,
-          logs.stderrPath,
-          logMetaPath,
-          { cause: err },
-        );
-      }
+    // 11b. Direct/chunked write modes: verdict "error" means the angel failed
+    // to write angel.md itself — surface as a distinct error kind.
+    if (response.response === 'error' && response.writeMode !== 'proposed') {
+      throw new OrchestrationError(
+        `Angel "${input.angelId}" ${response.writeMode} write failed` +
+          `${response.concerns ? `: ${response.concerns}` : ''}. Logs: ${logs.stderrPath}`,
+        'direct_write_failed',
+        logs.stdoutPath,
+        logs.stderrPath,
+        logMetaPath,
+      );
     }
 
     return {
@@ -360,7 +349,7 @@ function computeResponsePath(
 
   const datePrefix = extractDatePrefix(isoTimestamp, 'response');
   const seq = computeNextSeq(dir, datePrefix);
-  return join(dir, `${datePrefix}-${seq}.md`);
+  return join(dir, `${datePrefix}-${seq}.json`);
 }
 
 // execa >=8 sets .timedOut = true on the thrown error when the child process

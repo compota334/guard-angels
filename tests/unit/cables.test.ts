@@ -60,6 +60,22 @@ describe('writeCable', () => {
     expect(outboxContent).toBe(inboxContent);
   });
 
+  it('never overwrites when two cables share sender and timestamp', () => {
+    const first = writeCable(tmpDir, makeCable({ subject: 'first cable' }));
+    const second = writeCable(tmpDir, makeCable({ subject: 'second cable' }));
+    const third = writeCable(tmpDir, makeCable({ subject: 'third cable' }));
+
+    expect(new Set([first, second, third]).size).toBe(3);
+    expect(second).toMatch(/-1\.md$/);
+    expect(third).toMatch(/-2\.md$/);
+
+    const inboxDir = path.join(tmpDir, '.angels', '_inbox', 'src-auth');
+    expect(fs.readdirSync(inboxDir)).toHaveLength(3);
+    expect(
+      fs.readFileSync(path.join(inboxDir, second), 'utf-8'),
+    ).toContain('second cable');
+  });
+
   it('formats cable content according to spec', () => {
     const data = makeCable();
     const filename = writeCable(tmpDir, data);

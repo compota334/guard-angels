@@ -33,6 +33,7 @@ export async function doAngel(
   cwd: string,
   angelId: string,
   task: string,
+  options: { strictTerritory?: boolean } = {},
 ): Promise<number> {
   const config = loadConfig(cwd);
   const registry = AngelRegistry.fromConfig(config);
@@ -77,7 +78,7 @@ export async function doAngel(
   console.log('Angel approved: auto-executing...');
   console.log('');
 
-  return executeAngel(cwd, angelId, briefPath);
+  return executeAngel(cwd, angelId, briefPath, options);
 }
 
 function appendReviewNewspaperEntry(

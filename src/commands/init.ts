@@ -6,7 +6,8 @@ import { identifyCandidates, type FolderCandidate } from '../angels/identify.js'
 import { createAngelDraft } from '../angels/draft.js';
 import { DEFAULT_BACKEND_CMD, DEFAULT_TIMEOUT_SECONDS, DEFAULT_SWEEP_AUTONOMY } from '../config/defaults.js';
 import { loadConfig } from '../config/load.js';
-import type { Config, AngelEntry } from '../config/schema.js';
+import { ConfigSchema } from '../config/schema.js';
+import type { Config, ConfigInput, AngelEntry } from '../config/schema.js';
 import {
   angelsRoot,
   configFile,
@@ -129,8 +130,8 @@ export async function initAngels(cwd: string, opts: InitOptions): Promise<void> 
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  // Build and write _config.yml
-  const config: Config = {
+  // Build and write _config.yml (input shape: schema defaults stay implicit)
+  const config: ConfigInput = {
     version: 1,
     backend: {
       angel_cmd: DEFAULT_BACKEND_CMD,
@@ -157,9 +158,11 @@ export async function initAngels(cwd: string, opts: InitOptions): Promise<void> 
     console.log('Run "angels onboard" to bootstrap angel context from your code.');
   }
 
-  // Create angel.md for each angel
+  // Create angel.md for each angel (downstream consumers get the validated
+  // shape with schema defaults applied)
+  const parsedConfig: Config = ConfigSchema.parse(config);
   for (const entry of angelEntries) {
-    await createAngelDraft(config, entry, cwd);
+    await createAngelDraft(parsedConfig, entry, cwd);
   }
 
   // Write AGENTS.md to project root if not already present

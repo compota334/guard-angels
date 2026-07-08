@@ -43,48 +43,55 @@ function getProposedPlanGuidance(phase: PromptPhase): string {
   return '<body — leave blank if none>';
 }
 
+function exampleVerdict(phase: PromptPhase): string {
+  return phase === 'review' ? 'proceed' : 'done';
+}
+
 function buildResponseFormat(phase: PromptPhase): string {
+  const example = [
+    '{',
+    '  "format_version": 1,',
+    '  "from": "<your angel ID>",',
+    '  "timestamp": "<ISO-8601, e.g. 2026-05-12T14:32:00.000Z>",',
+    `  "verdict": "${exampleVerdict(phase)}",`,
+    '  "proposed_plan": "..."',
+    '}',
+  ].join('\n');
+
   return (
-    'Write your response file at the path above. Use EXACTLY this format — no markdown headers ' +
-    '(no #, ##, **), no invented fields. Parser is strict; any deviation causes parse failure.\n' +
+    'Write your response file at the path above. It MUST be a single JSON object — ' +
+    'UTF-8, no markdown code fences, no commentary before or after the object. ' +
+    'The parser is strict: an unknown field, a missing required field, or invalid JSON ' +
+    'fails the whole invocation.\n' +
     '\n' +
-    'FROM: <your angel ID>\n' +
-    'TIMESTAMP: <ISO-8601, e.g. 2026-05-12T14:32:00.000Z>\n' +
-    'RESPONSE: <exactly one of: proceed | concerns | refuse | done | error>\n' +
+    'Fields (required: format_version, from, timestamp, verdict; all others optional ' +
+    'and default to empty):\n' +
+    '- "format_version": the literal number 1.\n' +
+    '- "from": your angel ID (string).\n' +
+    '- "timestamp": ISO-8601 timestamp (string).\n' +
+    '- "verdict": exactly one of "proceed" | "concerns" | "refuse" | "done" | "error". ' +
+    'Any other string fails the parser. Phase guide: review → proceed | concerns | refuse; ' +
+    'discovery / init / execute / sweep / ask → done (or error on failure).\n' +
+    '- "write_mode": "proposed" (default) unless your brief explicitly tells you to use ' +
+    '"direct", "chunk" or "chunk_final".\n' +
+    '- "concerns": string. Your concerns, or why you refuse.\n' +
+    '- "proposed_plan": string. ' + getProposedPlanGuidance(phase) + '\n' +
+    '- "questions_for_main": string. Questions for the main agent, if any.\n' +
+    '- "proceed_if": string. Conditions under which concerns would be resolved.\n' +
+    '- "test_results": string. Test results if you ran tests.\n' +
+    '- "drift_report": string. Drift findings (sweep).\n' +
+    '- "cables_sent": array of {"to": "<angel-id>", "type": "<cable type>"} objects.\n' +
+    '- "files_changed": array of project-relative path strings.\n' +
+    '- "angel_md_updated": boolean.\n' +
     '\n' +
-    'CONCERNS:\n' +
-    '<body — leave blank if none>\n' +
+    'Rules:\n' +
+    '- "cables_sent", "files_changed" and "angel_md_updated" are only valid when verdict ' +
+    'is "done". On any other verdict they must be [] / [] / false (or omitted).\n' +
+    '- verdict "concerns" requires a non-empty "proposed_plan".\n' +
+    '- Multi-line text goes INSIDE the JSON strings (use \\n); do not add fields.\n' +
     '\n' +
-    'PROPOSED PLAN:\n' +
-    getProposedPlanGuidance(phase) +
-    '\n' +
-    '\n' +
-    'QUESTIONS FOR MAIN:\n' +
-    '<body — leave blank if none>\n' +
-    '\n' +
-    'PROCEED IF:\n' +
-    '<body — leave blank if none>\n' +
-    '\n' +
-    'TEST_RESULTS:\n' +
-    '<body — leave blank if none>\n' +
-    '\n' +
-    'DRIFT REPORT:\n' +
-    '<body — leave blank if none>\n' +
-    '\n' +
-    'Include the following three lines ONLY when RESPONSE is "done":\n' +
-    'CABLES SENT: <none | comma-separated angel IDs>\n' +
-    'FILES CHANGED: <none | comma-separated relative paths>\n' +
-    'ANGEL_MD_UPDATED: <yes | no>\n' +
-    '\n' +
-    'Format rules:\n' +
-    '- FROM / TIMESTAMP / RESPONSE / CABLES SENT / FILES CHANGED / ANGEL_MD_UPDATED: single-line ' +
-    '"FIELD: value" — value on the same line as the field name.\n' +
-    '- CONCERNS / PROPOSED PLAN / QUESTIONS FOR MAIN / PROCEED IF / TEST_RESULTS / DRIFT REPORT: ' +
-    'header alone on its own line (nothing after the colon), multi-line body on subsequent lines.\n' +
-    '- RESPONSE must be exactly one of the five words above. "DISCOVERY complete", "approved", or ' +
-    'any other string will fail the parser.\n' +
-    '- Phase guide: discovery / init / execute / sweep / ask → RESPONSE: done. ' +
-    'review → RESPONSE: proceed | concerns | refuse.'
+    'Minimal valid example:\n' +
+    example
   );
 }
 
@@ -147,10 +154,10 @@ You operate under the following protocol:
 1. You may READ any file in the project for context. You may only WRITE files inside your designated folder. Exception: your angel.md (path listed in your identity section) is the sole file you may write outside your folder.
 2. You operate in one of these phases: INIT, DISCOVERY, REVIEW, EXECUTE, or SWEEP. The current phase is stated below.
 3. In REVIEW, you must NOT modify any code. You read the brief, your charter, the relevant code, and respond with concerns or "proceed".
-4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to fill in CABLES SENT, FILES CHANGED, ANGEL_MD_UPDATED in the response.
-5. Your final action in either phase is to write a structured response file at the path specified.
+4. In EXECUTE, you make the requested changes, update your angel.md, and send cables to affected angels. The orchestrator appends the newspaper entry automatically based on your response file. IMPORTANT: do NOT write to .angels/_newspaper.md or .angels/_newspaper/. Your only job is to report "cables_sent", "files_changed" and "angel_md_updated" in your response JSON.
+5. Your final action in either phase is to write a structured JSON response file at the path specified.
 6. You may write/update tests using your judgment about what's appropriate for the change. There is no rule requiring tests, but use common sense — if you're changing logic, consider whether tests should change too. If you run tests, report the results in your response.
-7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW. Do not silently comply.
+7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW and cite the invariant by its ID (e.g. INV-002). Do not silently comply.
 8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.`;
 
 const PHASE_INSTRUCTIONS: Record<PromptPhase, string> = {
@@ -182,7 +189,7 @@ Read the brief below and evaluate the proposed change against your charter, inva
 You must respond with one of:
 - "proceed": The change is safe. You have no concerns.
 - "concerns": You have specific concerns. List them. Suggest mitigations in PROCEED IF.
-- "refuse": The change fundamentally violates your invariants. Explain why.
+- "refuse": The change fundamentally violates your invariants. Explain why, citing the violated invariant IDs (e.g. INV-002).
 
 Do NOT modify any code or files during REVIEW. Only write the response file.`,
 
@@ -193,7 +200,7 @@ After making changes:
 1. Update your angel.md (path listed in your identity section) if the change affects your charter, contracts, invariants, or dependencies. This is the one write exception outside your designated folder — see rule 1.
 2. If the change impacts other angels, send cables to notify them.
 3. If you run tests, report the results.
-4. Write the response file with RESPONSE: done and list all files changed.
+4. Write the response JSON with "verdict": "done" and list every changed file in "files_changed".
 
 You may only write files inside your designated folder, plus your angel.md at the path in your identity section.`,
 
@@ -204,7 +211,7 @@ Rules:
 - Read your angel.md and any relevant files in your folder to answer accurately.
 - Do NOT modify any files.
 - Do NOT send cables.
-- Write RESPONSE: done and put your complete answer in PROPOSED PLAN.
+- Write "verdict": "done" and put your complete answer in "proposed_plan".
 - Be specific: cite file paths, function names, line ranges where helpful.
 - If you cannot answer with confidence, say so explicitly — do not guess.`,
 
@@ -438,7 +445,7 @@ export function buildDenseDiscoveryPrompt(params: {
   memoryConfig: { targetPct: number; maxTokens: number };
   responsePath: string;
   /** When true, instruct the angel to write angel.md directly to the filesystem
-   *  instead of embedding it in PROPOSED PLAN. Requires angelMdPath. */
+   *  instead of embedding it in proposed_plan. Requires angelMdPath. */
   directWrite?: boolean;
   /** Write mode — 'direct' or 'proposed' (default). Takes precedence over directWrite when set. */
   writeMode?: WriteMode;
@@ -549,14 +556,14 @@ export function buildDenseDiscoveryPrompt(params: {
 
   if (isDirect && angelMdPath) {
     // Direct write mode: angel writes angel.md directly to the filesystem
-    // and indicates success via WRITE_MODE: DIRECT header
+    // and reports it via write_mode "direct" in the response JSON.
     sections.push(`WRITE angel.md directly at: ${angelMdPath}`);
     sections.push('');
     sections.push(
       '1. Write the complete angel.md body (no YAML frontmatter) to that path.\n' +
-      '2. In your response, start with WRITE_MODE: DIRECT then RESPONSE: done.\n' +
-      '   On failure, use RESPONSE: error.\n' +
-      'DO NOT include the angel.md body in PROPOSED PLAN (leave it empty).',
+      '2. In your response JSON, set "write_mode": "direct" and "verdict": "done".\n' +
+      '   On failure, set "verdict": "error" and explain in "concerns".\n' +
+      'DO NOT include the angel.md body in "proposed_plan" (leave it empty).',
     );
     sections.push('');
     sections.push(
@@ -564,12 +571,13 @@ export function buildDenseDiscoveryPrompt(params: {
       'Be specific: reference actual function names, types, modules, and file paths from the discovery context.',
     );
   } else {
-    // Legacy mode: angel writes body in PROPOSED PLAN field
+    // Proposed mode: angel embeds the body in the proposed_plan field
     sections.push(
-      `Write your response (the complete angel.md body) to: ${responsePath}`,
+      `Write your response JSON to: ${responsePath}`,
     );
     sections.push(
-      'Write ONLY the angel.md body (no frontmatter, no surrounding code fences, no extra commentary). ' +
+      'Put the COMPLETE angel.md body in the "proposed_plan" field (no frontmatter, ' +
+      'no surrounding code fences, no extra commentary). ' +
       'The body MUST follow the Dense Template structure above. ' +
       'Be specific: reference actual function names, types, modules, and file paths from the discovery context.',
     );
@@ -588,11 +596,11 @@ export function buildDenseDiscoveryPrompt(params: {
  * Build a prompt for writing a single chunk of a large angel.md.
  *
  * For chunk 0 (first): instructs the angel to write the FIRST chunk with
- * WRITE_MODE: CHUNK and specific sections.
+ * write_mode "chunk" and specific sections.
  *
  * For chunks 1+ (subsequent): tells the angel which sections are already
- * written and which new sections to generate, using WRITE_MODE: CHUNK
- * (or CHUNK_FINAL for the last chunk).
+ * written and which new sections to generate, using write_mode "chunk"
+ * (or "chunk_final" for the last chunk).
  *
  * @param params - Parameters for building the chunk prompt
  * @returns The complete chunk prompt string
@@ -609,7 +617,7 @@ export function buildChunkPrompt(params: {
   const pathDesc = angel.type === 'root' ? '.' : angel.path;
   const isFirst = chunkIndex === 0;
   const isLast = chunkIndex === totalChunks - 1;
-  const writeModeTag = isLast ? 'CHUNK_FINAL' : 'CHUNK';
+  const writeModeTag = isLast ? 'chunk_final' : 'chunk';
 
   const sections: string[] = [];
 
@@ -629,8 +637,8 @@ export function buildChunkPrompt(params: {
     sections.push('');
     sections.push(
       'Write ONLY these sections. Do NOT include other sections. ' +
-        'Use appendAngelMd() to write the body. ' +
-        'Start your response with WRITE_MODE: CHUNK then RESPONSE: done.',
+        'Append the sections directly to your angel.md file (path in your identity section). ' +
+        'In your response JSON set "write_mode": "chunk" and "verdict": "done".',
     );
   } else {
     const previousSections = getAllPreviousSections(chunkIndex);
@@ -654,8 +662,8 @@ export function buildChunkPrompt(params: {
     sections.push('');
     sections.push(
       'Do NOT repeat sections already written. ' +
-        'Use appendAngelMd() to append the new content. ' +
-        `Start your response with WRITE_MODE: ${writeModeTag} then RESPONSE: done.`,
+        'Append the new content directly to your angel.md file (path in your identity section). ' +
+        `In your response JSON set "write_mode": "${writeModeTag}" and "verdict": "done".`,
     );
   }
 
@@ -700,10 +708,9 @@ export function buildChunkPrompt(params: {
   // Output instructions
   sections.push('[OUTPUT INSTRUCTIONS]');
   sections.push(
-    '1. Start your response with WRITE_MODE: ' + writeModeTag + '\n' +
-    '2. Then RESPONSE: done\n' +
-    '3. DO NOT include the angel.md body in your response — use appendAngelMd() to write it\n' +
-    '4. Use the discovery context above for accurate file references',
+    '1. In your response JSON set "write_mode": "' + writeModeTag + '" and "verdict": "done"\n' +
+    '2. DO NOT include the angel.md body in "proposed_plan" — append it directly to your angel.md file\n' +
+    '3. Use the discovery context above for accurate file references',
   );
   sections.push('');
   sections.push(CABLE_FORMAT_TEMPLATE);

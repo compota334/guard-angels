@@ -12,6 +12,7 @@ import { buildDenseDiscoveryPrompt, buildChunkPrompt, shouldUseDenseTemplate } f
 import { buildChunkPlan, estimateTotalTokens } from '../protocol/discovery-chunker.js';
 import { invoke } from '../protocol/orchestrate.js';
 import { writeBrief } from '../protocol/brief.js';
+import { mapWithConcurrency, clampParallel } from '../util/concurrency.js';
 import type { Config, AngelEntry } from '../config/schema.js';
 
 export interface OnboardOptions {
@@ -21,6 +22,7 @@ export interface OnboardOptions {
   depth?: number;
   targetPct?: number;
   maxTokens?: number;
+  parallel?: number;
 }
 
 export async function onboardAngels(cwd: string, opts: OnboardOptions): Promise<void> {
@@ -28,48 +30,84 @@ export async function onboardAngels(cwd: string, opts: OnboardOptions): Promise<
   const registry = AngelRegistry.fromConfig(config);
   const targets = selectAngels(registry, opts.angel);
 
+  // Resolve interactive overwrite confirmations BEFORE the parallel run —
+  // readline prompts cannot interleave with concurrent onboards.
+  const confirmed: AngelEntry[] = [];
   for (const angel of targets) {
-    const angelPath = angelIdToPath(angel.id);
-    const mdPath = angelMdFile(cwd, angelPath);
-
+    const mdPath = angelMdFile(cwd, angelIdToPath(angel.id));
     if (isActiveAngel(mdPath) && !opts.force) {
-      const confirmed = await promptOverwrite(angel.id);
-      if (!confirmed) {
+      const overwrite = await promptOverwrite(angel.id);
+      if (!overwrite) {
         console.log(`Skipping ${angel.id} (active, not overwriting).`);
         continue;
       }
     }
+    confirmed.push(angel);
+  }
 
-    console.log(`Onboarding ${angel.id}...`);
+  const parallel = clampParallel(opts.parallel, 4);
+  const results = await mapWithConcurrency(confirmed, parallel, (angel) =>
+    onboardOne(cwd, angel, config, opts),
+  );
 
-    // Detect whether to use dense direct write mode
-    const angelConfigMemory = angel.memory ?? config.memory;
-    const cliOverrides = opts.targetPct !== undefined || opts.maxTokens !== undefined;
-    const effectiveMemory = cliOverrides
-      ? { target_pct: opts.targetPct ?? angelConfigMemory?.target_pct ?? 25, max_tokens: opts.maxTokens ?? angelConfigMemory?.max_tokens }
-      : angelConfigMemory;
-    const useDense = shouldUseDenseTemplate(effectiveMemory);
+  const failures = results
+    .map((result, i) => ({ result, angel: confirmed[i] }))
+    .filter((entry) => entry.result.status === 'rejected');
 
-    if (useDense) {
-      // Check if chunking is needed (estimated >50KB)
-      const absoluteAngelPath = resolvePath(cwd, angel.path);
-      const contextWindow = 128_000;
-      const deepContext = await buildDeepDiscoveryContext(absoluteAngelPath, effectiveMemory, contextWindow);
-      const estimatedTok = estimateTotalTokens(deepContext);
-      const useChunking = estimatedTok > 12_000; // >50KB threshold
-
-      if (useChunking) {
-        await onboardWithChunks(cwd, angel, config, opts, angelPath, mdPath, deepContext, estimatedTok);
-      } else {
-        await onboardWithDirectWrite(cwd, angel, config, opts, angelPath, mdPath);
-      }
-    } else {
-      await onboardLegacy(cwd, angel, opts, angelPath, mdPath);
-    }
+  for (const failure of failures) {
+    const reason = (failure.result as PromiseRejectedResult).reason as Error;
+    console.error(`Onboard failed for ${failure.angel.id}: ${reason?.message ?? String(reason)}`);
+  }
+  if (failures.length > 0) {
+    throw new Error(
+      `Onboard failed for ${failures.length} of ${confirmed.length} angel(s): ` +
+        failures.map((f) => f.angel.id).join(', '),
+    );
   }
 
   if (!opts.autoActivate) {
     printActivateHint();
+  }
+}
+
+/**
+ * Onboard a single angel: pick the pipeline (dense direct write, chunked,
+ * or legacy proposed-plan) based on the effective memory budget.
+ */
+async function onboardOne(
+  cwd: string,
+  angel: AngelEntry,
+  config: Config,
+  opts: OnboardOptions,
+): Promise<void> {
+  const angelPath = angelIdToPath(angel.id);
+  const mdPath = angelMdFile(cwd, angelPath);
+
+  console.log(`Onboarding ${angel.id}...`);
+
+  // Detect whether to use dense direct write mode
+  const angelConfigMemory = angel.memory ?? config.memory;
+  const cliOverrides = opts.targetPct !== undefined || opts.maxTokens !== undefined;
+  const effectiveMemory = cliOverrides
+    ? { target_pct: opts.targetPct ?? angelConfigMemory?.target_pct ?? 25, max_tokens: opts.maxTokens ?? angelConfigMemory?.max_tokens }
+    : angelConfigMemory;
+  const useDense = shouldUseDenseTemplate(effectiveMemory);
+
+  if (useDense) {
+    // Check if chunking is needed (estimated >50KB)
+    const absoluteAngelPath = resolvePath(cwd, angel.path);
+    const contextWindow = 128_000;
+    const deepContext = await buildDeepDiscoveryContext(absoluteAngelPath, effectiveMemory, contextWindow);
+    const estimatedTok = estimateTotalTokens(deepContext);
+    const useChunking = estimatedTok > 12_000; // >50KB threshold
+
+    if (useChunking) {
+      await onboardWithChunks(cwd, angel, config, opts, angelPath, mdPath, deepContext, estimatedTok);
+    } else {
+      await onboardWithDirectWrite(cwd, angel, config, opts, angelPath, mdPath);
+    }
+  } else {
+    await onboardLegacy(cwd, angel, opts, angelPath, mdPath);
   }
 }
 

@@ -129,7 +129,7 @@ describe('buildPrompt', () => {
       expect(prompt).toContain('change has been approved');
       expect(prompt).toContain('Update your angel.md');
       expect(prompt).toContain('send cables');
-      expect(prompt).toContain('RESPONSE: done');
+      expect(prompt).toContain('"verdict": "done"');
     });
   });
 
@@ -467,7 +467,7 @@ describe('buildDenseDiscoveryPrompt', () => {
     expect(prompt).toContain('Budget allocated: 25%');
   });
 
-  it('with writeMode="direct" includes WRITE_MODE: DIRECT', () => {
+  it('with writeMode="direct" instructs write_mode "direct" in the response JSON', () => {
     const prompt = buildDenseDiscoveryPrompt({
       angel,
       context,
@@ -476,10 +476,10 @@ describe('buildDenseDiscoveryPrompt', () => {
       writeMode: 'direct',
       angelMdPath: '/project/.angels/src-api/angel.md',
     });
-    expect(prompt).toContain('WRITE_MODE: DIRECT');
+    expect(prompt).toContain('"write_mode": "direct"');
   });
 
-  it('with writeMode="proposed" does NOT include WRITE_MODE', () => {
+  it('with writeMode="proposed" does NOT instruct direct write', () => {
     const prompt = buildDenseDiscoveryPrompt({
       angel,
       context,
@@ -487,7 +487,7 @@ describe('buildDenseDiscoveryPrompt', () => {
       responsePath: '/responses/discovery.md',
       writeMode: 'proposed',
     });
-    expect(prompt).not.toContain('WRITE_MODE');
+    expect(prompt).not.toContain('"write_mode": "direct"');
   });
 
   it('includes DENSE TEMPLATE section', () => {
@@ -511,7 +511,7 @@ describe('buildDenseDiscoveryPrompt', () => {
       angelMdPath: '/project/.angels/src-api/angel.md',
     });
     expect(prompt).toContain('WRITE angel.md directly at: /project/.angels/src-api/angel.md');
-    expect(prompt).toContain('DO NOT include the angel.md body in PROPOSED PLAN');
+    expect(prompt).toContain('DO NOT include the angel.md body in "proposed_plan"');
   });
 
   it('proposed mode writes to response path', () => {
@@ -522,7 +522,8 @@ describe('buildDenseDiscoveryPrompt', () => {
       responsePath: '/responses/discovery.md',
       writeMode: 'proposed',
     });
-    expect(prompt).toContain('Write your response (the complete angel.md body) to: /responses/discovery.md');
+    expect(prompt).toContain('Write your response JSON to: /responses/discovery.md');
+    expect(prompt).toContain('"proposed_plan"');
   });
 });
 
@@ -572,7 +573,7 @@ describe('buildChunkPrompt', () => {
     });
     expect(prompt).toContain('FIRST chunk');
     expect(prompt).toContain('CHUNKED WRITE, FIRST CHUNK');
-    expect(prompt).toContain('WRITE_MODE: CHUNK');
+    expect(prompt).toContain('"write_mode": "chunk"');
   });
 
   it('chunk 0 includes section list', () => {
@@ -596,7 +597,7 @@ describe('buildChunkPrompt', () => {
     });
     expect(prompt).toContain('chunk 2/5');
     expect(prompt).toContain('Sections already written:');
-    expect(prompt).toContain('WRITE_MODE: CHUNK');
+    expect(prompt).toContain('"write_mode": "chunk"');
   });
 
   it('last chunk uses CHUNK_FINAL write mode', () => {
@@ -607,7 +608,7 @@ describe('buildChunkPrompt', () => {
       chunkIndex: 4,
       totalChunks: 5,
     });
-    expect(prompt).toContain('CHUNK_FINAL');
+    expect(prompt).toContain('"write_mode": "chunk_final"');
   });
 
   it('includes discovery context stats', () => {

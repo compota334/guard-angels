@@ -93,6 +93,13 @@ export interface LogMeta {
   responsePath: string;
   exitCode: number;
   sessionId?: string;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheCreationInputTokens: number;
+    cacheReadInputTokens: number;
+  };
+  costUsd?: number;
   startedAt: string;
   finishedAt: string;
   timedOut: boolean;
