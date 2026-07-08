@@ -2,7 +2,7 @@
 
 All notable changes to Guard Angels are documented here.
 
-## [Unreleased]
+## [0.3.0] - 2026-07-08
 
 ### Changed (BREAKING)
 
@@ -21,12 +21,14 @@ All notable changes to Guard Angels are documented here.
 - **Mechanical territory enforcement**: `angels guard-check <path>` (exit 0 allow / exit 2 block; `--hook` mode reads a Claude Code PreToolUse payload from stdin) and `angels hooks install|status|uninstall` to manage the edit-guard hook in `.claude/settings.json`. Only active folder angels block; the angel subprocess is exempt via `GUARD_ANGELS_EXECUTING`.
 - **Deterministic journal**: a `## Journal` section in angel.md appended by the CLI with zero AI cost (execute outcomes automatically; human notes via the new `angels note <id> "<text>"`). Sweep instructs angels to fold journal facts into curated sections. Capped at 200 entries with overflow rotating to `_archive/journal/`.
 - **Cache-aware prompt layout**: prompts now put the stable prefix first (protocol, identity, angel.md memory, notes) and everything volatile last (phase, folder listing, chat, newspaper, inbox, brief), so brief→execute pairs hit the Anthropic prompt cache on the expensive part.
+- **`angels stats`**: read-only per-angel metrics with a totals row and `--json` output. Invocations, tokens and cost from the `.meta.json` telemetry (live and archived; absence of usage is reported, never shown as zero), verdict distribution and refusals citing `INV-NNN` ids from the response JSONs, and memory staleness as `angel.md` `last_updated` vs the territory's last git commit. `--since <iso>` scopes the time window; malformed artifact files are skipped with a printed note.
 - Unit tests for `handleQuestionsForMain`, `resolveMemoryConfig`, and `GUARD_ANGELS_PROMPT_WARN_BYTES` parsing; integration test for `init --manual` path traversal and input normalization.
 
 ### Changed
 
 - **Cables are consumed by default**: `brief`, `do` and `execute` now inject pending inbox cables as context and archive them after the angel has seen them. Opt out per invocation with `--no-consume-cables`. `execute` no longer archives cables it never delivered.
 - **Project name unified to "Guard Angels"**: remaining singular "Guard Angel" references updated across docs, log prefixes (`[guard-angels]`), and test temp-dir prefixes. The agent prompt intentionally keeps "You are a Guard Angel" because it addresses one individual angel.
+- **Docs brought back in sync with the code**: `docs/architecture.md` re-verified against this release (JSON response contract, per-angel locks and concurrency pool, newspaper rotation and generation cursors, journal, telemetry); `docs/performance-audit.md` now carries a status header marking its critical findings as resolved.
 
 ### Fixed
 
@@ -40,6 +42,7 @@ All notable changes to Guard Angels are documented here.
 
 ### Removed
 
+- The dead `backend.main_agent_cmd` config key, declared in the schema but consumed nowhere. Existing `_config.yml` files that still carry it keep loading; the key is simply ignored.
 - Dead code: the unused `buildDiscoveryPrompt` wrapper and duplicate `useDenseTemplate` helper, `getBoilerplateStats`, `SUPPORTED_LANGUAGES`, and export-only surface for internal types (`BoilerplateFilter`, `BoilerplateStats`, `SOURCE_EXTENSIONS`).
 - Duplication: scaffold/binary filter constants consolidated into `src/protocol/discovery-shared.ts` (previously copied in `discovery.ts` and `discovery-enhanced.ts`); the response summary printer shared by `brief` and `do` extracted to `src/commands/response-summary.ts`.
 
