@@ -19,6 +19,7 @@ import { askAngel } from './commands/ask.js';
 import { chatWithAngel } from './commands/chat.js';
 import { noteAngel } from './commands/note.js';
 import { runGuardCheck } from './commands/guard-check.js';
+import { showStats } from './commands/stats.js';
 import { installHooks, uninstallHooks, hooksStatus } from './commands/hooks.js';
 import { generateCompletion } from './commands/completion.js';
 
@@ -384,6 +385,19 @@ program
         olderThanDays,
       });
       process.exit(exitCode);
+    } catch (err: unknown) {
+      handleError(err, 1);
+    }
+  });
+
+program
+  .command('stats')
+  .description('Aggregate per-angel metrics: invocations, verdicts, tokens, cost, memory staleness')
+  .option('--json', 'Print the full report as JSON instead of tables')
+  .option('--since <iso>', 'Only count invocations and responses since this ISO timestamp')
+  .action(async (options: { json?: boolean; since?: string }) => {
+    try {
+      await showStats(process.cwd(), { json: options.json, since: options.since });
     } catch (err: unknown) {
       handleError(err, 1);
     }

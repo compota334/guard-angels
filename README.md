@@ -202,6 +202,7 @@ angels doctor --archive --older-than=30
 | `angels guard-check <path> [--hook]` | Territory check for edit hooks: exit 0 allows, exit 2 blocks. `--hook` reads a Claude Code PreToolUse payload from stdin. |
 | `angels hooks <install\|status\|uninstall>` | Manage the Claude Code edit-guard hook in `.claude/settings.json`. |
 | `angels show <angel-id>` | Print the current `angel.md` for an angel. |
+| `angels stats [--json] [--since=<iso>]` | Aggregate per-angel metrics: invocations, verdicts, refusals citing invariants, tokens, cost, memory staleness. Read-only. |
 | `angels completion <shell>` | Print a shell completion script. Supported shells: `bash`, `zsh`. |
 
 ## Response format
@@ -315,6 +316,29 @@ Facts land in each angel's memory without any AI invocation. A `## Journal` sect
 - `angels note <id> "<text>"` appends a human observation.
 
 During the next sweep, the angel folds journal facts into its curated sections and deletes the folded bullets. The journal is capped at 200 entries; overflow rotates to `_archive/journal/<angel-id>.md`. Frontmatter `last_updated` is untouched by journal appends, so it keeps meaning "last curated update".
+
+## Stats: does the republic earn its keep
+
+`angels stats` aggregates the artifacts the system already produces into per-angel numbers, with a totals row:
+
+```
+ANGEL     INVOC  PROCEED  CONCERNS  REFUSE  REF-INV  DONE  ERROR  IN-TOK  OUT-TOK  CACHE-RD  COST
+────────  ─────  ───────  ────────  ──────  ───────  ────  ─────  ──────  ───────  ────────  ────────
+_root         2        0         0       0        0     2      0  41,200      310    38,000  $0.0921
+src-auth      5        1         0       1        1     3      0  98,450      880    91,300  $0.2114
+TOTAL         7        1         0       1        1     5      0 139,650    1,190   129,300  $0.3035
+
+ANGEL     LAST CURATED  TERRITORY COMMIT  STALE
+────────  ────────────  ────────────────  ─────
+_root     2026-07-01    2026-07-08           7d
+src-auth  2026-07-05    2026-07-08           3d
+```
+
+- **Invocations, tokens, cost** come from the per-invocation `.meta.json` files (live and archived). Token usage and cost exist only for the claude backend since 0.3; invocations without usage are counted and their absence is announced in a note, never faked as zero.
+- **Verdicts** are parsed from the structured response JSONs (live and archived). `REF-INV` counts refusals whose concerns cite at least one `INV-NNN` id.
+- **Staleness** compares `angel.md` frontmatter `last_updated` (the last curated update; journal appends do not touch it) against the territory's last git commit. `7d` means the territory moved seven days past what the memory has curated.
+
+`--since <iso>` scopes invocations and responses to a time window; `--json` prints the full structured report for scripting. Malformed artifact files are skipped and listed in notes; the command is read-only and never fails over them.
 
 ## Angel memory system
 
