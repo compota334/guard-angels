@@ -51,6 +51,7 @@ export class ClaudeAdapter implements BackendAdapter {
         CLAUDECODE: '',
         CLAUDE_CODE_ENTRYPOINT: '',
         CLAUDE_CODE_EXECPATH: '',
+        ...(opts.env ?? {}),
       },
     });
 

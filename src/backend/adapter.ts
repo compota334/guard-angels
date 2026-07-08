@@ -3,6 +3,8 @@ export interface InvokeOptions {
   cwd: string;
   timeoutMs: number;
   extraArgs?: string[];
+  /** Extra environment variables for the spawned backend process. */
+  env?: Record<string, string>;
 }
 
 /**

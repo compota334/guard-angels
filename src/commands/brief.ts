@@ -3,7 +3,11 @@ import { AngelRegistry } from '../angels/registry.js';
 import { writeBrief } from '../protocol/brief.js';
 import { invoke } from '../protocol/orchestrate.js';
 import { appendNewspaper } from '../messaging/newspaper.js';
-import { readInbox, archiveProcessedInbox } from '../messaging/cables.js';
+import {
+  readInbox,
+  archiveProcessedInbox,
+  formatCablesAsContext,
+} from '../messaging/cables.js';
 import { handleQuestionsForMain } from '../messaging/questions.js';
 import { printResponseSummary } from './response-summary.js';
 import type { ResponseData, ResponseVerdict } from '../protocol/response.js';
@@ -28,6 +32,7 @@ const EXIT_CODES: Record<ResponseVerdict, number> = {
 };
 
 export interface BriefOptions {
+  /** Inject pending inbox cables into the brief and archive them after. Default: true. */
   consumeCables?: boolean;
 }
 
@@ -35,8 +40,9 @@ export interface BriefOptions {
  * Run phase 1 (REVIEW) for an angel: write a brief, invoke the angel,
  * print a summary of the response.
  *
- * With consumeCables=true, pending inbox cables are injected as context in
- * the brief and archived after the angel has seen them.
+ * Pending inbox cables are injected as context in the brief and archived
+ * after the angel has seen them (a postal service should not need the
+ * president to deliver letters). Opt out with consumeCables=false.
  *
  * Returns the exit code (0 = proceed, 1 = error, 2 = concerns, 3 = refuse).
  */
@@ -46,21 +52,21 @@ export async function briefAngel(
   task: string,
   options: BriefOptions = {},
 ): Promise<number> {
+  const consumeCables = options.consumeCables ?? true;
+
   // 1. Load config and validate angel exists
   const config = loadConfig(cwd);
   const registry = AngelRegistry.fromConfig(config);
   registry.getById(angelId); // throws if not found
 
-  // 2. Optionally read inbox cables to inject as context
+  // 2. Read inbox cables to inject as context (default behavior)
   let cableContext = '';
   let pendingCables: ParsedCable[] = [];
-  if (options.consumeCables) {
+  if (consumeCables) {
     pendingCables = readInbox(cwd, angelId);
     if (pendingCables.length > 0) {
-      cableContext = buildCableContext(pendingCables);
+      cableContext = formatCablesAsContext(pendingCables);
       console.log(`Injecting ${pendingCables.length} pending cable(s) into brief context.`);
-    } else {
-      console.log('No pending cables found in inbox.');
     }
   }
 
@@ -88,7 +94,7 @@ export async function briefAngel(
   });
 
   // 5. Archive cables now that the angel has seen them via the brief context
-  if (options.consumeCables && pendingCables.length > 0) {
+  if (consumeCables && pendingCables.length > 0) {
     archiveProcessedInbox(cwd, angelId);
   }
 
@@ -114,40 +120,6 @@ export async function briefAngel(
 
   // 8. Return exit code based on the response verdict
   return EXIT_CODES[result.response.response];
-}
-
-/**
- * Format pending cables as a context block to inject into the brief.
- * Each cable is included in full so the angel sees the complete content.
- */
-function buildCableContext(cables: ParsedCable[]): string {
-  const lines: string[] = [
-    `PENDING CABLES IN INBOX (${cables.length}):`,
-    '',
-  ];
-
-  for (const cable of cables) {
-    lines.push(`--- CABLE from ${cable.from} [${cable.urgency.toUpperCase()}] ---`);
-    lines.push(`Subject: ${cable.subject}`);
-    lines.push(`Type: ${cable.type}`);
-    lines.push(`Timestamp: ${cable.timestamp}`);
-    if (cable.requiresAck) {
-      lines.push('Requires acknowledgment: yes');
-    }
-    lines.push('');
-    lines.push(cable.body.trim());
-    if (cable.references.length > 0) {
-      lines.push('');
-      lines.push('References:');
-      for (const ref of cable.references) {
-        lines.push(`  - ${ref}`);
-      }
-    }
-    lines.push(`--- END CABLE ---`);
-    lines.push('');
-  }
-
-  return lines.join('\n');
 }
 
 /**

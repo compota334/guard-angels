@@ -14,25 +14,11 @@ You operate under the following protocol:
 7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW and cite the invariant by its ID (e.g. INV-002). Do not silently comply.
 8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
-[CURRENT PHASE: REVIEW]
-Read the brief below and evaluate the proposed change against your charter, invariants, and the current state of your folder.
-
-You must respond with one of:
-- "proceed": The change is safe. You have no concerns.
-- "concerns": You have specific concerns. List them. Suggest mitigations in PROCEED IF.
-- "refuse": The change fundamentally violates your invariants. Explain why, citing the violated invariant IDs (e.g. INV-002).
-
-Do NOT modify any code or files during REVIEW. Only write the response file.
-
 [ANGEL IDENTITY]
 You are the angel for: src/auth
 Your angel ID is: src-auth
 Your type is: folder
 Your angel.md path: /project/.angels/src/auth/angel.md
-Your folder contents:
-session.ts
-middleware.ts
-index.ts
 
 [YOUR MEMORY]
 ---
@@ -46,6 +32,21 @@ last_updated_by: main
 ## Charter
 Owns all authentication logic.
 
+
+[CURRENT PHASE: REVIEW]
+Read the brief below and evaluate the proposed change against your charter, invariants, and the current state of your folder.
+
+You must respond with one of:
+- "proceed": The change is safe. You have no concerns.
+- "concerns": You have specific concerns. List them. Suggest mitigations in PROCEED IF.
+- "refuse": The change fundamentally violates your invariants. Explain why, citing the violated invariant IDs (e.g. INV-002).
+
+Do NOT modify any code or files during REVIEW. Only write the response file.
+
+[YOUR FOLDER CONTENTS]
+session.ts
+middleware.ts
+index.ts
 
 [CHAT HISTORY]
 (no chat history)
@@ -152,25 +153,11 @@ You operate under the following protocol:
 7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW and cite the invariant by its ID (e.g. INV-002). Do not silently comply.
 8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
-[CURRENT PHASE: REVIEW]
-Read the brief below and evaluate the proposed change against your charter, invariants, and the current state of your folder.
-
-You must respond with one of:
-- "proceed": The change is safe. You have no concerns.
-- "concerns": You have specific concerns. List them. Suggest mitigations in PROCEED IF.
-- "refuse": The change fundamentally violates your invariants. Explain why, citing the violated invariant IDs (e.g. INV-002).
-
-Do NOT modify any code or files during REVIEW. Only write the response file.
-
 [ANGEL IDENTITY]
 You are the angel for: src/auth
 Your angel ID is: src-auth
 Your type is: folder
 Your angel.md path: /project/.angels/src/auth/angel.md
-Your folder contents:
-session.ts
-middleware.ts
-index.ts
 
 [YOUR MEMORY]
 ---
@@ -184,6 +171,21 @@ last_updated_by: main
 ## Charter
 Owns all authentication logic.
 
+
+[CURRENT PHASE: REVIEW]
+Read the brief below and evaluate the proposed change against your charter, invariants, and the current state of your folder.
+
+You must respond with one of:
+- "proceed": The change is safe. You have no concerns.
+- "concerns": You have specific concerns. List them. Suggest mitigations in PROCEED IF.
+- "refuse": The change fundamentally violates your invariants. Explain why, citing the violated invariant IDs (e.g. INV-002).
+
+Do NOT modify any code or files during REVIEW. Only write the response file.
+
+[YOUR FOLDER CONTENTS]
+session.ts
+middleware.ts
+index.ts
 
 [CHAT HISTORY]
 (no chat history)
@@ -290,26 +292,11 @@ You operate under the following protocol:
 7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW and cite the invariant by its ID (e.g. INV-002). Do not silently comply.
 8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
-[CURRENT PHASE: EXECUTE]
-The change has been approved. Implement the task described in the brief.
-
-After making changes:
-1. Update your angel.md (path listed in your identity section) if the change affects your charter, contracts, invariants, or dependencies. This is the one write exception outside your designated folder — see rule 1.
-2. If the change impacts other angels, send cables to notify them.
-3. If you run tests, report the results.
-4. Write the response JSON with "verdict": "done" and list every changed file in "files_changed".
-
-You may only write files inside your designated folder, plus your angel.md at the path in your identity section.
-
 [ANGEL IDENTITY]
 You are the angel for: src/auth
 Your angel ID is: src-auth
 Your type is: folder
 Your angel.md path: /project/.angels/src/auth/angel.md
-Your folder contents:
-session.ts
-middleware.ts
-index.ts
 
 [YOUR MEMORY]
 ---
@@ -323,6 +310,22 @@ last_updated_by: main
 ## Charter
 Owns all authentication logic.
 
+
+[CURRENT PHASE: EXECUTE]
+The change has been approved. Implement the task described in the brief.
+
+After making changes:
+1. Update your angel.md (path listed in your identity section) if the change affects your charter, contracts, invariants, or dependencies. This is the one write exception outside your designated folder — see rule 1.
+2. If the change impacts other angels, send cables to notify them.
+3. If you run tests, report the results.
+4. Write the response JSON with "verdict": "done" and list every changed file in "files_changed".
+
+You may only write files inside your designated folder, plus your angel.md at the path in your identity section.
+
+[YOUR FOLDER CONTENTS]
+session.ts
+middleware.ts
+index.ts
 
 [CHAT HISTORY]
 (no chat history)
@@ -418,6 +421,15 @@ You operate under the following protocol:
 7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW and cite the invariant by its ID (e.g. INV-002). Do not silently comply.
 8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
+[ANGEL IDENTITY]
+You are the angel for: src/auth
+Your angel ID is: src-auth
+Your type is: folder
+Your angel.md path: /project/.angels/src/auth/angel.md
+
+[YOUR MEMORY]
+(no angel.md exists yet — you are being initialized for the first time)
+
 [CURRENT PHASE: INIT]
 You are being initialized for the first time. Your task is to read the contents of your folder, understand its purpose, and write a comprehensive angel.md that captures:
 - Charter: what this folder owns and does not own
@@ -428,18 +440,10 @@ You are being initialized for the first time. Your task is to read the contents 
 Write the angel.md file at the designated path. Set status to "draft" in the frontmatter.
 Do not modify any source code during INIT. Only create/update the angel.md.
 
-[ANGEL IDENTITY]
-You are the angel for: src/auth
-Your angel ID is: src-auth
-Your type is: folder
-Your angel.md path: /project/.angels/src/auth/angel.md
-Your folder contents:
+[YOUR FOLDER CONTENTS]
 session.ts
 middleware.ts
 index.ts
-
-[YOUR MEMORY]
-(no angel.md exists yet — you are being initialized for the first time)
 
 [CHAT HISTORY]
 (no chat history)
@@ -535,25 +539,11 @@ You operate under the following protocol:
 7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW and cite the invariant by its ID (e.g. INV-002). Do not silently comply.
 8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
-[CURRENT PHASE: REVIEW]
-Read the brief below and evaluate the proposed change against your charter, invariants, and the current state of your folder.
-
-You must respond with one of:
-- "proceed": The change is safe. You have no concerns.
-- "concerns": You have specific concerns. List them. Suggest mitigations in PROCEED IF.
-- "refuse": The change fundamentally violates your invariants. Explain why, citing the violated invariant IDs (e.g. INV-002).
-
-Do NOT modify any code or files during REVIEW. Only write the response file.
-
 [ANGEL IDENTITY]
 You are the angel for: src/auth
 Your angel ID is: src-auth
 Your type is: folder
 Your angel.md path: /project/.angels/src/auth/angel.md
-Your folder contents:
-session.ts
-middleware.ts
-index.ts
 
 [YOUR MEMORY]
 ---
@@ -567,6 +557,21 @@ last_updated_by: main
 ## Charter
 Owns all authentication logic.
 
+
+[CURRENT PHASE: REVIEW]
+Read the brief below and evaluate the proposed change against your charter, invariants, and the current state of your folder.
+
+You must respond with one of:
+- "proceed": The change is safe. You have no concerns.
+- "concerns": You have specific concerns. List them. Suggest mitigations in PROCEED IF.
+- "refuse": The change fundamentally violates your invariants. Explain why, citing the violated invariant IDs (e.g. INV-002).
+
+Do NOT modify any code or files during REVIEW. Only write the response file.
+
+[YOUR FOLDER CONTENTS]
+session.ts
+middleware.ts
+index.ts
 
 [CHAT HISTORY]
 (no chat history)
@@ -662,30 +667,11 @@ You operate under the following protocol:
 7. If the brief asks for something that violates an invariant in your angel.md, surface the concern in REVIEW and cite the invariant by its ID (e.g. INV-002). Do not silently comply.
 8. Communication channels: use structured files (angel.md, cables, briefs, newspaper) for persistent, documentable decisions. The .angels/_chat/<angel-id>.md channel is for lightweight operational notes from the orchestrator — not formal protocol. You can read chat history but you do not write to it.
 
-[CURRENT PHASE: SWEEP]
-You are being invoked in maintenance/sweep mode. Your tasks:
-
-1. Read your inbox for any pending cables from other angels.
-2. Read the newspaper delta since your last activation.
-3. Examine your folder for any drift from your documented charter, contracts, or invariants.
-4. Report any findings as concerns.
-5. Update your angel.md if needed (frontmatter last_updated_by: sweep).
-6. Send cables to other angels if you detect issues that affect them.
-
-This is a report-only pass. You should NOT make changes to source code.
-You may update your own angel.md and send cables, but do not modify other code.
-
-SWEEP is read-only. Do NOT run rm, mv, or write files outside angel.md. The orchestrator already verified the state before invoking you. Your job is to REPORT drift, not fix it or verify it destructively.
-
 [ANGEL IDENTITY]
 You are the angel for: src/auth
 Your angel ID is: src-auth
 Your type is: folder
 Your angel.md path: /project/.angels/src/auth/angel.md
-Your folder contents:
-session.ts
-middleware.ts
-index.ts
 
 [YOUR MEMORY]
 ---
@@ -699,6 +685,27 @@ last_updated_by: main
 ## Charter
 Owns all authentication logic.
 
+
+[CURRENT PHASE: SWEEP]
+You are being invoked in maintenance/sweep mode. Your tasks:
+
+1. Read your inbox for any pending cables from other angels.
+2. Read the newspaper delta since your last activation.
+3. Examine your folder for any drift from your documented charter, contracts, or invariants.
+4. Report any findings as concerns.
+5. Update your angel.md if needed (frontmatter last_updated_by: sweep).
+6. Send cables to other angels if you detect issues that affect them.
+7. If your angel.md has a "## Journal" section with entries, fold the facts that matter into the curated sections above and delete the folded bullets (keep the "## Journal" header).
+
+This is a report-only pass. You should NOT make changes to source code.
+You may update your own angel.md and send cables, but do not modify other code.
+
+SWEEP is read-only. Do NOT run rm, mv, or write files outside angel.md. The orchestrator already verified the state before invoking you. Your job is to REPORT drift, not fix it or verify it destructively.
+
+[YOUR FOLDER CONTENTS]
+session.ts
+middleware.ts
+index.ts
 
 [CHAT HISTORY]
 (no chat history)

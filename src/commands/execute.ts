@@ -7,8 +7,14 @@ import { writeBrief, parseBrief } from '../protocol/brief.js';
 import { invoke } from '../protocol/orchestrate.js';
 import { angelIdToPath } from '../paths/resolve.js';
 import { angelLogsDir } from '../paths/layout.js';
+import { appendJournal } from '../angels/journal.js';
 import { appendNewspaper } from '../messaging/newspaper.js';
-import { archiveProcessedInbox } from '../messaging/cables.js';
+import {
+  readInbox,
+  archiveProcessedInbox,
+  formatCablesAsContext,
+  type ParsedCable,
+} from '../messaging/cables.js';
 import { handleQuestionsForMain } from '../messaging/questions.js';
 import type { ResponseData } from '../protocol/response.js';
 import type { CheckEntry } from '../config/schema.js';
@@ -24,6 +30,8 @@ interface FileSnapshot {
 export interface ExecuteOptions {
   /** Tri-state: undefined = use config `execute.strict_territory` (default true). */
   strictTerritory?: boolean;
+  /** Inject pending inbox cables into the execute brief and archive them after. Default: true. */
+  consumeCables?: boolean;
 }
 
 /**
@@ -67,6 +75,18 @@ export async function executeAngel(
   // 4. Snapshot the project tree BEFORE invocation
   const beforeSnapshot = snapshotProjectTree(cwd);
 
+  // 4b. Inject pending inbox cables into the execute brief (default behavior)
+  const consumeCables = options.consumeCables ?? true;
+  let cableContext = '';
+  let pendingCables: ParsedCable[] = [];
+  if (consumeCables) {
+    pendingCables = readInbox(cwd, angelId);
+    if (pendingCables.length > 0) {
+      cableContext = formatCablesAsContext(pendingCables);
+      console.log(`Injecting ${pendingCables.length} pending cable(s) into execute context.`);
+    }
+  }
+
   // 5. Write the execute-phase brief (references the original review brief)
   const timestamp = new Date().toISOString();
   const executeBriefPath = writeBrief(cwd, {
@@ -76,7 +96,9 @@ export async function executeAngel(
     phase: 'execute',
     type: originalBrief.type,
     task: originalBrief.task,
-    context: 'APPROVED: Execute the changes described in the original brief.',
+    context:
+      'APPROVED: Execute the changes described in the original brief.' +
+      (cableContext ? `\n\n${cableContext}` : ''),
     expectedScope: originalBrief.expectedScope,
     priorResponse: briefPath,
   });
@@ -146,8 +168,28 @@ export async function executeAngel(
     }
   }
 
-  // 9. Archive inbox cables the angel saw during execution
+  // 8c. Journal the outcome into the angel's memory (deterministic, no AI)
   if (result.response.response === 'done') {
+    const task = originalBrief.task.replace(/\s+/g, ' ').trim();
+    const taskSummary = task.length > 100 ? `${task.slice(0, 100)}...` : task;
+    const facts = [`EXECUTE done: "${taskSummary}"`];
+    if (result.response.filesChanged.length > 0) {
+      facts.push(`files: ${result.response.filesChanged.join(', ')}`);
+    }
+    if (result.response.cablesSent.length > 0) {
+      facts.push(
+        `cables: ${result.response.cablesSent.map((c) => `${c.to}:${c.type}`).join(', ')}`,
+      );
+    }
+    if (checkResults.length > 0) {
+      facts.push(`checks: ${checkResults.length} passed`);
+    }
+    appendJournal(cwd, angelId, angelPath, [facts.join(' | ')]);
+  }
+
+  // 9. Archive inbox cables the angel actually saw (injected into the brief).
+  // With --no-consume-cables the inbox is left intact for a later delivery.
+  if (result.response.response === 'done' && consumeCables && pendingCables.length > 0) {
     archiveProcessedInbox(cwd, angelId);
   }
 

@@ -3,6 +3,12 @@ import { AngelRegistry } from '../angels/registry.js';
 import { writeBrief } from '../protocol/brief.js';
 import { invoke } from '../protocol/orchestrate.js';
 import { appendNewspaper } from '../messaging/newspaper.js';
+import {
+  readInbox,
+  archiveProcessedInbox,
+  formatCablesAsContext,
+  type ParsedCable,
+} from '../messaging/cables.js';
 import { handleQuestionsForMain } from '../messaging/questions.js';
 import { executeAngel } from './execute.js';
 import { printResponseSummary } from './response-summary.js';
@@ -33,11 +39,24 @@ export async function doAngel(
   cwd: string,
   angelId: string,
   task: string,
-  options: { strictTerritory?: boolean } = {},
+  options: { strictTerritory?: boolean; consumeCables?: boolean } = {},
 ): Promise<number> {
+  const consumeCables = options.consumeCables ?? true;
+
   const config = loadConfig(cwd);
   const registry = AngelRegistry.fromConfig(config);
   registry.getById(angelId); // throws if not found
+
+  // Inject pending inbox cables into the review brief (default behavior)
+  let cableContext = '';
+  let pendingCables: ParsedCable[] = [];
+  if (consumeCables) {
+    pendingCables = readInbox(cwd, angelId);
+    if (pendingCables.length > 0) {
+      cableContext = formatCablesAsContext(pendingCables);
+      console.log(`Injecting ${pendingCables.length} pending cable(s) into brief context.`);
+    }
+  }
 
   const timestamp = new Date().toISOString();
   const briefPath = writeBrief(cwd, {
@@ -47,7 +66,7 @@ export async function doAngel(
     phase: 'review',
     type: 'change_request',
     task,
-    context: '',
+    context: cableContext,
     expectedScope: '',
     priorResponse: 'none',
   });
@@ -59,6 +78,11 @@ export async function doAngel(
     angelId,
     briefPath,
   });
+
+  // Archive cables now that the angel has seen them via the brief context
+  if (consumeCables && pendingCables.length > 0) {
+    archiveProcessedInbox(cwd, angelId);
+  }
 
   appendReviewNewspaperEntry(cwd, angelId, result.response, task);
   printResponseSummary(result.response, result.responsePath);

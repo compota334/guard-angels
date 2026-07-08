@@ -5,7 +5,7 @@ import * as z from 'zod';
  *
  * Angels write a single JSON object to the response path given in their
  * prompt. The orchestrator validates it against this schema and fails loudly
- * on any deviation — there is no markdown fallback.
+ * on any deviation; there is no markdown fallback.
  *
  * Field naming is snake_case on disk (what angels write); the internal
  * camelCase `ResponseData` shape lives in `response.ts`.
@@ -63,7 +63,7 @@ export type ResponseJson = z.infer<typeof ResponseJsonSchema>;
 export type CableSent = z.infer<typeof CableSentSchema>;
 
 /**
- * Format a Zod error into a message that names every offending field —
+ * Format a Zod error into a message that names every offending field;
  * this string ends up in the OrchestrationError the user sees.
  */
 export function formatSchemaIssues(error: z.ZodError): string {

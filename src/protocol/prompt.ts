@@ -224,6 +224,7 @@ You are being invoked in maintenance/sweep mode. Your tasks:
 4. Report any findings as concerns.
 5. Update your angel.md if needed (frontmatter last_updated_by: sweep).
 6. Send cables to other angels if you detect issues that affect them.
+7. If your angel.md has a "## Journal" section with entries, fold the facts that matter into the curated sections above and delete the folded bullets (keep the "## Journal" header).
 
 This is a report-only pass. You should NOT make changes to source code.
 You may update your own angel.md and send cables, but do not modify other code.
@@ -231,28 +232,35 @@ You may update your own angel.md and send cables, but do not modify other code.
 SWEEP is read-only. Do NOT run rm, mv, or write files outside angel.md. The orchestrator already verified the state before invoking you. Your job is to REPORT drift, not fix it or verify it destructively.`,
 };
 
+/**
+ * Section order is deliberate and cache-aware. The Anthropic prompt cache
+ * matches byte-identical prompt PREFIXES, so everything stable comes first
+ * (protocol header, angel identity, angel.md memory, notes) and everything
+ * that changes between invocations comes last (phase instructions, folder
+ * listing, chat, newspaper delta, inbox, brief, response path). This makes
+ * brief→execute pairs and iterative briefing hit the cache on the expensive
+ * part — the memory — instead of re-reading it at full price every time.
+ * Do not reorder sections without considering prefix stability.
+ */
 export function buildPrompt(input: PromptInput): string {
   const sections: string[] = [];
 
-  // 1. Fixed protocol header
+  // ── Stable prefix ──────────────────────────────────────────────────────────
+
+  // 1. Fixed protocol header (byte-identical for every angel and phase)
   sections.push('[PROTOCOL]');
   sections.push(PROTOCOL_HEADER);
 
-  // 2. Phase-specific instructions
-  sections.push('');
-  sections.push(PHASE_INSTRUCTIONS[input.phase]);
-
-  // 3. Angel identity
+  // 2. Angel identity (stable per angel; the volatile folder listing moved
+  // to its own section below)
   sections.push('');
   sections.push('[ANGEL IDENTITY]');
   sections.push(`You are the angel for: ${input.angelPath}`);
   sections.push(`Your angel ID is: ${input.angelId}`);
   sections.push(`Your type is: ${input.angelType}`);
   sections.push(`Your angel.md path: ${input.angelMdPath}`);
-  sections.push(`Your folder contents:`);
-  sections.push(input.folderListing || '(empty or not yet created)');
 
-  // 4. Angel memory (angel.md contents)
+  // 3. Angel memory (angel.md contents — stable between memory updates)
   sections.push('');
   sections.push('[YOUR MEMORY]');
   if (input.angelMd) {
@@ -269,7 +277,33 @@ export function buildPrompt(input: PromptInput): string {
     sections.push('(no angel.md exists yet — you are being initialized for the first time)');
   }
 
-  // 5. Chat history
+  // 4. Known issues / global notes (semi-stable; omitted entirely when absent)
+  const hasGlobalNotes = input.globalNotes && input.globalNotes.trim();
+  const hasAngelNotes = input.angelNotes && input.angelNotes.trim();
+  if (hasGlobalNotes || hasAngelNotes) {
+    sections.push('');
+    sections.push('[KNOWN ISSUES / GLOBAL NOTES]');
+    if (hasGlobalNotes) {
+      sections.push(input.globalNotes!.trim());
+    }
+    if (hasAngelNotes) {
+      sections.push('--- Angel-specific notes ---');
+      sections.push(input.angelNotes!.trim());
+    }
+  }
+
+  // ── Volatile tail ──────────────────────────────────────────────────────────
+
+  // 5. Phase-specific instructions (differ between review and execute)
+  sections.push('');
+  sections.push(PHASE_INSTRUCTIONS[input.phase]);
+
+  // 6. Folder contents (changes whenever files are added/removed)
+  sections.push('');
+  sections.push('[YOUR FOLDER CONTENTS]');
+  sections.push(input.folderListing || '(empty or not yet created)');
+
+  // 7. Chat history
   sections.push('');
   sections.push('[CHAT HISTORY]');
   if (input.chatHistory && input.chatHistory.trim()) {
@@ -278,7 +312,7 @@ export function buildPrompt(input: PromptInput): string {
     sections.push('(no chat history)');
   }
 
-  // 6. Newspaper delta
+  // 8. Newspaper delta
   sections.push('');
   sections.push('[NEWSPAPER DELTA SINCE YOUR LAST ACTIVATION]');
   if (input.newspaperDelta.trim()) {
@@ -287,7 +321,7 @@ export function buildPrompt(input: PromptInput): string {
     sections.push('(no new entries)');
   }
 
-  // 6. Inbox
+  // 9. Inbox
   sections.push('');
   sections.push('[YOUR INBOX]');
   if (input.inbox.length === 0) {
@@ -306,22 +340,7 @@ export function buildPrompt(input: PromptInput): string {
     }
   }
 
-  // 7. Known issues / global notes (omitted entirely when both are absent)
-  const hasGlobalNotes = input.globalNotes && input.globalNotes.trim();
-  const hasAngelNotes = input.angelNotes && input.angelNotes.trim();
-  if (hasGlobalNotes || hasAngelNotes) {
-    sections.push('');
-    sections.push('[KNOWN ISSUES / GLOBAL NOTES]');
-    if (hasGlobalNotes) {
-      sections.push(input.globalNotes!.trim());
-    }
-    if (hasAngelNotes) {
-      sections.push('--- Angel-specific notes ---');
-      sections.push(input.angelNotes!.trim());
-    }
-  }
-
-  // 8. Brief
+  // 10. Brief
   sections.push('');
   sections.push('[BRIEF]');
   if (input.brief.trim()) {

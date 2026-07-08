@@ -307,3 +307,37 @@ function buildCableFilename(data: CableData): string {
   return `${sanitizedTs}-cable-from-${fromSlug}.md`;
 }
 
+
+/**
+ * Format pending cables as a context block to inject into a brief.
+ * Each cable is included in full so the angel sees the complete content.
+ */
+export function formatCablesAsContext(cables: ParsedCable[]): string {
+  const lines: string[] = [
+    `PENDING CABLES IN INBOX (${cables.length}):`,
+    '',
+  ];
+
+  for (const cable of cables) {
+    lines.push(`--- CABLE from ${cable.from} [${cable.urgency.toUpperCase()}] ---`);
+    lines.push(`Subject: ${cable.subject}`);
+    lines.push(`Type: ${cable.type}`);
+    lines.push(`Timestamp: ${cable.timestamp}`);
+    if (cable.requiresAck) {
+      lines.push('Requires acknowledgment: yes');
+    }
+    lines.push('');
+    lines.push(cable.body.trim());
+    if (cable.references.length > 0) {
+      lines.push('');
+      lines.push('References:');
+      for (const ref of cable.references) {
+        lines.push(`  - ${ref}`);
+      }
+    }
+    lines.push(`--- END CABLE ---`);
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}

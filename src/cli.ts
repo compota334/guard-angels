@@ -17,6 +17,9 @@ import { retireAngel } from './commands/retire.js';
 import { showAngel } from './commands/show.js';
 import { askAngel } from './commands/ask.js';
 import { chatWithAngel } from './commands/chat.js';
+import { noteAngel } from './commands/note.js';
+import { runGuardCheck } from './commands/guard-check.js';
+import { installHooks, uninstallHooks, hooksStatus } from './commands/hooks.js';
 import { generateCompletion } from './commands/completion.js';
 
 const program = new Command();
@@ -170,7 +173,8 @@ program
   .argument('<angel-id>', 'Angel identifier')
   .argument('<task>', 'Task description')
   .description('Phase 1: Write a brief, invoke angel in review mode')
-  .option('--consume-cables', 'Inject pending inbox cables as context and archive them after')
+  .option('--consume-cables', 'Inject pending inbox cables as context and archive them after (default)')
+  .option('--no-consume-cables', 'Leave the inbox untouched for this brief')
   .action(async (angelId: string, task: string, options: { consumeCables?: boolean }) => {
     try {
       const exitCode = await briefAngel(process.cwd(), angelId, task, {
@@ -189,13 +193,16 @@ program
   .description('Phase 2: Re-invoke angel with approval in execute mode')
   .option('--strict-territory', 'Block and rollback out-of-territory writes (default)')
   .option('--no-strict-territory', 'Warn about out-of-territory writes instead of blocking')
-  .action(async (angelId: string, briefPath: string, options: { strictTerritory?: boolean }, command: Command) => {
+  .option('--consume-cables', 'Inject pending inbox cables as context and archive them after (default)')
+  .option('--no-consume-cables', 'Leave the inbox untouched for this execute')
+  .action(async (angelId: string, briefPath: string, options: { strictTerritory?: boolean; consumeCables?: boolean }, command: Command) => {
     try {
       // Tri-state: only forward the flag when the user typed it, so the
       // config default (execute.strict_territory) applies otherwise.
       const explicit = command.getOptionValueSource('strictTerritory') === 'cli';
       const exitCode = await executeAngel(process.cwd(), angelId, briefPath, {
         strictTerritory: explicit ? options.strictTerritory : undefined,
+        consumeCables: options.consumeCables,
       });
       process.exit(exitCode);
     } catch (err: unknown) {
@@ -210,11 +217,14 @@ program
   .description('Brief angel (review) then auto-execute if approved; exit 1/2 on concerns/refuse')
   .option('--strict-territory', 'Block and rollback out-of-territory writes (default)')
   .option('--no-strict-territory', 'Warn about out-of-territory writes instead of blocking')
-  .action(async (angelId: string, task: string, options: { strictTerritory?: boolean }, command: Command) => {
+  .option('--consume-cables', 'Inject pending inbox cables as context and archive them after (default)')
+  .option('--no-consume-cables', 'Leave the inbox untouched for this run')
+  .action(async (angelId: string, task: string, options: { strictTerritory?: boolean; consumeCables?: boolean }, command: Command) => {
     try {
       const explicit = command.getOptionValueSource('strictTerritory') === 'cli';
       const exitCode = await doAngel(process.cwd(), angelId, task, {
         strictTerritory: explicit ? options.strictTerritory : undefined,
+        consumeCables: options.consumeCables,
       });
       process.exit(exitCode);
     } catch (err: unknown) {
@@ -332,6 +342,19 @@ program
   });
 
 program
+  .command('note')
+  .argument('<angel-id>', 'Angel identifier')
+  .argument('<text>', 'Fact to append to the angel journal in angel.md')
+  .description('Append a factual note to the angel journal (no invocation)')
+  .action((angelId: string, text: string) => {
+    try {
+      noteAngel(process.cwd(), angelId, text);
+    } catch (err: unknown) {
+      handleError(err, 1);
+    }
+  });
+
+program
   .command('show')
   .argument('<angel-id>', 'Angel identifier')
   .description('Show the current angel.md for an angel')
@@ -361,6 +384,44 @@ program
         olderThanDays,
       });
       process.exit(exitCode);
+    } catch (err: unknown) {
+      handleError(err, 1);
+    }
+  });
+
+program
+  .command('guard-check')
+  .argument('[path]', 'Path to check against angel territories')
+  .option('--hook', 'Read a Claude Code PreToolUse JSON payload from stdin')
+  .description('Territory check for edit hooks: exit 0 allows, exit 2 blocks')
+  .action((path: string | undefined, options: { hook?: boolean }) => {
+    try {
+      process.exit(runGuardCheck(process.cwd(), { path, hook: options.hook }));
+    } catch (err: unknown) {
+      handleError(err, 1);
+    }
+  });
+
+program
+  .command('hooks')
+  .argument('<action>', 'install | status | uninstall')
+  .description('Manage the Claude Code edit-guard hook in .claude/settings.json')
+  .action((action: string) => {
+    try {
+      switch (action) {
+        case 'install':
+          process.exit(installHooks(process.cwd()));
+          break;
+        case 'status':
+          process.exit(hooksStatus(process.cwd()));
+          break;
+        case 'uninstall':
+          process.exit(uninstallHooks(process.cwd()));
+          break;
+        default:
+          console.error(`Unknown hooks action: "${action}". Use install | status | uninstall.`);
+          process.exit(1);
+      }
     } catch (err: unknown) {
       handleError(err, 1);
     }

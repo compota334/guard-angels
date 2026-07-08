@@ -1,7 +1,7 @@
 /**
  * Run `fn` over `items` with at most `limit` concurrent executions.
  *
- * Sliding-window pool: a new item starts as soon as a slot frees up — there
+ * Sliding-window pool: a new item starts as soon as a slot frees up; there
  * is no batch barrier, so wall-clock time tracks the slowest items rather
  * than the slowest item of each batch.
  *

@@ -18,9 +18,14 @@ All notable changes to Guard Angels are documented here.
 - **Housekeeping**: sweep archives briefs/responses/logs older than `housekeeping.archive_after_days` (default 30) before starting; `doctor --archive` uses the same config default and also rotates an oversized newspaper.
 - **Claude backend telemetry**: the adapter appends `--output-format json` and records `session_id`, token usage, and cost per invocation into `.meta.json` (replaces fragile regex extraction).
 - **Invariant IDs**: angel.md templates number invariants as `INV-001, INV-002, ...` and angels cite the violated IDs when refusing a brief.
+- **Mechanical territory enforcement**: `angels guard-check <path>` (exit 0 allow / exit 2 block; `--hook` mode reads a Claude Code PreToolUse payload from stdin) and `angels hooks install|status|uninstall` to manage the edit-guard hook in `.claude/settings.json`. Only active folder angels block; the angel subprocess is exempt via `GUARD_ANGELS_EXECUTING`.
+- **Deterministic journal**: a `## Journal` section in angel.md appended by the CLI with zero AI cost (execute outcomes automatically; human notes via the new `angels note <id> "<text>"`). Sweep instructs angels to fold journal facts into curated sections. Capped at 200 entries with overflow rotating to `_archive/journal/`.
+- **Cache-aware prompt layout**: prompts now put the stable prefix first (protocol, identity, angel.md memory, notes) and everything volatile last (phase, folder listing, chat, newspaper, inbox, brief), so brief→execute pairs hit the Anthropic prompt cache on the expensive part.
+- Unit tests for `handleQuestionsForMain`, `resolveMemoryConfig`, and `GUARD_ANGELS_PROMPT_WARN_BYTES` parsing; integration test for `init --manual` path traversal and input normalization.
 
 ### Changed
 
+- **Cables are consumed by default**: `brief`, `do` and `execute` now inject pending inbox cables as context and archive them after the angel has seen them. Opt out per invocation with `--no-consume-cables`. `execute` no longer archives cables it never delivered.
 - **Project name unified to "Guard Angels"**: remaining singular "Guard Angel" references updated across docs, log prefixes (`[guard-angels]`), and test temp-dir prefixes. The agent prompt intentionally keeps "You are a Guard Angel" because it addresses one individual angel.
 
 ### Fixed
@@ -37,10 +42,6 @@ All notable changes to Guard Angels are documented here.
 
 - Dead code: the unused `buildDiscoveryPrompt` wrapper and duplicate `useDenseTemplate` helper, `getBoilerplateStats`, `SUPPORTED_LANGUAGES`, and export-only surface for internal types (`BoilerplateFilter`, `BoilerplateStats`, `SOURCE_EXTENSIONS`).
 - Duplication: scaffold/binary filter constants consolidated into `src/protocol/discovery-shared.ts` (previously copied in `discovery.ts` and `discovery-enhanced.ts`); the response summary printer shared by `brief` and `do` extracted to `src/commands/response-summary.ts`.
-
-### Added
-
-- Unit tests for `handleQuestionsForMain`, `resolveMemoryConfig`, and `GUARD_ANGELS_PROMPT_WARN_BYTES` parsing; integration test for `init --manual` path traversal and input normalization.
 
 ## [0.2.0] - 2026-07-03
 

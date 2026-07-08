@@ -187,9 +187,9 @@ angels doctor --archive --older-than=30
 | `angels activate [<angel-id>] [--all]` | Promote draft angels to active after reviewing. |
 | `angels list` | List all registered angels with their status. |
 | `angels create <path>` | Create an angel for a specific folder. |
-| `angels brief <angel-id> "<task>"` | Phase 1: send a review brief to an angel. Does NOT execute. |
-| `angels execute <angel-id> <brief-path> [--no-strict-territory]` | Phase 2: re-invoke angel with approval to execute changes. Out-of-territory writes are blocked and rolled back by default; `--no-strict-territory` downgrades them to warnings. |
-| `angels do <angel-id> "<task>" [--no-strict-territory]` | Brief and execute in a single step. Aborts if angel raises concerns or refuses. |
+| `angels brief <angel-id> "<task>" [--no-consume-cables]` | Phase 1: send a review brief to an angel. Does NOT execute. Pending inbox cables are injected as context and archived by default. |
+| `angels execute <angel-id> <brief-path> [--no-strict-territory] [--no-consume-cables]` | Phase 2: re-invoke angel with approval to execute changes. Out-of-territory writes are blocked and rolled back by default; `--no-strict-territory` downgrades them to warnings. |
+| `angels do <angel-id> "<task>" [--no-strict-territory] [--no-consume-cables]` | Brief and execute in a single step. Aborts if angel raises concerns or refuses. |
 | `angels cable <to> <type> "<body>"` | Send a cable (inter-angel message). Types: `breaking_change`, `fyi`, `review_request`, `invariant_violation`. |
 | `angels inbox <angel-id>` | Show pending cables for an angel. |
 | `angels newspaper [--since=<iso>]` | Print newspaper entries (append-only log). Records cable, brief, execute, and sweep events. |
@@ -198,6 +198,9 @@ angels doctor --archive --older-than=30
 | `angels retire <angel-id>` | Archive and remove an angel from the project. |
 | `angels ask <angel-id> "<question>"` | Ask an angel a read-only question (no brief file, no execute path). |
 | `angels chat <angel-id> "<message>"` | Append a note to the angel's chat history (no invocation). |
+| `angels note <angel-id> "<text>"` | Append a factual note to the angel's journal in `angel.md` (no invocation). |
+| `angels guard-check <path> [--hook]` | Territory check for edit hooks: exit 0 allows, exit 2 blocks. `--hook` reads a Claude Code PreToolUse payload from stdin. |
+| `angels hooks <install\|status\|uninstall>` | Manage the Claude Code edit-guard hook in `.claude/settings.json`. |
 | `angels show <angel-id>` | Print the current `angel.md` for an angel. |
 | `angels completion <shell>` | Print a shell completion script. Supported shells: `bash`, `zsh`. |
 
@@ -284,6 +287,34 @@ If any check fails, `angels execute` exits 1, prints the failing output, and the
 ## Invariant IDs
 
 Invariants in `angel.md` carry stable IDs (`INV-001`, `INV-002`, ...). IDs are never reused; when an angel refuses a brief it cites the violated IDs, which makes refusals auditable in the newspaper and response files.
+
+## Mechanical enforcement (edit hooks)
+
+The rule "do not edit an angel's territory directly" stops being a request and becomes a wall:
+
+```bash
+angels hooks install    # writes a PreToolUse hook into .claude/settings.json
+angels hooks status
+angels hooks uninstall
+```
+
+With the hook installed, any Edit/Write tool call from Claude Code that targets a file inside an **active folder angel's** territory is blocked (exit 2) with a message redirecting to `angels brief`. Semantics:
+
+- Only **active folder angels** block. Draft angels do not; the root angel never blocks (it owns everything, and blocking every edit would make the hook unusable).
+- The angel subprocess itself is exempt (the orchestrator sets `GUARD_ANGELS_EXECUTING`), and its writes are still verified post-hoc by the strict-territory check.
+- Projects without `.angels/` are unaffected; the hook allows everything there.
+- Requires `angels` on `PATH` (global install). Restart running Claude Code sessions after installing.
+
+`angels guard-check <path>` runs the same check manually and is scriptable (exit 0 allow, exit 2 block).
+
+## The journal (zero-token memory freshness)
+
+Facts land in each angel's memory without any AI invocation. A `## Journal` section in `angel.md` is appended mechanically by the CLI:
+
+- Every successful EXECUTE adds one line: task, files changed, cables sent, checks passed.
+- `angels note <id> "<text>"` appends a human observation.
+
+During the next sweep, the angel folds journal facts into its curated sections and deletes the folded bullets. The journal is capped at 200 entries; overflow rotates to `_archive/journal/<angel-id>.md`. Frontmatter `last_updated` is untouched by journal appends, so it keeps meaning "last curated update".
 
 ## Angel memory system
 
@@ -454,7 +485,7 @@ Use `--verbose` to see full stack traces and error cause chains for debugging.
 
 ## Main-agent prompt addendum
 
-Add this to your project's `CLAUDE.md` (or equivalent) so the main agent knows how to use Guard Angels:
+Run `angels hooks install` first: it enforces the no-direct-edits rule mechanically, so the main agent physically cannot bypass the protocol. Then add this to your project's `CLAUDE.md` (or equivalent) so the main agent knows how to use Guard Angels:
 
 ```
 This project uses Guard Angels. Significant folders have angels that own

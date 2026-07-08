@@ -22,6 +22,7 @@ export class CodexAdapter implements BackendAdapter {
       cwd: opts.cwd,
       timeout: opts.timeoutMs,
       reject: false,
+      env: { ...process.env, ...(opts.env ?? {}) },
     });
 
     const sessionId = this.extractSessionId(result.stdout);

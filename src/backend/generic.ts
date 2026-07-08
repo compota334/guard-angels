@@ -20,6 +20,7 @@ export class GenericAdapter implements BackendAdapter {
       cwd: opts.cwd,
       timeout: opts.timeoutMs,
       reject: false,
+      env: { ...process.env, ...(opts.env ?? {}) },
     });
 
     return {

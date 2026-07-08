@@ -183,11 +183,13 @@ export async function invoke(
     let stderr = '';
 
     try {
-      // 8. Spawn backend adapter
+      // 8. Spawn backend adapter. GUARD_ANGELS_EXECUTING exempts the angel
+      // subprocess (and its children) from the guard-check edit hook.
       const result = await adapter.invoke({
         prompt,
         cwd: projectRoot,
         timeoutMs,
+        env: { GUARD_ANGELS_EXECUTING: input.angelId },
       });
 
       // FIX 5: null-coalesce in case the adapter returns null/undefined
