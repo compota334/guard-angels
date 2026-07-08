@@ -1,5 +1,7 @@
 # Guard Angels — Auditoría de Performance y Escalabilidad
 
+> **Estado a 2026-07-08 (v0.3.0): resuelto en su mayoría.** Los hallazgos críticos de esta auditoría ya fueron atendidos: rotación del newspaper con cursores por generación y lectura por offset real (Propuesta 2), archivado automático de briefs/responses/logs viejos por sweep y `doctor --archive` (Propuestas 1 y 4), pool de concurrencia para onboard y sweep (Propuesta 5), y journal determinístico que mantiene fresca la memoria sin invocaciones (relacionado a 1.3). Ver CHANGELOG 0.3.0. El documento se conserva como registro del análisis; no planificar trabajo a partir de él sin verificar contra el código actual.
+
 **Fecha:** 2026-05-12
 **Alcance:** Análisis estático del código fuente (`src/`). No se ejecutaron benchmarks ni pruebas de carga.
 **Conclusión general:** El sistema funciona correctamente para uso liviano (~10 ángeles, semanas de operación), pero acumula estado sin límite en 5 vectores independientes. Bajo uso sostenido (6+ meses, trabajo diario), ocurrirán fallas en cascada empezando por el sistema de briefs, seguido por la memoria de los ángeles y los inboxes de cables. La mayoría de los problemas tienen solución arquitectónica sin reescritura mayor.

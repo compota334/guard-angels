@@ -24,7 +24,6 @@ const AngelEntrySchema = z.object({
 });
 
 const BackendSchema = z.object({
-  main_agent_cmd: z.string().min(1).optional(),
   angel_cmd: z.string().min(1),
   angel_timeout_seconds: z.number().int().positive(),
 });

@@ -18,7 +18,6 @@ function writeConfig(dir: string, content: string): void {
 const VALID_CONFIG = `
 version: 1
 backend:
-  main_agent_cmd: "claude -p --dangerously-skip-permissions"
   angel_cmd: "claude -p --dangerously-skip-permissions"
   angel_timeout_seconds: 600
 angels:
@@ -56,10 +55,11 @@ describe('loadConfig', () => {
     expect(config.sweep.autonomy).toBe('report-only');
   });
 
-  it('loads config without optional main_agent_cmd', () => {
+  it('ignores unknown backend keys (e.g. the removed main_agent_cmd)', () => {
     const config = `
 version: 1
 backend:
+  main_agent_cmd: "claude -p --dangerously-skip-permissions"
   angel_cmd: "claude -p"
   angel_timeout_seconds: 300
 angels:
@@ -71,7 +71,7 @@ sweep:
 `;
     writeConfig(tmpDir, config);
     const result = loadConfig(tmpDir);
-    expect(result.backend.main_agent_cmd).toBeUndefined();
+    expect(result.backend).not.toHaveProperty('main_agent_cmd');
     expect(result.backend.angel_cmd).toBe('claude -p');
   });
 
